@@ -1,0 +1,46 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const {readSourceText}=require('./source-scan.cjs');
+
+const root = path.resolve(__dirname, '..');
+// 2026-09-16（T-6280 / D-396）：2 条窗口断言改"锚定入口 + 有界窗口"（handleModuleChange 与
+// 重扫 timer 各自的同步/异步 renderStore 调用）；TS 源码读取改走 readSourceText。
+const source = readSourceText('src/index.ts');
+const storeUiSource = readSourceText('src/home-store-ui.ts');
+const restoreBlock = (source.match(/const restoreStoreView = \(\) => \{([\s\S]*?)\n\s*\};/) || [])[1] || '';
+
+test('store rerender captures active element', () => assert.match(storeUiSource, /const activeElement = document\.activeElement instanceof HTMLElement/));
+test('store rerender captures scroll position', () => assert.match(storeUiSource, /const previousScrollTop = root\.scrollTop/));
+test('store rerender checks focus ownership', () => assert.match(storeUiSource, /root\.contains\(activeElement\)/));
+test('store rerender detects card focus', () => assert.match(storeUiSource, /activeElement\.closest<HTMLElement>\("\.sw-home-store__card"\)/));
+test('store rerender detects tab focus', () => assert.match(storeUiSource, /activeElement\.closest<HTMLElement>\("\.sw-home-store__tab"\)/));
+test('store rerender detects group focus', () => assert.match(storeUiSource, /activeElement\.closest<HTMLElement>\("\.sw-home-store__group-toggle"\)/));
+test('store rerender detects search focus', () => assert.match(storeUiSource, /activeElement\.matches\("\.sw-home-store__search input"\)/));
+test('store rerender detects sort focus', () => assert.match(storeUiSource,/activeElement\.matches\("\.sw-home-store__sort"\)/));
+test('store rerender clears the old DOM', () => assert.match(storeUiSource, /catalogPane\.innerHTML = ""/));
+test('store rerender has a restoration helper', () => assert.match(storeUiSource, /const restoreStoreView = \(\) =>/));
+test('store rerender bounds scroll restoration', () => assert.match(storeUiSource, /root\.scrollTop = Math\.min\(previousScrollTop, root\.scrollHeight\)/));
+test('store rerender searches visible cards', () => assert.match(storeUiSource, /root\.querySelectorAll<HTMLElement>\("\.sw-home-store__card"\)/));
+test('store rerender matches card module id', () => assert.match(storeUiSource, /card\.dataset\.moduleId === focusValue/));
+test('store rerender skips hidden cards', () => assert.match(storeUiSource, /!card\.classList\.contains\("fn__none"\)/));
+test('store rerender searches tabs', () => assert.match(storeUiSource, /root\.querySelectorAll<HTMLElement>\("\.sw-home-store__tab"\)/));
+test('store rerender matches tab key', () => assert.match(storeUiSource, /tab\.dataset\.tabKey === focusValue/));
+test('store rerender searches groups', () => assert.match(storeUiSource, /root\.querySelectorAll<HTMLElement>\("\.sw-home-store__group"\)/));
+test('store rerender restores group toggle', () => assert.match(storeUiSource, /querySelector<HTMLElement>\("\.sw-home-store__group-toggle"\)/));
+test('store rerender restores search control', () => assert.match(storeUiSource, /root\.querySelector<HTMLElement>\("\.sw-home-store__search input"\)/));
+test('store rerender restores sort control', () => assert.match(storeUiSource, /root\.querySelector<HTMLElement>\("\.sw-home-store__sort"\)/));
+test('store rerender focuses without jumping scroll', () => assert.match(storeUiSource, /target\.focus\(\{preventScroll: true\}\)/));
+// T-6967 S2：空目录路径改为横幅 + 保留 chrome + 恢复视图（不再整树 textContent 清空）。
+test('empty store path restores view state', () => assert.match(storeUiSource, /catalogPane\.appendChild\(storeFragment\);[\s\S]{0,400}?restoreStoreView\(\);/));
+test('normal store path restores view state', () => assert.match(storeUiSource, /applyFilter\(\);\s*restoreStoreView\(\);/));
+test('sort changes rerender the store', () => assert.match(storeUiSource, /bindRenderListener\(sortSelect, "change", \(\) => \{ storeSort = normalizeHomeStoreSort\(sortSelect\.value\); persistStoreState\(\); renderStore\(\); \}\)/));
+test('module changes rerender the store', () => { const i = storeUiSource.indexOf('const handleModuleChange = () => {'); assert.ok(i >= 0, 'missing handleModuleChange'); const body = storeUiSource.slice(i, i + 300); assert.ok(body.includes('renderStore();'), 'rerender on module change'); });
+test('provider rescan rerenders the store', () => { const i = storeUiSource.indexOf('window.setTimeout(() => {'); assert.ok(i >= 0, 'missing rescan timer'); const body = storeUiSource.slice(i, i + 300); assert.ok(body.includes('renderStore();'), 'rerender after rescan'); });
+test('focus descriptor starts in a neutral state', () => assert.match(storeUiSource, /let focusKind = "none"/));
+test('focus descriptor stores a stable value', () => assert.match(storeUiSource, /let focusValue = ""/));
+test('card focus remains non-positive tabindex', () => assert.match(storeUiSource, /card\.tabIndex = -1/));
+test('rerender restoration is local to the store root', () => assert.match(storeUiSource,/restoreStoreView\(\)/));
+test('rerender restoration does not add network calls', () => assert.doesNotMatch(restoreBlock, /fetch\(/));

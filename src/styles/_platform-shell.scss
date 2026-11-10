@@ -1,0 +1,976 @@
+// T-6866: shared visual contract for the three platform surfaces.
+//
+// This layer ships after the current surface styles.  It only adds
+// namespaced tokens and opt-in primitives; no existing surface selector is
+// restyled until its DOM opts into a `sw-platform-*` class.  The aliases keep
+// SiYuan's theme variables as the source of truth while allowing the switcher,
+// workbench and snippet studio to converge one surface at a time.
+@use "00-tokens" as *;
+
+// The aliases are also exposed on today's roots so an adapter can be added
+// without introducing a second color or spacing system.  Existing roots do
+// not consume these aliases yet, so this block is behavior-neutral.
+:is(.sw-platform-shell, .sw-platform-surface, .speed-switch, .sw-home, .sw-studio, .sw-fab-root) {
+    --sw-platform-accent: var(--b3-theme-primary, var(--sw-accent-fallback, #8576e8));
+    --sw-platform-accent-soft: var(--sw-accent-soft, color-mix(in srgb, var(--sw-platform-accent) 12%, transparent));
+    --sw-platform-accent-pressed: var(--sw-accent-pressed, color-mix(in srgb, var(--sw-platform-accent) 20%, transparent));
+
+    --sw-platform-bg: var(--sw-page-bg, var(--b3-theme-background, #ffffff));
+    --sw-platform-surface: var(--b3-theme-surface, var(--sw-platform-bg));
+    --sw-platform-surface-muted: var(--sw-surface-muted, var(--b3-theme-surface-lighter, var(--sw-platform-surface)));
+    --sw-platform-surface-raised: color-mix(in srgb, var(--sw-platform-surface) 92%, var(--sw-platform-accent-soft));
+    --sw-platform-line: var(--b3-border-color, color-mix(in srgb, var(--sw-platform-text) 18%, transparent));
+
+    --sw-platform-text: var(--b3-theme-on-background, var(--b3-theme-on-surface, #273043));
+    --sw-platform-text-muted: var(--b3-theme-on-surface-light, var(--b3-theme-on-surface, #687286));
+    --sw-platform-text-on-accent: var(--b3-theme-on-primary, #ffffff);
+    --sw-platform-success: var(--b3-theme-success, #2d9865);
+    --sw-platform-warning: var(--b3-theme-warning, #b7761d);
+    --sw-platform-error: var(--b3-theme-error, var(--b3-card-error-color, #b84040));
+
+    --sw-platform-radius-sm: var(--sw-radius-control, 8px);
+    --sw-platform-radius-md: var(--sw-radius-card, 12px);
+    --sw-platform-radius-lg: var(--sw-radius-panel, 16px);
+    --sw-platform-radius-pill: 999px;
+
+    // Platform spacing names are compatibility aliases; _00-tokens is the sole
+    // source of the underlying scale values.
+    --sw-platform-space-1: var(--sw-space-xs, 4px);
+    --sw-platform-space-2: var(--sw-space-md, 8px);
+    --sw-platform-space-3: var(--sw-space-lg, 12px);
+    --sw-platform-space-4: var(--sw-space-xl, 16px);
+    --sw-platform-space-5: var(--sw-space-2xl, 24px);
+
+    --sw-platform-shadow-card: var(--sw-card-shadow, 0 1px 2px rgb(51 58 83 / 5%), 0 8px 24px rgb(75 85 120 / 8%));
+    --sw-platform-shadow-floating: var(--sw-float-shadow, 0 14px 36px rgb(55 65 100 / 15%), 0 3px 10px rgb(55 65 100 / 8%));
+    // 现代科技发光微环：内层 1px 底色隔离 + 外层 35% 柔和漫射光晕
+    --sw-platform-focus: var(--sw-focus-ring, 0 0 0 1px var(--sw-platform-bg), 0 0 0 3px color-mix(in srgb, var(--sw-platform-accent) 35%, transparent));
+    --sw-platform-header-height: 64px;
+}
+
+// PlatformShell -------------------------------------------------------------
+// The shell is deliberately dimension-neutral.  Dialogs and mobile sheets
+// continue to own their size; this primitive only supplies the shared theme,
+// focus and box model once a surface opts in.
+.sw-platform-shell {
+    box-sizing: border-box;
+    min-width: 0;
+    min-height: 0;
+    color: var(--sw-platform-text);
+    background: var(--sw-bg-tinted, var(--sw-platform-bg));
+    font-family: var(--b3-font-family, inherit);
+
+    *, *::before, *::after { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+
+    :where(button, [role="button"], input, select, textarea):focus-visible {
+        outline: 2px solid var(--sw-platform-accent);
+        outline-offset: 2px;
+        box-shadow: var(--sw-platform-focus);
+    }
+}
+
+// Shared chrome -------------------------------------------------------------
+// The chrome is mounted inside the existing surface root.  Keeping it as a
+// fixed-size sibling means surface-specific body layouts and their focus
+// contracts do not need to know about the platform header.
+.sw-platform-chrome {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    min-width: 0;
+    container-name: sw-platform;
+    container-type: inline-size;
+    color: var(--sw-platform-text);
+    background: var(--sw-platform-bg);
+}
+
+// Platform surfaces render their own branded header and close action.  Keep
+// SiYuan's generic Dialog title row out of the surface so the same title is
+// not shown twice (for example, "页签切换器" above the platform header).
+.b3-dialog__container.sw-platform-dialog > .b3-dialog__header,
+.b3-dialog__container.sw-mobile-switcher-dialog > .b3-dialog__header,
+.b3-dialog__container.sw-mobile-switcher-dialog > .b3-dialog__close {
+    display: none !important;
+}
+
+.b3-dialog__container.sw-platform-dialog:not(.sw-mobile-switcher-dialog):not(:has(.sw-platform-chrome)) > .b3-dialog__header,
+.b3-dialog__container.sw-settings-dialog > .b3-dialog__header {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.b3-dialog__container.sw-platform-dialog > .b3-dialog__body {
+    padding-top: 0 !important;
+}
+
+// T-7711: 平台弹窗自适应非全屏模式：Bento 深度柔影、18px 大圆角与内层 1px 细微光切面
+.b3-dialog__container.sw-platform-dialog:not(.sw-dialog--fullscreen) {
+    border-radius: var(--sw-radius-panel, 18px);
+    border: 1px solid color-mix(in srgb, var(--sw-platform-accent) 22%, var(--b3-border-color));
+    box-shadow: var(--sw-shadow-bento), inset 0 0 0 1px color-mix(in srgb, var(--b3-theme-surface) 60%, transparent);
+    overflow: hidden;
+    transition: width $sw-dur-base $sw-ease, height $sw-dur-base $sw-ease;
+}
+
+// T-7712: 平台弹窗全屏铺满模式：彻底清除外边框、阴影与圆角，零缝隙纯粹沉浸
+.b3-dialog__container.sw-platform-dialog.sw-dialog--fullscreen {
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+
+.sw-platform-header__brand-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sw-platform-header__brand-mark {
+    display: grid;
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    place-items: center;
+    border-radius: var(--sw-platform-radius-sm, 8px);
+    color: var(--sw-platform-text-on-accent);
+    background: linear-gradient(135deg, var(--sw-platform-accent), color-mix(in srgb, var(--sw-platform-accent) 45%, #2fa6a0));
+    font-size: var(--sw-font-md, 13px);
+    font-weight: 800;
+    line-height: 1;
+    user-select: none;
+}
+
+.sw-platform-header__brand-copy {
+    display: grid;
+    min-width: 0;
+    gap: 1px;
+}
+
+.sw-platform-header__brand-subtitle {
+    overflow: hidden;
+    color: var(--sw-platform-text-muted);
+    font-size: var(--sw-font-2xs, 10px);
+    font-weight: var(--sw-weight-medium, 500);
+    line-height: var(--sw-leading-compact, 1.2);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sw-platform-context__separator {
+    flex: 0 0 auto;
+    color: var(--sw-platform-text-muted);
+}
+
+.sw-platform-context__hint {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--sw-platform-text-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sw-platform-surface-nav__item[aria-current="page"] { cursor: default; }
+.sw-platform-surface-nav__item:not(button) { user-select: none; }
+
+// Sidebar chrome keeps actions on the first row and gives the full second row to navigation.
+.sw--sidebar > .sw-platform-chrome .sw-platform-header {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "actions" "nav";
+    gap: var(--sw-space-sm, 6px);
+    min-height: 0;
+    padding: var(--sw-space-md, 8px) 10px;
+}
+
+.sw--sidebar > .sw-platform-chrome .sw-platform-header__brand { display: none; }
+.sw--sidebar > .sw-platform-chrome .sw-platform-context { display: none; }
+.sw--sidebar > .sw-platform-chrome .sw-platform-header__actions { justify-self: end; }
+.sw--sidebar > .sw-platform-chrome .sw-platform-surface-nav { width: 100%; }
+.sw--sidebar > .sw-platform-chrome .sw-platform-surface-nav__item { flex: 1 1 auto; min-width: 0; padding-inline: var(--sw-space-md, 8px); }
+.sw--sidebar > .sw-platform-chrome .sw-platform-surface-nav__hint,
+.sw--sidebar > .sw-platform-chrome .sw-platform-status,
+.sw--sidebar > .sw-platform-chrome .sw-platform-header__close-hint,
+.sw--sidebar > .sw-platform-chrome .sw-platform-header__help-label { display: none; }
+
+.sw__mobile > .sw-platform-chrome .sw-platform-header {
+    min-height: 44px;
+    padding-inline: 10px;
+}
+
+.sw__mobile > .sw-platform-chrome .sw-platform-context {
+    min-height: 32px;
+    padding-inline: 10px;
+}
+
+.sw__mobile > .sw-platform-chrome .sw-platform-header__brand { min-width: 0; }
+
+// Header and surface navigation --------------------------------------------
+.sw-platform-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(350px, 520px) minmax(0, 1fr);
+    grid-template-areas: "brand nav actions";
+    align-items: center;
+    gap: var(--sw-platform-space-4);
+    min-width: 0;
+    min-height: var(--sw-platform-header-height);
+    padding: var(--sw-platform-space-2) var(--sw-platform-space-4);
+    border-bottom: 1px solid var(--sw-platform-line);
+    background: color-mix(in srgb, var(--sw-platform-bg) 88%, var(--sw-platform-surface));
+}
+
+.sw-platform-header__brand,
+.sw-platform-header__context,
+.sw-platform-header__actions {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: var(--sw-platform-space-2);
+}
+
+.sw-platform-header__brand { grid-area: brand; min-width: 0; font-weight: var(--sw-weight-bold, 700); }
+.sw-platform-header__context { flex: 1 1 auto; color: var(--sw-platform-text-muted); font-size: var(--sw-font-sm, 12px); overflow: hidden; }
+.sw-platform-header__context > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sw-platform-header__actions { grid-area: actions; justify-self: end; flex: 0 0 auto; justify-content: flex-end; }
+
+// T-7402 全屏模式顶栏右上角安全避让（兼容思源笔记桌面端在全屏无边框窗口右上角绘制的系统控制按钮）
+:is(.speed-switch.sw--fullscreen, .sw-dialog--fullscreen) .sw-platform-header,
+.b3-dialog__container.sw-dialog--fullscreen .sw-platform-header {
+    padding-right: calc(140px + var(--sw-platform-space-4, 16px));
+}
+
+.sw-platform-header__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    padding: 0;
+    // T-7015b（用户反馈）：关闭钮从纯文本钮升级为带边框/底色的实感钮——
+    // 位置本就在 header 最右，此前只是无背景小图标，可发现性不足。
+    border: 1px solid var(--sw-platform-line, var(--b3-border-color));
+    border-radius: var(--b3-border-radius);
+    background: var(--sw-platform-surface, var(--b3-theme-surface));
+    cursor: pointer;
+    appearance: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    pointer-events: auto;
+    transition: border-color $sw-dur-fast $sw-ease, background $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease;
+
+    &:hover {
+        border-color: var(--sw-platform-accent, var(--b3-theme-primary));
+        background: color-mix(in srgb, var(--sw-platform-accent, var(--b3-theme-primary)) 12%, transparent);
+        box-shadow: 0 0 8px color-mix(in srgb, var(--sw-platform-accent, var(--b3-theme-primary)) 30%, transparent);
+    }
+
+    &:active {
+        transform: translateY(1px);
+    }
+}
+
+.sw-platform-header__close svg { width: var(--sw-icon-md, 18px); height: 18px; }
+
+// Header affordances -------------------------------------------------------
+// The platform chrome creates the settings/close hint elements in the
+// TypeScript mount path.  Keep their visual contract here instead of relying
+// on SiYuan's generic button skin, which disappears on dark themes and in
+// compact/mobile dialogs.
+.sw-platform-header__icon-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--sw-platform-radius-sm, 8px);
+    color: var(--sw-platform-text-muted);
+    background: transparent;
+    cursor: pointer;
+    transition: color $sw-dur-base $sw-ease, border-color $sw-dur-base $sw-ease, background $sw-dur-base $sw-ease;
+}
+
+.sw-platform-header__icon-action:hover,
+.sw-platform-header__icon-action:focus-visible {
+    border-color: var(--sw-platform-accent);
+    color: var(--sw-platform-accent);
+    background: var(--sw-platform-accent-soft);
+}
+
+.sw-platform-header__icon-action:active { transform: translateY(1px); }
+.sw-platform-header__icon-action svg { width: 16px; height: 16px; }
+.sw-platform-header__help { width: auto; min-width: 36px; gap: var(--sw-space-sm, 6px); padding-inline: var(--sw-space-md, 8px); }
+.sw-platform-header__help-label { font-size: var(--sw-font-sm, 12px); white-space: nowrap; }
+
+.sw-platform-header__close-hint,
+.sw-platform-dialog__close-hint {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--sw-space-xs, 4px);
+    color: var(--sw-platform-text-muted);
+    font-size: var(--sw-font-xs, 11px);
+    line-height: var(--sw-leading-compact, 1.2);
+    user-select: none;
+    white-space: nowrap;
+}
+
+.sw-platform-header__close-hint .sw-platform-kbd,
+.sw-platform-dialog__close-hint .sw-platform-kbd {
+    min-width: 28px;
+    height: var(--sw-control-h-sm, 20px);
+    padding-inline: var(--sw-space-sm, 6px);
+    font-size: var(--sw-font-2xs, 10px);
+}
+
+.sw-platform-header__close-hint-label,
+.sw-platform-dialog__close-hint-label { line-height: 1; }
+
+.sw-platform-header__close-group {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sw-space-md, 8px);
+    padding-left: 10px;
+    border-left: 1px solid var(--sw-platform-line);
+}
+
+.sw-platform-dialog__close-button {
+    flex: 0 0 auto;
+    min-width: 36px;
+    min-height: 36px;
+}
+
+.sw-dialog__mobile-close-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    min-height: 32px;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    margin-left: auto;
+    border: none;
+    border-radius: var(--sw-radius-control, 6px);
+    background: transparent;
+    color: var(--b3-theme-on-surface);
+    touch-action: manipulation;
+    cursor: pointer;
+
+    svg {
+        width: 18px;
+        height: 18px;
+        fill: currentColor;
+    }
+
+    &:active {
+        opacity: 0.7;
+    }
+}
+
+.b3-dialog__container:has(.sw-dialog__mobile-close-btn) > .b3-dialog__close {
+    display: none !important;
+}
+
+@media (max-width: 768px), (pointer: coarse) {
+    .sw-dialog__mobile-close-btn {
+        display: inline-flex !important;
+        min-width: 44px;
+        min-height: 44px;
+        width: 44px;
+        height: 44px;
+    }
+}
+.body--mobile .sw-dialog__mobile-close-btn,
+[data-theme-mode="mobile"] .sw-dialog__mobile-close-btn {
+    display: inline-flex !important;
+}
+
+.sw-platform-surface-nav {
+    grid-area: nav;
+    justify-self: center;
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-xs, 4px);
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.sw-platform-surface-nav::-webkit-scrollbar { display: none; }
+
+.sw-platform-surface-nav__item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 48px;
+    gap: var(--sw-space-md, 8px);
+    padding: var(--sw-space-xs, 4px) 10px;
+    // T-7015c（用户反馈）：非当前项默认给淡边框胶囊——静态观感即可辨认「这是
+    // 可点的按钮」，不再依赖 hover 才显形（按钮可发现性）。
+    border: 1px solid color-mix(in srgb, var(--sw-platform-line, var(--b3-border-color)) 72%, transparent);
+    border-radius: var(--sw-platform-radius-sm);
+    color: var(--sw-platform-text-muted);
+    background: transparent;
+    cursor: pointer;
+    font: inherit;
+    white-space: nowrap;
+    // T-7228：顶栏入口是连续操作区。保留自身命中层与触控语义，避免
+    // 宿主按钮皮肤/透明边界让用户必须反复移动鼠标才能得到反馈。
+    position: relative;
+    z-index: $sw-z-base;
+    appearance: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    pointer-events: auto;
+    // T-7027: surface switching must acknowledge pointer/touch activation immediately.
+    transition: none;
+}
+
+.sw-platform-surface-nav__icon { flex: 0 0 18px; width: 18px; height: 18px; pointer-events: none; }
+.sw-platform-surface-nav__copy { display: flex; align-items: center; min-width: 0; text-align: left; pointer-events: none; }
+.sw-platform-surface-nav__label { overflow: hidden; color: inherit; font-size: var(--sw-font-sm, 12px); font-weight: var(--sw-weight-bold, 700); text-overflow: ellipsis; white-space: nowrap; }
+.sw-platform-surface-nav__hint { display: none !important; }
+
+.sw-platform-surface-nav__item:hover,
+.sw-platform-surface-nav__item:focus-visible {
+    color: var(--sw-platform-text);
+    background: var(--sw-platform-accent-soft);
+    border-color: color-mix(in srgb, var(--sw-platform-accent) 45%, var(--sw-platform-line));
+}
+
+.sw-platform-surface-nav__item.is-active {
+    border-color: color-mix(in srgb, var(--sw-platform-accent) 40%, transparent);
+    background: var(--sw-platform-accent-soft);
+    box-shadow: var(--sw-shadow-xs);
+}
+
+.sw-platform-surface-nav__item[aria-current="page"],
+.sw-platform-surface-nav__item.is-active {
+    border-color: color-mix(in srgb, var(--sw-platform-accent) 35%, transparent);
+    color: var(--sw-platform-accent);
+    background: var(--sw-platform-accent-soft);
+    box-shadow: var(--sw-shadow-xs);
+    font-weight: var(--sw-weight-semibold, 600);
+}
+
+.sw-platform-surface-nav__item:active {
+    color: var(--sw-platform-text);
+    background: var(--sw-platform-accent-pressed);
+    transform: translateY(1px);
+}
+
+.sw-platform-surface-nav__item:focus-visible {
+    outline: 2px solid var(--sw-platform-accent);
+    outline-offset: 1px;
+    box-shadow: var(--sw-focus-glow);
+    z-index: $sw-z-raised;
+}
+
+// Context and state ----------------------------------------------------------
+.sw-platform-context {
+    display: flex;
+    align-items: center;
+    gap: var(--sw-platform-space-2);
+    min-width: 0;
+    min-height: 36px;
+    padding: 6px var(--sw-platform-space-4);
+    border-bottom: 1px solid color-mix(in srgb, var(--sw-platform-line) 72%, transparent);
+    color: var(--sw-platform-text-muted);
+    background: color-mix(in srgb, var(--sw-platform-surface) 64%, var(--sw-platform-bg));
+    font-size: var(--sw-font-xs, 11px);
+}
+
+// 工作台表面隐藏面包屑栏，让位给沉浸小组件桌面 (Bento 3.0)
+.sw-platform-chrome[data-platform-surface="workbench"] .sw-platform-context {
+    display: none !important;
+}
+
+.sw-platform-context__trail,
+.sw-platform-context__object,
+.sw-platform-context__actions {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: var(--sw-platform-space-1);
+}
+
+.sw-platform-context__trail,
+.sw-platform-context__object { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sw-platform-context__object { color: var(--sw-platform-text); font-weight: var(--sw-weight-semibold, 600); }
+.sw-platform-context__actions { margin-left: auto; flex: 0 0 auto; }
+
+.sw-platform-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sw-space-sm, 6px);
+    width: fit-content;
+    max-width: 100%;
+    min-height: 24px;
+    padding: var(--sw-space-xs, 4px) var(--sw-space-md, 8px);
+    border: 1px solid transparent;
+    border-radius: var(--sw-platform-radius-pill);
+    color: var(--sw-platform-text-muted);
+    background: var(--sw-platform-surface-muted);
+    font-size: var(--sw-font-xs, 11px);
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+// T-6871（RZ-1）：状态徽标的语义色点——颜色/文字之外的第二通道（§5.2 视觉刻度：
+// 状态至少两种通道同时呈现）；中性徽标同样带点，保持所有徽标基线一致。
+.sw-platform-status::before {
+    content: "";
+    flex: 0 0 auto;
+    width: 6px;
+    height: 6px;
+    border-radius: var(--sw-platform-radius-pill);
+    background: currentColor;
+    opacity: .85;
+}
+
+// T-6871（RZ-1）：徽标文字用语义色与正文色混合——宿主主题的 warning/error 原色
+// 直接做小字号文字时对比度可能不足 3:1（Chromium 采样实测 light-stale 2.9 /
+// dark-error 2.99），混入正文色保住色相的同时把对比度拉回徽章线以上。
+.sw-platform-status[data-state="ready"],
+.sw-platform-status.is-ready {
+    border-color: color-mix(in srgb, var(--sw-platform-success) 24%, transparent);
+    color: color-mix(in srgb, var(--sw-platform-success) 72%, var(--sw-platform-text));
+    background: color-mix(in srgb, var(--sw-platform-success) 12%, transparent);
+}
+
+.sw-platform-status[data-state="loading"],
+.sw-platform-status.is-loading {
+    border-color: color-mix(in srgb, var(--sw-platform-accent) 24%, transparent);
+    color: var(--sw-platform-accent);
+    background: var(--sw-platform-accent-soft);
+}
+
+.sw-platform-status[data-state="stale"],
+.sw-platform-status[data-state="dirty"],
+.sw-platform-status.is-stale,
+.sw-platform-status.is-dirty {
+    border-color: color-mix(in srgb, var(--sw-platform-warning) 28%, transparent);
+    color: color-mix(in srgb, var(--sw-platform-warning) 68%, var(--sw-platform-text));
+    background: color-mix(in srgb, var(--sw-platform-warning) 12%, transparent);
+}
+
+.sw-platform-status[data-state="blocked"],
+.sw-platform-status[data-state="error"],
+.sw-platform-status.is-blocked,
+.sw-platform-status.is-error {
+    border-color: color-mix(in srgb, var(--sw-platform-error) 30%, transparent);
+    color: color-mix(in srgb, var(--sw-platform-error) 68%, var(--sw-platform-text));
+    background: color-mix(in srgb, var(--sw-platform-error) 12%, transparent);
+}
+
+// Actions --------------------------------------------------------------------
+.sw-platform-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--sw-platform-space-2);
+    min-width: 0;
+}
+
+.sw-platform-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sw-space-sm, 6px);
+    min-height: 36px;
+    padding: var(--sw-space-sm, 6px) var(--sw-space-lg, 12px);
+    border: 1px solid var(--sw-platform-line);
+    border-radius: var(--sw-platform-radius-sm);
+    color: var(--sw-platform-text);
+    background: var(--sw-platform-surface);
+    cursor: pointer;
+    font: inherit;
+    line-height: 1.3;
+    touch-action: manipulation;
+    transition: color $sw-dur-fast $sw-ease, background $sw-dur-fast $sw-ease, border-color $sw-dur-fast $sw-ease, transform $sw-dur-fast $sw-ease;
+}
+
+.sw-platform-action:hover,
+.sw-platform-action[aria-pressed="true"] {
+    border-color: color-mix(in srgb, var(--sw-platform-accent) 48%, var(--sw-platform-line));
+    color: var(--sw-platform-accent);
+    background: var(--sw-platform-accent-soft);
+}
+
+.sw-platform-action:active { transform: translateY(1px); background: var(--sw-platform-accent-soft); }
+.sw-platform-action:disabled { opacity: .52; cursor: default; transform: none; }
+.sw-platform-action--primary { border-color: var(--sw-platform-accent); color: var(--sw-platform-text-on-accent); background: var(--sw-platform-accent); }
+.sw-platform-action--primary:hover { border-color: var(--sw-platform-accent); color: var(--sw-platform-text-on-accent); background: color-mix(in srgb, var(--sw-platform-accent) 88%, #000); }
+.sw-platform-action--quiet { border-color: transparent; color: var(--sw-platform-text-muted); background: transparent; }
+.sw-platform-action--danger { color: var(--sw-platform-error); }
+
+// T-6871（RZ-1）：胶囊主动作与主色软底次动作——设计规格 §1 模式 6
+// （每屏唯一主色胶囊主动作；次动作用软底胶囊）。
+.sw-platform-action--pill { border-radius: var(--sw-platform-radius-pill); }
+.sw-platform-action--soft { border-color: transparent; color: var(--sw-platform-accent); background: var(--sw-platform-accent-soft); }
+.sw-platform-action--soft:hover { border-color: color-mix(in srgb, var(--sw-platform-accent) 40%, transparent); color: var(--sw-platform-accent); }
+
+// Keyboard hints (RZ-1/T-6871) -------------------------------------------------
+// 键位提示芯片：把快捷键常驻在界面上（Raycast/Linear 惯例），升级为微立体机械键帽
+.sw-platform-kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 var(--sw-space-sm, 6px);
+    border: 1px solid var(--sw-platform-line);
+    border-radius: var(--sw-radius-sm, 6px);
+    color: var(--sw-platform-text-muted);
+    background: var(--sw-platform-surface);
+    box-shadow: inset 0 1px 0 0 color-mix(in srgb, var(--sw-platform-text-on-accent) 18%, transparent), 0 1px 2px rgba(0, 0, 0, 0.08);
+    font-family: var(--b3-font-family-code, ui-monospace, Consolas, monospace);
+    font-size: var(--sw-font-2xs, 10px);
+    font-weight: var(--sw-weight-semibold, 600);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    white-space: nowrap;
+    user-select: none;
+    vertical-align: middle;
+}
+
+.sw-platform-context__kbd-hints {
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-xs, 4px);
+    margin-left: auto;
+    flex: 0 0 auto;
+}
+
+// Segmented control (RZ-1/T-6871) ----------------------------------------------
+// 分段控件：2~4 个互斥取值的设置项用它替代下拉（取值一眼可见、一次点击切换）。
+.sw-platform-seg {
+    display: inline-flex;
+    align-items: stretch;
+    gap: var(--sw-space-2xs, 2px);
+    max-width: 100%;
+    padding: var(--sw-space-xs, 4px);
+    border: 1px solid var(--sw-platform-line);
+    border-radius: var(--sw-radius-control, 10px);
+    background: var(--sw-platform-surface-muted);
+}
+
+.sw-platform-seg__item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: var(--sw-control-h-md);
+    padding: var(--sw-space-xs, 4px) var(--sw-space-lg, 12px);
+    border: 0;
+    border-radius: $sw-radius-sm;
+    color: var(--sw-platform-text);
+    background: transparent;
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--sw-font-sm, 12px);
+    line-height: var(--sw-leading-compact, 1.2);
+    white-space: nowrap;
+    transition: color $sw-dur-fast $sw-ease, background $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease;
+}
+
+.sw-platform-seg__item:hover { color: var(--sw-platform-text); background: var(--sw-platform-accent-soft); }
+
+.sw-platform-seg__item.is-active {
+    color: var(--sw-platform-text);
+    background: var(--sw-platform-bg);
+    font-weight: var(--sw-weight-semibold, 600);
+    box-shadow: var(--sw-shadow-xs);
+}
+
+.sw-platform-seg__item:disabled { opacity: .52; cursor: default; }
+
+@media (pointer: coarse) {
+    .sw-platform-surface-nav__item,
+    .sw-platform-action { min-height: 48px; }
+    // 分段项本体 38px + 容器上下 padding 3px = 44px 命中区（触控不降级）。
+    .sw-platform-seg__item { min-height: 38px; }
+    .sw-platform-header__close,
+    .sw-platform-header__icon-action {
+        width: 44px;
+        height: 44px;
+        min-width: 44px;
+    }
+    .sw-platform-dialog__close-button { min-width: 44px; min-height: 44px; }
+}
+
+@media (max-width: 960px) {
+    .sw-platform-header {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas: "brand actions" "nav nav";
+        gap: var(--sw-space-md, 8px) var(--sw-space-lg, 12px);
+        min-height: 0;
+        padding: var(--sw-space-md, 8px) var(--sw-space-lg, 12px);
+    }
+    .sw-platform-surface-nav { justify-self: stretch; }
+    .sw-platform-surface-nav__hint { display: none; }
+    .sw-platform-header__close-hint { display: none; }
+    .sw-platform-header__help-label { display: none; }
+    .sw-platform-context { align-items: flex-start; flex-wrap: wrap; }
+    .sw-platform-context__actions { margin-left: 0; flex-basis: 100%; }
+    // 真机反馈（T-6970）：分段项 nowrap，皮肤选择这类长标签（融合主题（默认）/苹果风格 · 液态玻璃）
+    // 在手机宽度下互相挤压溢出、文字重叠。窄容器允许整项换行（flex-wrap），放不下的分段
+    // 落到第二行；宽容器（桌面 >640px）保持单行不受影响。
+    .sw-platform-seg { flex-wrap: wrap; row-gap: var(--sw-space-2xs, 2px); }
+}
+
+@container sw-platform (max-width: 560px) {
+    .sw-platform-header__brand-subtitle { display: none; }
+}
+
+@media (max-width: 560px) {
+    .sw-platform-dialog__close-hint-label,
+    .sw__mobile > .sw-platform-chrome .sw-platform-header__close-hint-label { display: none; }
+    .sw-platform-dialog__close-hint .sw-platform-kbd { min-width: 26px; }
+    .sw-platform-surface-nav__icon { display: none; }
+    .sw-platform-surface-nav__item { gap: var(--sw-space-xs, 4px); padding-inline: var(--sw-space-sm, 6px); }
+    .sw-platform-surface-nav__label { font-size: var(--sw-font-xs, 11px); }
+    .sw-platform-header__close,
+    .sw-platform-header__icon-action { width: 44px; height: 44px; min-width: 44px; }
+    .sw__mobile > .sw-platform-chrome .sw-platform-header {
+        gap: var(--sw-space-sm, 6px);
+        padding-inline: var(--sw-space-md, 8px);
+    }
+    .sw__mobile > .sw-platform-chrome .sw-platform-header__actions { gap: var(--sw-space-xs, 4px); }
+}
+
+// Dialog width can be smaller than the browser viewport (custom/adaptive
+// panel sizes), so viewport media queries alone leave the three-column header
+// in an over-constrained row.  Mirror the compact header contract from the
+// viewport rules against the chrome container as well.  The sidebar keeps its
+// dedicated actions-then-navigation layout through the more specific rules
+// above.
+@container sw-platform (max-width: 960px) {
+    .sw-platform-surface:not(.sw--sidebar) > .sw-platform-chrome .sw-platform-header {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas: "brand actions" "nav nav";
+        gap: var(--sw-space-md, 8px) var(--sw-space-lg, 12px);
+        min-height: 0;
+        padding: var(--sw-space-md, 8px) var(--sw-space-lg, 12px);
+    }
+
+    .sw-platform-surface:not(.sw--sidebar) > .sw-platform-chrome .sw-platform-surface-nav { justify-self: stretch; }
+    .sw-platform-surface:not(.sw--sidebar) > .sw-platform-chrome .sw-platform-surface-nav__hint,
+    .sw-platform-surface:not(.sw--sidebar) > .sw-platform-chrome .sw-platform-header__close-hint,
+    .sw-platform-surface:not(.sw--sidebar) > .sw-platform-chrome .sw-platform-header__help-label { display: none; }
+}
+
+@container sw-platform (max-width: 560px) {
+    .sw-platform-surface:not(.sw--sidebar) > .sw-platform-chrome .sw-platform-surface-nav__icon { display: none; }
+    .sw-platform-surface:not(.sw--sidebar) > .sw-platform-chrome .sw-platform-surface-nav__item { gap: var(--sw-space-xs, 4px); padding-inline: var(--sw-space-sm, 6px); }
+    .sw-platform-surface:not(.sw--sidebar) > .sw-platform-chrome .sw-platform-surface-nav__label { font-size: var(--sw-font-xs, 11px); }
+    .sw-platform-surface:not(.sw--sidebar) > .sw-platform-chrome .sw-platform-header__close,
+    .sw-platform-surface:not(.sw--sidebar) > .sw-platform-chrome .sw-platform-header__icon-action {
+        width: 44px;
+        height: 44px;
+        min-width: 44px;
+    }
+}
+
+@container sw-platform (max-width: 300px) {
+    .sw--sidebar > .sw-platform-chrome .sw-platform-surface-nav__icon { display: none; }
+    .sw--sidebar > .sw-platform-chrome .sw-platform-surface-nav__item { padding-inline: var(--sw-space-xs, 4px); }
+    .sw--sidebar > .sw-platform-chrome .sw-platform-surface-nav__label { font-size: var(--sw-font-xs, 11px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sw-platform-shell *,
+    .sw-platform-shell *::before,
+    .sw-platform-shell *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+
+    .sw-platform-header__close:active,
+    .sw-platform-header__icon-action:active { transform: none; }
+    .sw-platform-surface-nav__item:active { transform: none; }
+}
+
+@media (prefers-contrast: more) {
+    :is(.sw-platform-shell, .sw-platform-surface, .speed-switch, .sw-home, .sw-studio, .sw-fab-root) {
+        --sw-platform-line: var(--b3-border-color, currentColor);
+        --sw-platform-focus: 0 0 0 3px var(--sw-platform-accent);
+    }
+}
+
+// T-7435: 思源 3.8.8+ 桌面紧凑模式自适应 (:root[data-ui-density="compact"])
+:root[data-ui-density="compact"] {
+    --sw-platform-space-1: 2px;
+    --sw-platform-space-2: 4px;
+    --sw-platform-space-3: 8px;
+    --sw-platform-space-4: 12px;
+    --sw-platform-header-height: 48px;
+
+    .sw__card {
+        padding: var(--sw-space-xs, 4px) var(--sw-space-sm, 6px);
+        min-height: 40px;
+    }
+
+    .sw-home__cell {
+        padding: var(--sw-space-xs, 4px);
+    }
+
+    .sw__doc-item {
+        padding-block: var(--sw-space-xs, 4px);
+    }
+}
+
+// ==================== 现代工业三段式与统计优先外壳 (Three-Column & Metrics Bar) ====================
+
+// 1. 顶部统计优先关键指标栏 (Top Key Metrics Bar)
+// 固定一行 3~4 个关键指标，大数字配小标签，竖分隔而非卡片包裹
+.sw-platform-metrics-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    min-height: 54px;
+    padding: var(--sw-space-xs, 4px) var(--sw-space-xl, 16px);
+    margin: var(--sw-space-xs, 4px) var(--sw-space-md, 8px) var(--sw-space-sm, 6px);
+    border-radius: var(--sw-platform-radius-md, 12px);
+    background: var(--sw-card-float-bg, var(--b3-theme-surface));
+    box-shadow: var(--sw-shadow-bento);
+    flex: 0 0 auto;
+
+    .sw-platform-metric-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        flex: 1 1 0;
+        min-width: 0;
+        cursor: pointer;
+        padding: var(--sw-space-2xs, 2px) var(--sw-space-xs, 4px);
+        border-radius: var(--sw-radius-sm, 6px);
+        transition: transform $sw-dur-fast $sw-ease, background-color $sw-dur-fast $sw-ease;
+
+        &:hover {
+            background: var(--sw-color-accent-soft);
+            transform: translateY(-1px);
+
+            .sw-platform-metric-value {
+                color: var(--sw-color-accent);
+            }
+        }
+
+        &:active {
+            transform: translateY(0.5px) scale(0.98);
+        }
+
+        &:focus-visible {
+            outline: none;
+            box-shadow: var(--sw-focus-glow);
+        }
+
+        .sw-platform-metric-value {
+            font-size: var(--sw-font-stat-hero, 28px);
+            font-weight: var(--sw-weight-bold, 700);
+            font-variant-numeric: tabular-nums;
+            line-height: 1.1;
+            color: var(--sw-color-text, var(--b3-theme-on-background));
+            transition: color $sw-dur-fast $sw-ease;
+        }
+
+        .sw-platform-metric-label {
+            font-size: var(--sw-font-xs, 11px);
+            font-weight: var(--sw-weight-medium, 500);
+            color: var(--sw-color-text-muted, var(--b3-theme-on-surface-light));
+            margin-top: var(--sw-space-2xs, 2px);
+            white-space: nowrap;
+        }
+
+        &.is-data-accent .sw-platform-metric-value {
+            color: var(--sw-color-data, #10b981);
+        }
+    }
+
+    // 指标之间用半透明竖分隔线连接，绝不用卡片包裹
+    .sw-platform-metric-divider {
+        width: 1px;
+        height: var(--sw-control-h-md, 26px);
+        flex: 0 0 1px;
+        background: var(--sw-color-line-soft, color-mix(in srgb, var(--b3-border-color) 45%, transparent));
+    }
+
+    @container (max-width: 420px) {
+        padding: var(--sw-space-2xs, 2px) var(--sw-space-md, 8px);
+        min-height: 46px;
+
+        .sw-platform-metric-item.is-secondary,
+        .sw-platform-metric-divider.is-secondary {
+            display: none !important;
+        }
+
+        .sw-platform-metric-value {
+            font-size: var(--sw-font-2xl, 20px) !important;
+        }
+    }
+
+    @container (max-width: 280px) {
+        display: none !important;
+    }
+}
+
+// 2. 左侧极窄常驻图标导航 (Narrow Icon Rail)
+.sw-platform-icon-rail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 52px;
+    min-width: 52px;
+    padding: var(--sw-space-md, 8px) 0;
+    gap: var(--sw-space-sm, 6px);
+    border-right: 1px solid var(--sw-color-line-soft);
+    background: var(--sw-color-surface-muted, var(--b3-theme-surface-lighter));
+    flex: 0 0 52px;
+
+    .sw-platform-rail-item {
+        width: 38px;
+        height: 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--sw-radius-md, 8px);
+        color: var(--sw-color-text-subtle);
+        background: transparent;
+        cursor: pointer;
+        transition: background-color $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease, transform $sw-dur-fast $sw-ease;
+
+        svg {
+            width: var(--sw-icon-md, 20px);
+            height: var(--sw-icon-md, 20px);
+        }
+
+        &:hover {
+            background: var(--sw-color-surface-raised);
+            color: var(--sw-color-text);
+        }
+
+        &.is-active {
+            background: var(--sw-color-accent-soft);
+            color: var(--sw-color-accent);
+        }
+
+        &:active {
+            transform: scale(0.95);
+        }
+
+        &:focus-visible {
+            outline: none;
+            box-shadow: var(--sw-focus-glow);
+        }
+    }
+}

@@ -1,0 +1,3092 @@
+@use "00-tokens" as *;
+.sw-journal-prompt {
+    .sw-journal-prompt__tip {
+        margin-bottom: 10px;
+        color: var(--b3-theme-on-surface-light);
+    }
+
+    .sw-journal-prompt__sel {
+        margin-top: var(--sw-space-xs, 4px);
+
+        select.b3-select {
+            padding: var(--sw-space-md, 8px) 10px;
+            min-height: var(--sw-control-h, 34px);
+            border-radius: var(--sw-radius-md, 8px);
+            border-color: var(--sw-color-line-soft, var(--b3-border-color));
+            background: var(--b3-theme-background);
+        }
+    }
+}
+
+// 锁定思源 Dialog body 滚动（JS 打开弹窗时给 .b3-dialog__body 加 sw-scroll-locked 类）。
+// 思源默认 .b3-dialog__body { overflow:auto }，内容一高会整体滚动把顶栏滚走；
+// 这里改为 overflow:hidden + .sw__body 绝对定位铺满 body，
+// 使 .sw__scroll 成为唯一滚动容器（顶栏固定、回顶按钮依赖它的 scroll 事件）
+.b3-dialog__body.sw-scroll-locked {
+    overflow: hidden;
+    position: relative;
+
+    .sw__body {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: auto;
+    }
+}
+
+// T-7593：移动端全屏 Dialog 与软键盘弹起自适应防遮挡 (Mobile Spec v1)
+.sw-mobile-switcher-dialog {
+    width: 100vw !important;
+    height: 100dvh !important;
+    max-width: 100vw !important;
+    max-height: var(--sw-visual-viewport-h, 100dvh) !important;
+    border-radius: 0 !important;
+    padding-top: env(safe-area-inset-top, 0px) !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+}
+.sw__mobile.sw-keyboard-open {
+    max-height: var(--sw-visual-viewport-h, 100dvh) !important;
+
+    // T-7702: 软键盘输入态自动收起底部操作栏，释放垂直浏览空间
+    :is(.sw__quick-actions, .sw-home__quick-actions, .sw__mobile-bottom-nav) {
+        display: none !important;
+    }
+}
+
+.speed-switch {
+    .sw__scroll { container-type: size; }
+
+    @container (max-width: 679px) {
+        .sw--with-preview {
+            grid-template-columns: minmax(0, 1fr) !important;
+            .sw__doc-preview { display: none !important; }
+        }
+    }
+    // Shared visual language: lavender accent, blue-grey layers and restrained
+    // elevation.  Every token still derives from SiYuan theme variables so
+    // dark/custom themes remain in control; the hex values are safe fallbacks.
+    --sw-accent-fallback: #8576e8;
+    --sw-warm-accent: #d58a5b;
+    --sw-radius-control: 10px;
+    --sw-radius-card: 14px;
+    --sw-radius-panel: 18px;
+    --sw-control-bg: var(--b3-theme-surface-lighter, var(--b3-theme-background));
+    --sw-page-bg: var(--b3-theme-background);
+    --sw-surface-muted: var(--b3-theme-surface-lighter, var(--b3-theme-surface));
+    --sw-accent-soft: var(--b3-theme-primary-lightest, var(--b3-theme-surface-lighter));
+    // T-7198：color-mix 增强必须包 @supports。自定义属性不做解析期校验，裸写
+    // 后值会静默覆盖上面的 var() 回退——不支持 color-mix 的 WebView 在使用点
+    // 整体失效（背景/表面丢失），而不是落到回退定义。
+    @supports (background: color-mix(in srgb, red, blue)) {
+        --sw-page-bg: color-mix(in srgb, var(--b3-theme-background) 88%, #dfe5f2 12%);
+        --sw-surface-muted: color-mix(in srgb, var(--b3-theme-surface) 86%, #e4e8f2 14%);
+        --sw-accent-soft: color-mix(in srgb, var(--b3-theme-primary, var(--sw-accent-fallback)) 12%, transparent);
+    }
+    // 按下态：比 hover 的 accent-soft 更实一档，作为可点击列表项/标签的即时反馈。
+    // 独立成令牌是为了让 prefers-contrast: more 能一并覆盖（见文件末尾），
+    // 否则高对比度下按下反而比悬停更浅。
+    --sw-accent-pressed: color-mix(in srgb, var(--b3-theme-primary, var(--sw-accent-fallback)) 20%, transparent);
+    --sw-warm-soft: color-mix(in srgb, var(--sw-warm-accent) 13%, transparent);
+    --sw-hover-bg: var(--b3-list-hover, var(--sw-accent-soft));
+    --sw-focus-ring: 0 0 0 3px color-mix(in srgb, var(--b3-theme-primary, var(--sw-accent-fallback)) 24%, transparent);
+    --sw-card-shadow: 0 1px 2px rgba(51, 58, 83, .05), 0 8px 24px rgba(75, 85, 120, .08);
+    --sw-float-shadow: 0 14px 36px rgba(55, 65, 100, .15), 0 3px 10px rgba(55, 65, 100, .08);
+
+    // 对话框内部整体布局。注意：根元素同时挂 speed-switch 和 sw__body 两个类，
+    // 必须用 & 复合选择器（.speed-switch.sw__body），后代选择器匹配不到自身导致布局全断
+    &.sw__body {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+    }
+
+    // Mobile Dialog may be painted before WebView has resolved its final size.
+    // Keep the first frame invisible so cards never flash at the wrong scale.
+    &.sw__mobile--initializing {
+        visibility: hidden;
+    }
+
+    // 主体区域：左侧面板列表 + 右侧页签缩略图
+    .sw__main {
+        flex: 1;
+        display: flex;
+        min-height: 0;
+    }
+
+    // 右侧内容：工具栏 + 滚动区 + 回顶按钮
+    .sw__content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        min-width: 0;
+        min-height: 0;
+    }
+
+    // ==================== 顶栏（弹窗最顶端，极简无背景，仅底部细分隔线） ====================
+    .sw__toolbar {
+        // T-6979：收藏浮层位于顶栏内；顶栏须整体盖过后绘制的缩略图滚动层，
+        // 否则固定定位浮层的分组按钮会被卡片截获点击。
+        position: relative;
+        z-index: 3;
+        flex: none;
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: var(--sw-space-md, 8px);
+        min-height: 52px;
+        box-sizing: border-box;
+        padding: 10px var(--sw-space-lg, 12px);
+        border-bottom: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--b3-border-color) 45%, transparent));
+        background: var(--b3-theme-surface);
+        background: color-mix(in srgb, var(--b3-theme-surface) 94%, var(--b3-theme-background));
+
+        // 搜索框（带前置搜索图标，无边框透明底，聚焦时仅底部主色线）：基准 240px 可伸缩占满剩余
+        .sw__search-wrap {
+            position: relative;
+            flex: 1 1 240px;
+            min-width: 80px;
+            display: flex;
+            align-items: center;
+
+            .sw__search-icon {
+                position: absolute;
+                left: 10px;
+                top: 50%;
+                transform: translateY(-50%);
+                width: var(--sw-icon-xs, 14px);
+                height: 14px;
+                color: var(--b3-theme-on-surface-light);
+                pointer-events: none;
+            }
+
+            .sw__search {
+                width: 100%;
+                height: var(--sw-control-h);
+                padding-left: 30px;
+                padding-right: 56px;
+                border: 1px solid var(--sw-color-line-soft, var(--b3-border-color));
+                background: var(--sw-control-bg);
+                box-shadow: none;
+                border-radius: var(--sw-radius-control);
+                color: var(--b3-theme-on-background);
+
+                &::placeholder {
+                    color: var(--b3-theme-on-surface-light);
+                }
+
+                &:focus {
+                    outline: none;
+                    border-color: var(--b3-theme-primary);
+                    background: var(--sw-card-float-bg, var(--b3-theme-surface));
+                    box-shadow: var(--sw-focus-glow, var(--sw-focus-ring));
+                }
+            }
+
+            .sw__search-clear {
+                position: absolute;
+                right: 30px;
+                top: 50%;
+                transform: translateY(-50%);
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 20px;
+                height: 20px;
+                padding: 0;
+                border: 0;
+                border-radius: var(--sw-platform-radius-pill, 999px);
+                background: color-mix(in srgb, var(--b3-theme-on-surface) 10%, transparent);
+                color: var(--b3-theme-on-surface-light);
+                cursor: pointer;
+                transition: opacity $sw-dur-fast $sw-ease, background $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease, transform $sw-dur-fast $sw-ease;
+
+                &:hover {
+                    background: color-mix(in srgb, var(--b3-theme-on-surface) 18%, transparent);
+                    color: var(--b3-theme-on-background);
+                }
+
+                &:active {
+                    transform: translateY(-50%) scale(0.92);
+                }
+
+                // T-7575: 移动端防误触热区扩展至 44×44px（WCAG 2.5.5 / HIG 规范）
+                &::before {
+                    content: "";
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    width: 44px;
+                    height: 44px;
+                    min-width: 44px;
+                    min-height: 44px;
+                }
+
+                svg {
+                    width: 11px;
+                    height: 11px;
+                }
+
+                &:hover {
+                    background: color-mix(in srgb, var(--b3-theme-primary) 16%, transparent);
+                    color: var(--b3-theme-primary);
+                }
+
+                &:active {
+                    transform: translateY(-50%) scale(0.92);
+                }
+
+                &:focus-visible {
+                    outline: 2px solid var(--b3-theme-primary);
+                    outline-offset: -1px;
+                }
+            }
+
+            .sw__search-filter-btn {
+                position: absolute;
+                right: 2px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 28px;
+                height: 28px;
+                padding: 0;
+                border: 0;
+                border-radius: $sw-radius-sm;
+                background: transparent;
+                color: var(--b3-theme-on-surface-light);
+                cursor: pointer;
+
+                // T-7575: 移动端防误触热区扩展至 44×44px（WCAG 2.5.5 / HIG 规范）
+                &::before {
+                    content: "";
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    width: 44px;
+                    height: 44px;
+                    min-width: 44px;
+                    min-height: 44px;
+                }
+
+                svg {
+                    width: 15px;
+                    height: 15px;
+                }
+
+                &:hover {
+                    background: var(--b3-theme-surface-light);
+                    color: var(--b3-theme-on-background);
+                }
+
+                &:active {
+                    transform: scale(0.92);
+                }
+
+                &:focus-visible {
+                    outline: none;
+                    box-shadow: var(--sw-focus-glow);
+                }
+
+                &.sw__active {
+                    background: color-mix(in srgb, var(--b3-theme-primary) 12%, transparent);
+                    color: var(--b3-theme-primary);
+
+                    &::after {
+                        content: attr(data-filter-count);
+                        position: absolute;
+                        top: -2px;
+                        right: -2px;
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        min-width: 14px;
+                        height: 14px;
+                        padding: 0 var(--sw-space-xs, 4px);
+                        border: 2px solid var(--b3-theme-surface);
+                        border-radius: 999px;
+                        background: var(--sw-color-accent, var(--b3-theme-primary));
+                        color: var(--b3-theme-on-primary, #ffffff);
+                        font-family: var(--sw-font-mono, monospace);
+                        font-size: var(--sw-font-2xs, 10px);
+                        font-weight: var(--sw-weight-semibold, 600);
+                        font-variant-numeric: tabular-nums;
+                        line-height: 1;
+                        pointer-events: none;
+                        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+                    }
+                }
+
+                &:disabled {
+                    cursor: wait;
+                    opacity: .55;
+                }
+            }
+        }
+
+        // 带标签的下拉框组：左侧小字标签「收藏」「排序」，右侧控件；窄弹窗下可收缩
+        .sw__select-wrap {
+            flex: 0 1 auto;
+            display: flex;
+            align-items: center;
+            gap: var(--sw-space-sm, 6px);
+            min-width: 0;
+
+            .sw__select-label {
+                flex: none;
+                font-size: var(--sw-font-sm, 12px);
+                color: var(--b3-theme-on-surface-light);
+                white-space: nowrap;
+            }
+
+            .sw__sort {
+                flex: 0 1 132px;
+                height: 32px;
+                min-width: 96px;
+                border: 1px solid var(--b3-border-color);
+                background: var(--sw-control-bg);
+                color: var(--b3-theme-on-background);
+                border-radius: var(--sw-radius-control);
+            }
+
+            // ===== 收藏下拉组件（自定义，替代原生 select：分组可折叠/展开） =====
+            .sw__fav-dd {
+                position: relative;
+                flex: 0 1 auto;
+                min-width: 0;
+            }
+
+            .sw__fav-trigger {
+                display: flex;
+                align-items: center;
+                gap: var(--sw-space-xs, 4px);
+                height: 32px;
+                padding: 0 var(--sw-space-md, 8px);
+                min-width: 96px;
+                border: 1px solid var(--b3-border-color);
+                background: var(--sw-control-bg);
+                color: var(--b3-theme-on-background);
+                border-radius: var(--sw-radius-control);
+                cursor: pointer;
+                font-size: var(--sw-font-sm, 12px);
+
+                svg {
+                    width: 13px;
+                    height: 13px;
+                    flex: none;
+                    color: var(--b3-theme-on-surface-light);
+                }
+
+                .sw__fav-trigger-text {
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+
+                .sw__fav-badge {
+                    flex: none;
+                    min-width: 15px;
+                    padding: 0 var(--sw-space-xs, 4px);
+                    border-radius: $sw-radius-md;
+                    background: var(--b3-theme-primary);
+                    color: var(--b3-theme-on-primary);
+                    font-size: var(--sw-font-2xs, 10px);
+                    line-height: 15px;
+                    text-align: center;
+                }
+
+                &:hover {
+                    border-color: var(--b3-theme-primary-light);
+                    color: var(--b3-theme-primary);
+
+                    svg {
+                        color: var(--b3-theme-primary);
+                    }
+                }
+            }
+
+            // 浮层面板：分组标题 + 组内项。
+            // fixed 定位 + JS 计算坐标（positionFavPanel）：脱离侧边栏 dock 的 overflow 裁剪，
+            // 窄侧边栏下自动收窄宽度并夹紧在宿主与视口内，下方空间不足时翻转到上方
+            .sw__fav-panel {
+                position: fixed;
+                z-index: 999;
+                width: 248px;
+                // T-7017：视口比例高度（dvh 动态视口跟随软键盘收放；旧 WebView 回退 320px）+ 最小可用高度
+                max-height: 320px;
+                max-height: min(60dvh, 480px);
+                min-height: 200px;
+                overflow: auto;
+                padding: var(--sw-space-xs, 4px);
+                background: var(--b3-theme-surface);
+                border: 1px solid var(--b3-border-color);
+                border-radius: $sw-radius-md;
+                box-shadow: var(--b3-dialog-shadow);
+
+                .sw__fav-empty {
+                    min-height: 64px;
+                    padding: 18px 10px;
+                    border-radius: calc(var(--sw-radius-card) - 2px);
+                    background: color-mix(in srgb, var(--b3-theme-background) 44%, transparent);
+                    font-size: var(--sw-font-sm, 12px);
+                    color: var(--b3-theme-on-surface-light);
+                    text-align: center;
+                }
+
+                .sw__fav-group + .sw__fav-group {
+                    margin-top: var(--sw-space-2xs, 2px);
+                }
+
+                .sw__fav-group-head {
+                    display: flex;
+                    align-items: center;
+                    gap: var(--sw-space-sm, 6px);
+                    width: 100%;
+                    padding: var(--sw-space-sm, 6px) var(--sw-space-md, 8px);
+                    border: none;
+                    background: transparent;
+                    border-radius: 4px;
+                    color: var(--b3-theme-on-surface);
+                    font-size: var(--sw-font-sm, 12px);
+                    font-weight: var(--sw-weight-semibold, 600);
+                    cursor: pointer;
+
+                    .sw__fav-arrow {
+                        width: 10px;
+                        height: 10px;
+                        flex: none;
+                        transition: transform $sw-dur-base $sw-ease;
+                    }
+
+                    .sw__fav-group-name {
+                        flex: 1;
+                        min-width: 0;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        white-space: nowrap;
+                        text-align: left;
+                    }
+
+                    .sw__fav-count {
+                        flex: none;
+                        font-size: var(--sw-font-2xs, 10px);
+                        font-weight: var(--sw-weight-regular, 400);
+                        color: var(--b3-theme-on-surface-light);
+                        background: var(--b3-theme-surface-lighter, var(--b3-theme-background));
+                        border-radius: $sw-radius-md;
+                        padding: 0 var(--sw-space-sm, 6px);
+                        line-height: 15px;
+                    }
+
+                    &:hover {
+                        background: var(--b3-list-hover);
+                    }
+
+                    &:focus-visible {
+                        outline: none;
+                        box-shadow: inset var(--sw-focus-ring);
+                    }
+                }
+
+                .sw__fav-items {
+                    display: flex;
+                    flex-direction: column;
+                    padding-bottom: var(--sw-space-2xs, 2px);
+                }
+
+                .sw__fav-item {
+                    display: flex;
+                    align-items: center;
+                    gap: var(--sw-space-sm, 6px);
+                    width: 100%;
+                    padding: var(--sw-space-sm, 6px) var(--sw-space-md, 8px) var(--sw-space-sm, 6px) var(--sw-space-2xl, 24px);
+                    border: none;
+                    background: transparent;
+                    border-radius: 4px;
+                    color: var(--b3-theme-on-background);
+                    font-size: var(--sw-font-sm, 12px);
+                    cursor: pointer;
+                    text-align: left;
+
+                    svg {
+                        width: 12px;
+                        height: 12px;
+                        flex: none;
+                        color: var(--b3-theme-on-surface-light);
+                    }
+
+                    span {
+                        min-width: 0;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        white-space: nowrap;
+                    }
+
+                    &:hover {
+                        background: var(--b3-list-hover);
+                        color: var(--b3-theme-primary);
+                    }
+
+                    &:focus-visible {
+                        outline: none;
+                        box-shadow: inset var(--sw-focus-ring);
+                    }
+                }
+
+                // 无分组时的平铺列表：不缩进
+                .sw__fav-items--flat .sw__fav-item {
+                    padding-left: var(--sw-space-md, 8px);
+                }
+
+                // 折叠状态：隐藏组内项，箭头转向
+                .sw__fav-collapsed {
+                    .sw__fav-items {
+                        display: none;
+                    }
+
+                    .sw__fav-arrow {
+                        transform: rotate(-90deg);
+                    }
+                }
+            }
+        }
+
+        // 顶栏图标按钮：无边框无背景，hover 仅文字变主色
+        .sw__icon-btn {
+            flex: none;
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            border: none;
+            border-radius: var(--sw-radius-control);
+            color: var(--b3-theme-on-surface);
+            cursor: pointer;
+            transition: color $sw-dur-base, background-color $sw-dur-base;
+
+            svg {
+                width: var(--sw-icon-sm, 16px);
+                height: 16px;
+            }
+
+            &:hover {
+                color: var(--b3-theme-primary);
+                background: var(--sw-hover-bg);
+            }
+
+            &:focus-visible {
+                outline: none;
+                color: var(--b3-theme-primary);
+                box-shadow: var(--sw-focus-ring);
+            }
+        }
+
+        // 全屏 ⇄ 普通切换按钮：普通模式显示"进入全屏"角标外扩图标（默认态）
+        .sw__fullscreen-btn {
+            .sw__fs-enter {
+                display: block;
+            }
+
+            .sw__fs-exit {
+                display: none;
+            }
+        }
+    }
+
+    // ==================== 左侧面板列表（极简：无背景无边框，靠留白与文字色区分） ====================
+    // 三种显示方式（设置项 dockDisplay）：
+    //   full      —— 完整列表（默认）
+    //   collapsed —— 折叠为图标条：隐藏名称，hover 浮出名称，顶部按钮可展开
+    //   hidden    —— 不渲染（内容区占满弹窗全宽）
+    .sw__dock {
+        flex: none;
+        width: 156px;
+        overflow: auto;
+        padding: 10px var(--sw-space-md, 8px) 10px var(--sw-space-lg, 12px);
+    }
+
+    // 折叠 ⇄ 完整 切换按钮：置于列表顶部，弱化为图标按钮
+    .sw__dock-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        margin: 0 0 var(--sw-space-sm, 6px) auto;
+        padding: 0;
+        border: none;
+        border-radius: var(--sw-platform-radius-pill, 999px);
+        background: transparent;
+        color: var(--b3-theme-on-surface-light);
+        cursor: pointer;
+        transition: color $sw-dur-fast $sw-ease, background-color $sw-dur-fast $sw-ease, transform $sw-dur-fast $sw-ease;
+
+        svg {
+            width: var(--sw-icon-xs, 14px);
+            height: 14px;
+        }
+
+        &:hover,
+        &:focus {
+            color: var(--b3-theme-primary);
+            background: var(--b3-theme-primary-lightest);
+            outline: none;
+        }
+
+        &:active {
+            transform: scale(0.92);
+        }
+    }
+
+    // 折叠模式：44px 图标条
+    .sw__dock--collapsed {
+        width: 44px;
+        padding: 10px var(--sw-space-xs, 4px);
+        // 允许 hover 浮层向右伸出，不被裁剪
+        overflow: visible;
+
+        .sw__dock-toggle {
+            margin: 0 auto var(--sw-space-md, 8px);
+        }
+
+        .sw__dock-label {
+            display: none;
+        }
+
+        .sw__dock-item {
+            justify-content: center;
+            padding: var(--sw-space-md, 8px) 0;
+            border-radius: $sw-radius-sm;
+        }
+
+        .sw__dock-title {
+            display: none;
+        }
+    }
+
+    .sw__dock-label {
+        margin: 0 0 var(--sw-space-sm, 6px);
+        font-size: var(--sw-font-xs, 11px);
+        letter-spacing: 0.05em;
+        color: var(--b3-theme-on-surface-light);
+    }
+
+    .sw__dock-item {
+        display: flex;
+        align-items: center;
+        gap: var(--sw-space-md, 8px);
+        width: 100%;
+        padding: var(--sw-space-sm, 6px) var(--sw-space-sm, 6px);
+        border: none;
+        background: transparent;
+        color: var(--b3-theme-on-background);
+        font-size: var(--sw-font-md, 13px);
+        line-height: var(--sw-leading-ui, 1.4);
+        text-align: left;
+        cursor: pointer;
+        transition: color $sw-dur-fast;
+
+        &:hover,
+        &:focus {
+            color: var(--b3-theme-primary);
+            outline: none;
+        }
+
+        // 当前展开的面板：仅文字与图标变主色
+        &.sw__active {
+            color: var(--b3-theme-primary);
+        }
+    }
+
+    // 折叠模式下 hover 浮出的面板名称（完整模式隐藏）
+    .sw__dock-flyout {
+        display: none;
+    }
+
+    .sw__dock--collapsed .sw__dock-item {
+        position: relative;
+
+        &:hover .sw__dock-flyout,
+        &:focus .sw__dock-flyout {
+            display: block;
+            position: absolute;
+            left: calc(100% + 8px);
+            top: 50%;
+            transform: translateY(-50%);
+            padding: var(--sw-space-xs, 4px) 10px;
+            border: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--b3-border-color) 45%, transparent));
+            border-radius: var(--sw-radius-md, 8px);
+            background: var(--sw-card-float-bg, var(--b3-theme-surface));
+            box-shadow: var(--sw-shadow-bento);
+            color: var(--b3-theme-on-background);
+            font-size: var(--sw-font-sm, 12px);
+            line-height: var(--sw-leading-ui, 1.4);
+            white-space: nowrap;
+            pointer-events: none;
+            z-index: 10;
+        }
+    }
+
+    .sw__dock-icon {
+        flex: none;
+        display: flex;
+        align-items: center;
+        color: var(--b3-theme-on-surface-light);
+
+        svg {
+            width: 15px;
+            height: 15px;
+        }
+    }
+
+    .sw__dock-item.sw__active .sw__dock-icon {
+        color: var(--b3-theme-primary);
+    }
+
+    .sw__dock-title {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    // ==================== 滚动区 ====================
+    .sw__scroll {
+        flex: 1;
+        overflow: auto;
+        padding: 10px var(--sw-space-lg, 12px) var(--sw-space-xl, 16px);
+        outline: none;
+
+        &::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        &::-webkit-scrollbar-thumb {
+            background-color: var(--b3-scroll-color);
+            border-radius: 4px;
+        }
+        &::-webkit-scrollbar-track {
+            background: transparent;
+        }
+    }
+
+    // 一键回到顶部按钮（无边框无背景纯图标，hover 显主色，滚动后淡入上浮）
+    .sw__back-top {
+        position: absolute;
+        right: 16px;
+        bottom: 16px;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: transparent;
+        border: none;
+        color: var(--b3-theme-on-surface-light);
+        cursor: pointer;
+        z-index: 2;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(6px);
+        transition: opacity $sw-dur-base $sw-ease, transform $sw-dur-base $sw-ease, visibility $sw-dur-base, color $sw-dur-base;
+        pointer-events: none;
+
+        svg {
+            width: var(--sw-icon-md, 18px);
+            height: 18px;
+        }
+
+        &:hover {
+            color: var(--b3-theme-primary);
+        }
+
+        &.sw__show {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+    }
+
+    // 空态提示（无页签 / 无搜索结果）：注入圆润抽象几何微色块做情感化点缀
+    .sw__empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: var(--sw-space-sm, 6px);
+        min-height: 132px;
+        padding: 48px var(--sw-space-xl, 16px);
+        border: 1px dashed var(--sw-color-line-soft, color-mix(in srgb, var(--b3-border-color) 45%, transparent));
+        border-radius: var(--sw-radius-card);
+        background: var(--sw-card-float-bg, var(--b3-theme-surface));
+        box-shadow: var(--sw-shadow-bento);
+        font-size: var(--sw-font-md, 13px);
+        color: var(--b3-theme-on-surface-light);
+        text-align: center;
+
+        &::before {
+            content: "";
+            width: 36px;
+            height: 36px;
+            margin-bottom: var(--sw-space-xs, 4px);
+            border-radius: var(--sw-radius-md, 8px);
+            background: 
+                radial-gradient(circle at 30% 30%, color-mix(in srgb, var(--sw-color-accent) 48%, transparent), transparent 70%),
+                radial-gradient(circle at 70% 70%, color-mix(in srgb, var(--sw-color-accent) 24%, transparent), transparent 70%),
+                color-mix(in srgb, var(--sw-color-accent) 10%, transparent);
+            box-shadow: 0 4px 12px color-mix(in srgb, var(--sw-color-accent) 15%, transparent);
+            display: inline-block;
+        }
+
+        .sw__empty-message { display: grid; gap: var(--sw-space-sm, 6px); }
+
+        .sw__empty-title {
+            font-weight: var(--sw-weight-semibold, 600);
+            color: var(--b3-theme-on-surface);
+        }
+
+        .sw__empty-sub {
+            font-size: var(--sw-font-sm, 12px);
+            color: var(--b3-theme-on-surface-light);
+            line-height: var(--sw-leading-reading, 1.65);
+            opacity: 0.8;
+        }
+    }
+
+    // ==================== 分组（极简：仅弱化文字标签，无分隔线） ====================
+    .sw__group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .sw__group-header {
+        display: flex;
+        align-items: center;
+        gap: var(--sw-space-sm, 6px);
+        width: 100%;
+        margin: 0 0 var(--sw-space-md, 8px);
+        padding: var(--sw-space-xs, 4px) var(--sw-space-sm, 6px);
+        border: none;
+        border-radius: $sw-radius-md;
+        background: transparent;
+        color: var(--b3-theme-on-surface);
+        font-size: var(--sw-font-sm, 12px);
+        font-weight: var(--sw-weight-semibold, 600);
+        text-align: left;
+        cursor: pointer;
+        transition: background-color $sw-dur-fast;
+
+        &:hover,
+        &:focus-visible {
+            background: var(--b3-theme-surface-lighter, var(--b3-theme-surface));
+            outline: none;
+        }
+
+        .sw__group-chevron {
+            flex: none;
+            width: 12px;
+            height: 12px;
+            color: var(--b3-theme-on-surface-light);
+        }
+
+        .sw__group-icon {
+            flex: none;
+            width: var(--sw-icon-xs, 14px);
+            height: 14px;
+            color: var(--b3-theme-on-surface-light);
+        }
+
+        .sw__group-title {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .sw__group-count {
+            flex: none;
+            min-width: 20px;
+            padding: 0 var(--sw-space-sm, 6px);
+            border-radius: $sw-radius-md;
+            background: var(--b3-theme-surface-lighter, var(--b3-theme-surface));
+            color: var(--b3-theme-on-surface-light);
+            font-size: var(--sw-font-xs, 11px);
+            font-weight: var(--sw-weight-medium, 500);
+            line-height: 18px;
+            text-align: center;
+        }
+    }
+
+    .sw__group--collapsed .sw__grid {
+        display: none;
+    }
+
+    .sw__window-label {
+        display: flex;
+        align-items: center;
+        gap: var(--sw-space-md, 8px);
+        margin: var(--sw-space-xs, 4px) var(--sw-space-2xs, 2px) var(--sw-space-md, 8px);
+        font-size: var(--sw-font-xs, 11px);
+        letter-spacing: 0.05em;
+        color: var(--b3-theme-on-surface-light);
+
+        .sw__doc-scope-summary {
+            min-width: 0;
+            overflow: hidden;
+            color: var(--b3-theme-on-surface-light);
+            font-size: var(--sw-font-xs, 11px);
+            font-weight: var(--sw-weight-regular, 400);
+            letter-spacing: 0;
+            line-height: 1.35;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .sw__doc-health-status {
+            letter-spacing: normal;
+            flex-shrink: 0;
+        }
+
+        &:first-child {
+            margin-top: 0;
+        }
+    }
+
+    // ==================== 搜索过滤条（T-6809） ====================
+    .sw__search-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--sw-space-sm, 6px);
+        margin: var(--sw-space-md, 8px) var(--sw-space-2xs, 2px) var(--sw-space-xs, 4px);
+    }
+
+    .sw__search-chip {
+        min-height: 30px;
+        padding: var(--sw-space-xs, 4px) var(--sw-space-lg, 12px);
+        border: 1px solid var(--b3-border-color);
+        border-radius: 999px;
+        background: var(--b3-theme-surface);
+        color: var(--b3-theme-on-background);
+        font-size: var(--sw-font-sm, 12px);
+        cursor: pointer;
+
+        &:hover { border-color: color-mix(in srgb, var(--b3-theme-primary) 36%, var(--b3-border-color)); }
+
+        &.is-active {
+            border-color: var(--b3-theme-primary);
+            background: var(--sw-accent-soft, var(--b3-theme-surface-lighter));
+            color: var(--b3-theme-primary);
+        }
+    }
+
+    // 过滤条可见性语义：按选中类型隐藏非命中分区（纯展示层，不改搜索）
+    &[data-sw-chip="tabs"] {
+        .sw__unified, .sw__snippet-results, .sw__doc-results { display: none; }
+    }
+
+    &[data-sw-chip="unified"] {
+        .sw__group, .sw__doc-results { display: none; }
+    }
+
+    &[data-sw-chip="docs"] {
+        .sw__group, .sw__unified, .sw__snippet-results { display: none; }
+    }
+
+    // T-6881（P2 第三批）：查询态片段分区容器——与统一分区同族布局
+    .sw__snippet-results {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-top: var(--sw-space-xl, 16px);
+        min-width: 0;
+    }
+
+    // ==================== 零词条工作台（T-6807） ====================
+    .sw__workbench {
+        margin-top: var(--sw-space-xl, 16px);
+        min-width: 0;
+    }
+
+    .sw__workbench-row-label {
+        margin: var(--sw-space-md, 8px) var(--sw-space-2xs, 2px) var(--sw-space-xs, 4px);
+        font-size: var(--sw-font-xs, 11px);
+        letter-spacing: 0.05em;
+        color: var(--b3-theme-on-surface-light);
+    }
+
+    .sw__workbench-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--sw-space-sm, 6px);
+    }
+
+    .sw__workbench-chip {
+        min-height: 32px;
+        padding: var(--sw-space-xs, 4px) var(--sw-space-lg, 12px);
+        border: 1px solid var(--b3-border-color);
+        border-radius: 999px;
+        background: var(--b3-theme-surface);
+        color: var(--b3-theme-on-background);
+        font-size: var(--sw-font-md, 13px);
+        cursor: pointer;
+
+        &:hover {
+            border-color: color-mix(in srgb, var(--b3-theme-primary) 36%, var(--b3-border-color));
+            color: var(--b3-theme-primary);
+        }
+    }
+
+    .sw__workbench-entries {
+        display: flex;
+        flex-direction: column;
+        gap: var(--sw-space-xs, 4px);
+
+        .sw__doc-item { min-height: 44px; padding: var(--sw-space-md, 8px) 10px; }
+    }
+
+    // ==================== 全库文档搜索结果 / 统一索引分区（T-6799） ====================
+    .sw__unified {
+        display: flex;
+        flex-direction: column;
+        gap: var(--sw-space-lg, 12px);
+        margin-top: var(--sw-space-xl, 16px);
+        min-width: 0;
+
+        // 分区间距由容器 gap 统一，抵消分区自带的 margin-top
+        .sw__unified-section { margin-top: 0; }
+    }
+
+    // ==================== 审查轮 P-A：命令模式列表（quick pick 式） ====================
+    .sw__command-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--sw-space-sm, 6px);
+        margin-top: var(--sw-space-xl, 16px);
+        min-width: 0;
+
+        .sw__command-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            min-height: 40px;
+            padding: var(--sw-space-md, 8px) var(--sw-space-lg, 12px);
+            border: 1px solid var(--b3-border-color);
+            border-radius: $sw-radius-md;
+            background: var(--b3-theme-surface);
+            color: var(--b3-theme-on-background);
+            font-size: var(--sw-font-md, 13px);
+            text-align: left;
+            cursor: pointer;
+
+            &:hover {
+                border-color: color-mix(in srgb, var(--b3-theme-primary) 36%, var(--b3-border-color));
+                color: var(--b3-theme-primary);
+            }
+
+            .sw__command-icon {
+                display: inline-flex;
+                flex-shrink: 0;
+                color: var(--b3-theme-on-surface-light);
+
+                svg { width: var(--sw-icon-sm, 16px); height: 16px; fill: currentColor; }
+            }
+
+            .sw__command-label {
+                flex: 1;
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .sw__command-kind {
+                flex-shrink: 0;
+                color: var(--b3-theme-on-surface-light);
+                font-size: var(--sw-font-xs, 11px);
+                opacity: .8;
+            }
+        }
+    }
+
+    // ==================== T-6911：命令模式分组与折叠组头（T-6846） ====================
+    .sw__command-group {
+        margin-top: var(--sw-space-lg, 12px);
+        min-width: 0;
+    }
+
+    .sw__command-group-toggle {
+        display: flex;
+        align-items: center;
+        gap: var(--sw-space-sm, 6px);
+        cursor: pointer;
+        user-select: none;
+        border-radius: $sw-radius-sm;
+        min-height: 28px;
+
+        &::before {
+            content: "";
+            width: 0;
+            height: 0;
+            border-left: 5px solid currentColor;
+            border-top: 4px solid transparent;
+            border-bottom: 4px solid transparent;
+            transition: transform $sw-dur-fast $sw-ease;
+        }
+
+        &[aria-expanded="false"]::before {
+            transform: rotate(90deg);
+        }
+
+        &:hover { color: var(--b3-theme-primary); }
+
+        &:focus-visible {
+            outline: 2px solid var(--b3-theme-primary);
+            outline-offset: 2px;
+        }
+    }
+
+    .sw__command-group-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--sw-space-sm, 6px);
+        margin-top: var(--sw-space-sm, 6px);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .sw__command-group-toggle::before { transition: none; }
+    }
+
+    .sw__tab-preview,
+    .sw__doc-results,
+    .sw__unified-section {
+        margin-top: var(--sw-space-xl, 16px);
+        min-width: 0;
+
+        .sw__doc-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+            grid-auto-rows: 1fr;
+            gap: var(--sw-space-lg, 12px);
+        }
+
+        .sw__doc-item {
+            display: grid;
+            grid-template-columns: 32px minmax(0, 1fr);
+            align-items: center;
+            gap: var(--sw-space-lg, 12px);
+            width: 100%;
+            min-width: 0;
+            min-height: 84px;
+            padding: var(--sw-space-lg, 12px);
+            border: 1px solid color-mix(in srgb, var(--sw-color-accent, var(--b3-theme-primary)) 16%, var(--b3-border-color));
+            background: var(--sw-card-float-bg, var(--b3-theme-surface));
+            color: var(--b3-theme-on-background);
+            text-align: left;
+            font-family: inherit;
+            font-size: var(--sw-font-md, 13px);
+            letter-spacing: 0;
+            cursor: pointer;
+            border-radius: var(--sw-radius-card, 14px);
+            box-shadow: var(--sw-shadow-bento);
+            box-sizing: border-box;
+            appearance: none;
+            -webkit-appearance: none;
+            transition: border-color $sw-dur-base, background-color $sw-dur-base, box-shadow $sw-dur-base, transform $sw-dur-base;
+
+            &:hover {
+                background-color: var(--sw-card-float-bg, var(--b3-theme-surface));
+                border-color: var(--b3-theme-primary);
+                transform: translateY(-2px);
+                box-shadow: var(--sw-shadow-bento), 0 8px 24px color-mix(in srgb, var(--b3-theme-primary) 12%, transparent);
+            }
+
+            &:focus-visible {
+                outline: 2px solid var(--b3-theme-primary);
+                outline-offset: 1px;
+                border-color: var(--b3-theme-primary);
+                box-shadow: var(--sw-focus-ring), var(--sw-shadow-bento);
+            }
+
+            &:active {
+                transform: translateY(0);
+                box-shadow: none;
+            }
+
+            .sw__doc-icon {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 32px;
+                height: 32px;
+                border-radius: $sw-radius-md;
+                background: var(--b3-list-hover);
+                color: var(--b3-theme-primary);
+
+                svg {
+                    display: block;
+                    width: var(--sw-icon-sm, 16px);
+                    height: 16px;
+                }
+            }
+
+            .sw__doc-copy {
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                gap: var(--sw-space-sm, 6px);
+                min-width: 0;
+            }
+
+            .sw__doc-title {
+                display: -webkit-box;
+                overflow: hidden;
+                -webkit-box-orient: vertical;
+                -webkit-line-clamp: 2;
+                line-clamp: 2;
+                line-height: 1.45;
+                font-weight: var(--sw-weight-semibold, 600);
+                overflow-wrap: anywhere;
+
+                // T-6834 关键词高亮：审查轮 P-B 加强对比——主色底 30% + 命中字着主色，
+                // 小字号下也一眼可辨（对齐搜索引擎/VS Code 命中强度）
+                mark {
+                    padding: 1px var(--sw-space-2xs, 2px);
+                    border-radius: 3px;
+                    background: color-mix(in srgb, var(--sw-color-accent, var(--b3-theme-primary)) 22%, transparent);
+                    color: var(--sw-color-accent, var(--b3-theme-primary));
+                    font-weight: 700;
+                    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sw-color-accent, var(--b3-theme-primary)) 30%, transparent);
+                }
+            }
+
+            .sw__doc-source {
+                align-self: flex-start;
+                color: var(--b3-theme-primary);
+                font-size: var(--sw-font-xs, 11px);
+                line-height: var(--sw-leading-compact, 1.2);
+                opacity: .86;
+            }
+
+            .sw__search-match-source {
+                display: inline-flex;
+                align-items: center;
+                min-height: 18px;
+                max-width: 100%;
+                padding: 0 var(--sw-space-sm, 6px);
+                overflow: hidden;
+                border: 1px solid color-mix(in srgb, var(--b3-theme-primary) 28%, transparent);
+                border-radius: 999px;
+                color: var(--b3-theme-primary);
+                font-size: var(--sw-font-2xs, 10px);
+                line-height: var(--sw-leading-compact, 1.2);
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .sw__doc-path {
+                display: block;
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                font-size: var(--sw-font-sm, 12px);
+                line-height: var(--sw-leading-ui, 1.4);
+                color: var(--b3-theme-on-surface-light);
+            }
+
+            .sw__doc-snippet {
+                display: -webkit-box;
+                min-width: 0;
+                overflow: hidden;
+                -webkit-box-orient: vertical;
+                -webkit-line-clamp: 2;
+                line-clamp: 2;
+                color: var(--b3-theme-on-surface-light);
+                font-size: var(--sw-font-sm, 12px);
+                line-height: var(--sw-leading-body, 1.5);
+                overflow-wrap: anywhere;
+
+                // T-6835 片段行关键词高亮：比标题更轻，仅着色不加底
+                mark {
+                    padding: 0;
+                    border-radius: 2px;
+                    background: transparent;
+                    color: var(--b3-theme-primary);
+                    font-weight: var(--sw-weight-semibold, 600);
+                }
+            }
+        }
+
+        // ==================== T-6839/T-6842 常驻预览窗格 ====================
+        // 桌面右分栏：行焦点/悬停同步结构化正文与大纲预览。
+        // T-6842：box 转网格布局（标签行/结果列/窗格列），窗格 sticky 吸附
+        // 滚动视口顶部——长列表滚到"加载更多"时预览仍在场（旧 absolute 覆盖
+        // 层会随内容滚走）。
+        &.sw--with-preview {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) clamp(280px, 34%, 480px);
+            grid-template-rows: 1fr;
+            column-gap: 14px;
+            align-items: stretch;
+            flex: 1;
+            min-height: calc(100cqh - var(--sw-space-md, 8px));
+
+            .sw__window-label {
+                grid-column: 1 / -1;
+            }
+
+            .sw__doc-load-more,
+            .sw__doc-view-all {
+                grid-column: 1;
+            }
+
+            .sw__tab-content { grid-column: 1; min-width: 0; }
+
+            .sw__doc-preview {
+                grid-column: 2;
+                grid-row: 1 / -1;
+                position: sticky;
+                top: 0;
+                display: flex;
+                flex-direction: column;
+                box-sizing: border-box;
+                min-width: 0;
+                height: 100%;
+                min-height: 100%;
+                max-height: none;
+                overflow: hidden;
+                padding: 14px var(--sw-space-xl, 16px) var(--sw-space-xl, 16px);
+                border: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--b3-border-color) 45%, transparent));
+                background: var(--sw-card-float-bg, var(--b3-theme-surface));
+                box-shadow: var(--sw-shadow-bento, var(--sw-shadow-xs));
+                border-radius: var(--sw-platform-radius-md, 12px);
+
+                &:focus-within {
+                    outline: none;
+                    box-shadow: var(--sw-focus-glow);
+                }
+
+                .sw__doc-preview-body {
+                    flex: 1;
+                    min-height: 0;
+                    overflow-y: auto;
+                    overscroll-behavior: contain;
+                    scrollbar-gutter: stable;
+                }
+
+                .sw__doc-preview-meta {
+                    margin-top: auto;
+                    padding-top: var(--sw-space-md, 8px);
+                    border-top: 1px dashed var(--sw-color-line-soft, color-mix(in srgb, var(--b3-border-color) 45%, transparent));
+                }
+
+                .sw__doc-preview-meta-grid {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: var(--sw-space-xs, 4px);
+                    margin: var(--sw-space-xs, 4px) 0;
+                }
+
+                .sw__doc-preview-meta-pill {
+                    padding: var(--sw-space-2xs, 2px) var(--sw-space-sm, 6px);
+                    border-radius: var(--sw-radius-sm, 6px);
+                    background: color-mix(in srgb, var(--b3-theme-primary) 8%, var(--b3-theme-surface));
+                    color: var(--b3-theme-on-surface-light);
+                    font-size: var(--sw-font-xs, 11px);
+                }
+
+                .sw__doc-preview-actions {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: var(--sw-space-xs, 4px);
+                    margin-top: var(--sw-space-xs, 4px);
+                }
+
+                .sw__doc-preview-act-btn {
+                    padding: var(--sw-space-2xs, 2px) var(--sw-space-sm, 6px);
+                    font-size: var(--sw-font-xs, 11px);
+                    border-radius: var(--sw-radius-sm, 6px);
+                    border: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--b3-border-color) 50%, transparent));
+                    background: var(--sw-card-float-bg, var(--b3-theme-surface));
+                    color: var(--b3-theme-on-surface);
+                    cursor: pointer;
+                    transition: border-color $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease;
+
+                    &:hover {
+                        border-color: var(--b3-theme-primary);
+                        color: var(--b3-theme-primary);
+                    }
+                }
+
+                .sw__doc-preview-empty-card {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    text-align: center;
+                    padding: var(--sw-space-2xl, 32px) var(--sw-space-xl, 16px);
+                    margin: var(--sw-space-xl, 20px) 0;
+                    border: 1px dashed var(--sw-color-line-soft, color-mix(in srgb, var(--b3-border-color) 45%, transparent));
+                    border-radius: var(--sw-radius-card, 12px);
+                    background: color-mix(in srgb, var(--b3-theme-surface) 92%, var(--b3-theme-background));
+
+                    .sw__doc-preview-empty-icon { font-size: 28px; margin-bottom: var(--sw-space-md, 8px); }
+                    .sw__doc-preview-empty-text { font-size: 13px; font-weight: 500; color: var(--b3-theme-on-surface); }
+                    .sw__doc-preview-empty-sub { font-size: 11px; color: var(--b3-theme-on-surface-light); margin-top: var(--sw-space-xs, 4px); }
+                }
+
+                // 审查轮 P-C：常驻头部与内容区分离，轮换不清掉标题
+                // T-6873（RZ-3）：头部改 flex，右侧挂六态状态徽标（loading→ready）
+                .sw__doc-preview-header {
+                    flex: none;
+                    display: flex;
+                    align-items: center;
+                    gap: var(--sw-space-md, 8px);
+                    margin-bottom: 14px;
+                    padding-bottom: 10px;
+                    border-bottom: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--b3-border-color) 45%, transparent));
+                    color: var(--b3-theme-on-surface-light);
+                    font-size: var(--sw-font-xs, 11px);
+                    letter-spacing: 0;
+
+                    .sw__doc-preview-status {
+                        flex: none;
+                        margin-left: auto;
+                        min-height: var(--sw-control-h-sm);
+                        padding: var(--sw-space-2xs, 2px) var(--sw-space-md, 8px);
+                        font-size: var(--sw-font-2xs, 10px);
+                    }
+
+                    // T-6949/T-6950：固定与查找开关——头部最右（order 使其排在状态徽标之后）；
+                    // 固定态主色软底 + 主色文字；禁用（无当前对象）降透明。
+                    .sw__doc-preview-pin,
+                    .sw__doc-preview-find-toggle {
+                        flex: none;
+                        order: 1;
+                        min-height: var(--sw-control-h-sm);
+                        padding: 1px var(--sw-space-md, 8px);
+                        border: 1px solid var(--sw-color-line-soft, var(--b3-border-color));
+                        border-radius: var(--sw-platform-radius-pill, 999px);
+                        background: transparent;
+                        color: var(--b3-theme-on-surface-light);
+                        font-size: var(--sw-font-2xs, 10px);
+                        line-height: var(--sw-leading-body, 1.5);
+                        transition: transform $sw-dur-fast $sw-ease, background-color $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease;
+
+                        &:hover {
+                            background: var(--sw-color-accent-soft);
+                            color: var(--sw-color-accent);
+                            transform: translateY(-0.5px);
+                        }
+
+                        &:active {
+                            transform: translateY(0.5px) scale(0.96);
+                        }
+
+                        &:focus-visible {
+                            outline: none;
+                            box-shadow: var(--sw-focus-glow);
+                        }
+                        cursor: pointer;
+
+                        &:hover {
+                            background: color-mix(in srgb, var(--b3-theme-primary) 8%, transparent);
+                            color: var(--b3-theme-on-background);
+                        }
+
+                        &:focus-visible {
+                            outline: 2px solid var(--b3-theme-primary);
+                            outline-offset: 1px;
+                        }
+                    }
+
+                    .sw__doc-preview-pin {
+                        &[aria-pressed="true"] {
+                            border-color: color-mix(in srgb, var(--b3-theme-primary) 34%, transparent);
+                            background: color-mix(in srgb, var(--b3-theme-primary) 12%, transparent);
+                            color: var(--b3-theme-primary);
+                        }
+
+                        &:disabled {
+                            opacity: .45;
+                            cursor: default;
+                        }
+                    }
+
+                    .sw__doc-preview-find-toggle[aria-expanded="true"] {
+                        border-color: color-mix(in srgb, var(--b3-theme-primary) 34%, transparent);
+                        background: color-mix(in srgb, var(--b3-theme-primary) 12%, transparent);
+                        color: var(--b3-theme-primary);
+                    }
+                }
+
+                .sw__doc-preview-hint {
+                    color: var(--b3-theme-on-surface-light);
+                    font-size: var(--sw-font-sm, 12px);
+                    line-height: var(--sw-leading-body, 1.5);
+                }
+
+                // T-6950：预览内查找条——按需展开；计数 tabular；命中主色软底、当前命中加深
+                .sw__doc-preview-find {
+                    flex: none;
+                    display: flex;
+                    align-items: center;
+                    gap: var(--sw-space-sm, 6px);
+                    margin-bottom: 10px;
+
+                    &[hidden] { display: none; }
+
+                    .sw__doc-preview-find-input {
+                        flex: 1;
+                        min-width: 0;
+                        height: var(--sw-control-h-md);
+                        padding: 0 var(--sw-space-md, 8px);
+                        border: 1px solid var(--b3-border-color);
+                        border-radius: var(--sw-radius-sm, 6px);
+                        background: var(--b3-theme-background);
+                        color: var(--b3-theme-on-background);
+                        font-size: var(--sw-font-sm, 12px);
+
+                        &:focus-visible {
+                            outline: 2px solid var(--b3-theme-primary);
+                            outline-offset: 1px;
+                        }
+                    }
+
+                    .sw__doc-preview-find-count {
+                        flex: none;
+                        min-width: 36px;
+                        text-align: center;
+                        color: var(--b3-theme-on-surface-light);
+                        font-size: var(--sw-font-xs, 11px);
+                        font-variant-numeric: tabular-nums;
+                    }
+
+                    button {
+                        flex: none;
+                        min-height: 24px;
+                        padding: 1px var(--sw-space-md, 8px);
+                        border: 1px solid var(--b3-border-color);
+                        border-radius: $sw-radius-sm;
+                        background: transparent;
+                        color: var(--b3-theme-on-surface-light);
+                        font-size: var(--sw-font-xs, 11px);
+                        line-height: var(--sw-leading-body, 1.5);
+                        cursor: pointer;
+
+                        &:hover {
+                            background: color-mix(in srgb, var(--b3-theme-primary) 8%, transparent);
+                            color: var(--b3-theme-on-background);
+                        }
+
+                        &:focus-visible {
+                            outline: 2px solid var(--b3-theme-primary);
+                            outline-offset: 1px;
+                        }
+                    }
+                }
+
+                .sw__doc-preview-body mark.sw__doc-preview-hit {
+                    border-radius: 2px;
+                    background: color-mix(in srgb, var(--b3-theme-primary) 22%, transparent);
+                    color: inherit;
+
+                    &.is-current {
+                        background: color-mix(in srgb, var(--b3-theme-primary) 48%, transparent);
+                    }
+                }
+
+                .sw__doc-preview-title {
+                    margin: 0 0 14px;
+                    color: var(--b3-theme-on-background);
+                    font-size: var(--sw-font-lg, 15px);
+                    font-weight: var(--sw-weight-emphasis, 650);
+                    line-height: 1.45;
+                    overflow-wrap: anywhere;
+                }
+
+                .sw__doc-preview-section + .sw__doc-preview-section {
+                    margin-top: var(--sw-space-xl, 16px);
+                    padding-top: 14px;
+                    border-top: 1px solid var(--b3-border-color);
+                }
+
+                .sw__doc-preview-section-title {
+                    margin: 0 0 var(--sw-space-md, 8px);
+                    color: var(--b3-theme-on-surface-light);
+                    font-size: var(--sw-font-xs, 11px);
+                    font-weight: var(--sw-weight-semibold, 600);
+                    line-height: var(--sw-leading-ui, 1.4);
+                }
+
+                .sw__doc-preview-outline {
+                    display: grid;
+                    gap: var(--sw-space-xs, 4px);
+                    margin: 0;
+                    padding: 0;
+                    list-style: none;
+                }
+
+                .sw__doc-preview-heading {
+                    font-size: var(--sw-font-sm, 12px);
+                    font-weight: var(--sw-weight-medium, 500);
+                    line-height: var(--sw-leading-reading, 1.6);
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+
+                .sw__doc-preview-block,
+                .sw__doc-preview-content-list {
+                    margin: 0 0 10px;
+                    color: var(--b3-theme-on-background);
+                    font-size: var(--sw-font-md, 13px);
+                    line-height: 1.7;
+                    overflow-wrap: anywhere;
+                }
+
+                .sw__doc-preview-block:last-child,
+                .sw__doc-preview-content-list:last-child { margin-bottom: 0; }
+
+                .sw__doc-preview-block--heading {
+                    margin-top: var(--sw-space-lg, 12px);
+                    font-weight: var(--sw-weight-emphasis, 650);
+                }
+
+                .sw__doc-preview-block--quote {
+                    padding-left: 10px;
+                    border-left: 2px solid var(--b3-theme-primary);
+                    color: var(--b3-theme-on-surface-light);
+                }
+
+                .sw__doc-preview-block--code {
+                    padding: var(--sw-space-md, 8px);
+                    border: 1px solid var(--sw-color-line-soft, var(--b3-border-color));
+                    border-radius: var(--sw-radius-xs, 4px);
+                    background: var(--b3-theme-background);
+                    font-family: var(--sw-font-mono, var(--b3-font-family-code, monospace));
+                    font-variant-numeric: tabular-nums;
+                    white-space: pre-wrap;
+                    word-break: break-word;
+                    max-width: 100%;
+                    overflow-x: auto;
+                    box-sizing: border-box;
+                }
+
+                .sw__doc-preview-content-list {
+                    padding-left: 18px;
+                    list-style: disc;
+                }
+
+                .sw__doc-preview-task {
+                    display: flex;
+                    align-items: flex-start;
+                    gap: var(--sw-space-md, 8px);
+                    margin-left: -18px;
+                    list-style: none;
+
+                    input {
+                        flex: none;
+                        margin: var(--sw-space-xs, 4px) 0 0;
+                        accent-color: var(--b3-theme-primary);
+                    }
+
+                    .sw__doc-preview-task--done {
+                        color: var(--b3-theme-on-surface-light);
+                        text-decoration: line-through;
+                    }
+                }
+            }
+        }
+
+        .sw__doc-status {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: var(--sw-space-sm, 6px);
+            min-height: 76px;
+            padding: var(--sw-space-lg, 12px);
+            border: 1px solid color-mix(in srgb, var(--b3-border-color) 72%, transparent);
+            border-radius: var(--sw-radius-card);
+            background: color-mix(in srgb, var(--b3-theme-surface) 76%, var(--b3-theme-background));
+            color: var(--b3-theme-on-surface-light);
+            font-size: var(--sw-font-sm, 12px);
+            text-align: center;
+
+            svg {
+                width: var(--sw-icon-xs, 14px);
+                height: 14px;
+            }
+
+            .sw__doc-status-copy {
+                display: grid;
+                gap: var(--sw-space-xs, 4px);
+                max-width: 440px;
+            }
+
+            .sw__doc-status-title {
+                color: currentColor;
+                font-size: var(--sw-font-sm, 12px);
+                font-weight: var(--sw-weight-semibold, 600);
+            }
+
+            .sw__doc-status-hint {
+                color: var(--b3-theme-on-surface-light);
+                line-height: var(--sw-leading-body, 1.5);
+            }
+
+            .sw__doc-status-skeleton {
+                display: grid;
+                gap: var(--sw-space-sm, 6px);
+                width: min(100%, 280px);
+                margin-top: var(--sw-space-xs, 4px);
+            }
+
+            .sw__doc-status-skeleton-line {
+                display: block;
+                height: 8px;
+                border-radius: 999px;
+                background: color-mix(in srgb, var(--b3-theme-primary) 18%, transparent);
+                animation: sw-doc-skeleton-pulse $sw-dur-skeleton $sw-ease-sym infinite;
+
+                &.is-wide { width: 92%; }
+                &.is-medium { width: 72%; }
+                &.is-short { width: 48%; }
+            }
+
+            &.sw__doc-status--error {
+                border-color: color-mix(in srgb, var(--b3-theme-error) 42%, var(--b3-border-color));
+                background: color-mix(in srgb, var(--b3-theme-error) 8%, var(--b3-theme-surface));
+                color: var(--b3-theme-error);
+            }
+
+            &.sw__doc-status--loading {
+                border-style: dashed;
+                color: var(--b3-theme-primary);
+            }
+
+            &.sw__doc-status--empty {
+                border-style: dashed;
+            }
+        }
+
+        .sw__doc-retry {
+            width: 100%;
+            min-height: 32px;
+            margin-top: var(--sw-space-md, 8px);
+            border: 1px solid color-mix(in srgb, var(--b3-theme-error) 38%, var(--b3-border-color));
+            border-radius: var(--sw-radius-control);
+            color: var(--b3-theme-error);
+
+            &:hover,
+            &:focus-visible {
+                background: color-mix(in srgb, var(--b3-theme-error) 8%, var(--b3-theme-surface));
+                outline: none;
+                box-shadow: var(--sw-focus-ring);
+            }
+        }
+
+        .sw__doc-view-all {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            min-height: 32px;
+            margin-top: var(--sw-space-md, 8px);
+            border: 1px solid var(--b3-border-color);
+            border-radius: var(--sw-radius-control);
+            color: var(--b3-theme-primary);
+            font-size: var(--sw-font-sm, 12px);
+
+            &:hover,
+            &:focus-visible {
+                background: var(--sw-hover-bg);
+                outline: none;
+                box-shadow: var(--sw-focus-ring);
+            }
+        }
+    }
+
+    .sw__tab-preview.sw--with-preview .sw__doc-preview {
+        grid-row: 1 / -1;
+        align-self: stretch;
+        height: 100%;
+        min-height: calc(100cqh - var(--sw-space-md, 8px));
+    }
+
+    // Opt-in home/second-panel module surface. The renderer owns semantics;
+    // this layer only gives it a compact, theme-native visual treatment.
+    .sw__home-module {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        overflow: hidden;
+        border: 1px solid var(--b3-border-color);
+        border-radius: var(--sw-radius-card);
+        background: var(--b3-theme-surface);
+        box-shadow: var(--sw-card-shadow);
+
+        &[data-status="loading"] .sw__home-module-status { color: var(--sw-platform-accent, var(--b3-theme-primary)); } // T-7205
+        &[data-status="error"] { border-color: color-mix(in srgb, var(--sw-platform-error, var(--b3-theme-error)) 45%, var(--b3-border-color)); }
+    }
+
+    .sw__home-module-header {
+        display: flex;
+        align-items: center;
+        gap: var(--sw-space-md, 8px);
+        min-height: 38px;
+        padding: var(--sw-space-md, 8px) 10px;
+        border-bottom: 1px solid var(--b3-border-color);
+        background: color-mix(in srgb, var(--b3-theme-surface) 86%, var(--b3-theme-background));
+    }
+
+.sw__home-module-title {
+        flex: 1;
+        min-width: 0;
+        margin: 0;
+        overflow: hidden;
+        color: var(--b3-theme-on-background);
+        font-size: var(--sw-font-md, 13px);
+        font-weight: var(--sw-weight-semibold, 600);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .sw__home-module-toggle,
+    .sw__home-module-retry,
+    .sw__home-module-config-hint {
+        flex: none;
+        min-height: 28px;
+        padding: 0 var(--sw-space-md, 8px);
+        border-radius: var(--sw-radius-control);
+        font-size: var(--sw-font-xs, 11px);
+
+        &:focus-visible {
+            outline: none;
+            border-color: var(--b3-theme-primary);
+            box-shadow: var(--sw-focus-ring);
+        }
+    }
+
+    .sw__home-module-body { min-width: 0; padding: var(--sw-space-sm, 6px); }
+    .sw__home-module-list { display: grid; gap: var(--sw-space-2xs, 2px); margin: 0; padding: 0; list-style: none; }
+    .sw__home-module-item { min-width: 0; }
+    .sw__home-module-item-action {
+        display: block;
+        width: 100%;
+        min-height: 32px;
+        padding: var(--sw-space-sm, 6px) var(--sw-space-md, 8px);
+        overflow: hidden;
+        border: 1px solid transparent;
+        border-radius: var(--sw-radius-control);
+        background: transparent;
+        color: var(--b3-theme-on-background);
+        cursor: pointer;
+        font: inherit;
+        font-size: var(--sw-font-sm, 12px);
+        text-align: left;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+
+        &:hover,
+        &:focus-visible {
+            border-color: var(--b3-border-color);
+            background: var(--sw-hover-bg);
+            color: var(--b3-theme-primary);
+            outline: none;
+        }
+
+        &:focus-visible { box-shadow: var(--sw-focus-ring); }
+    }
+
+    .sw__home-module-status {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 54px;
+        margin: 0;
+        padding: var(--sw-space-md, 8px);
+        color: var(--b3-theme-on-surface-light);
+        font-size: var(--sw-font-sm, 12px);
+        text-align: center;
+
+        &--error { color: var(--sw-platform-error, var(--b3-theme-error)); } // T-7205 平台语义色
+    }
+
+    .sw__home-panel {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+        gap: 10px;
+        min-width: 0;
+        align-items: start;
+    }
+
+    .sw__home-panel-module {
+        min-width: 0;
+    }
+
+    .sw__home-panel-empty {
+        grid-column: 1 / -1;
+        min-height: 54px;
+        margin: 0;
+        padding: 18px var(--sw-space-lg, 12px);
+        border: 1px dashed var(--b3-border-color);
+        border-radius: var(--sw-radius-card);
+        color: var(--b3-theme-on-surface-light);
+        font-size: var(--sw-font-sm, 12px);
+        text-align: center;
+    }
+
+    // Shared recent/open-history component used by desktop, sidebar and mobile.
+    .sw__history-dd {
+        position: relative;
+        flex: 0 1 auto;
+        min-width: 0;
+
+        &--icon {
+            flex: none;
+            .sw__history-trigger {
+                min-width: 28px;
+                width: 28px;
+                padding: 0;
+                justify-content: center;
+                .sw__history-trigger-text { display: none; }
+
+                // T-7588：移动端纯图标历史按钮触控热区扩展至 44×44px（WCAG 2.5.5）
+                position: relative;
+                &::before {
+                    content: "";
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    width: 44px;
+                    height: 44px;
+                    min-width: 44px;
+                    min-height: 44px;
+                }
+            }
+        }
+    }
+
+    .sw__history-trigger {
+        display: flex;
+        align-items: center;
+        gap: var(--sw-space-xs, 4px);
+        height: 32px;
+        padding: 0 var(--sw-space-md, 8px);
+        min-width: 96px;
+        border: 1px solid var(--b3-border-color);
+        background: var(--sw-control-bg);
+        color: var(--b3-theme-on-background);
+        border-radius: var(--sw-radius-control);
+        cursor: pointer;
+        font-size: var(--sw-font-sm, 12px);
+
+        svg { width: 13px; height: 13px; flex: none; color: var(--b3-theme-on-surface-light); }
+        .sw__history-trigger-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .sw__history-badge {
+            flex: none;
+            min-width: 15px;
+            padding: 0 var(--sw-space-xs, 4px);
+            border-radius: $sw-radius-md;
+            background: var(--b3-theme-primary);
+            color: var(--b3-theme-on-primary);
+            font-size: var(--sw-font-2xs, 10px);
+            line-height: 15px;
+            text-align: center;
+        }
+        &:hover { border-color: var(--b3-theme-primary-light); color: var(--b3-theme-primary); }
+        &:focus-visible { outline: none; border-color: var(--b3-theme-primary); box-shadow: var(--sw-focus-ring); }
+    }
+
+    .sw__history-panel {
+        position: fixed;
+        z-index: 999;
+        // T-7017：视口比例高度（dvh 跟随软键盘收放；旧 WebView 回退 320px）+ 最小可用高度
+        max-height: 320px;
+        max-height: min(60dvh, 480px);
+        min-height: 200px;
+        overflow: auto;
+        padding: var(--sw-space-xs, 4px);
+        background: var(--b3-theme-surface);
+        border: 1px solid var(--b3-border-color);
+        border-radius: var(--sw-radius-card);
+        box-shadow: var(--b3-dialog-shadow), var(--sw-card-shadow);
+    }
+
+    .sw__history-empty { padding: 14px 10px; color: var(--b3-theme-on-surface-light); font-size: var(--sw-font-sm, 12px); text-align: center; }
+    .sw__history-show-all {
+        display: block;
+        width: calc(100% - var(--sw-space-md, 8px) * 2);
+        margin: 0 var(--sw-space-md, 8px) var(--sw-space-sm, 6px);
+    }
+    .sw__history-sync-error {
+        display: flex;
+        align-items: center;
+        gap: var(--sw-space-sm, 6px);
+        padding: var(--sw-space-sm, 6px) var(--sw-space-md, 8px);
+        border: 1px solid var(--b3-theme-error);
+        border-radius: var(--sw-radius-sm, 6px);
+        background: var(--b3-theme-surface);
+        color: var(--b3-theme-on-background);
+        font-size: var(--sw-font-xs, 11px);
+        line-height: var(--sw-leading-normal, 1.4);
+        @supports (background: color-mix(in srgb, red, blue)) {
+            border-color: color-mix(in srgb, var(--b3-theme-error) 45%, var(--b3-border-color));
+            background: color-mix(in srgb, var(--b3-theme-error) 8%, var(--b3-theme-surface));
+        }
+        .sw__history-sync-retry { margin-inline-start: auto; flex: none; }
+    }
+    .sw__history-section-title {
+        padding: var(--sw-space-md, 8px) var(--sw-space-md, 8px) var(--sw-space-xs, 4px);
+        color: var(--b3-theme-on-surface-light);
+        font-size: var(--sw-font-2xs, 10px);
+        font-weight: var(--sw-weight-semibold, 600);
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+    .sw__history-clear {
+        display: block;
+        width: 100%;
+        padding: var(--sw-space-sm, 6px) var(--sw-space-md, 8px);
+        border: 0;
+        border-bottom: 1px solid var(--b3-border-color);
+        background: transparent;
+        color: var(--b3-theme-on-surface-light);
+        font-size: var(--sw-font-xs, 11px);
+        text-align: right;
+        cursor: pointer;
+        &:hover { color: var(--b3-theme-primary); }
+    }
+    .sw__history-item {
+        display: flex;
+        align-items: center;
+        gap: var(--sw-space-md, 8px);
+        width: 100%;
+        min-width: 0;
+        padding: var(--sw-space-md, 8px) var(--sw-space-md, 8px);
+        border: 0;
+        border-radius: var(--sw-radius-sm, 6px);
+        background: transparent;
+        color: var(--b3-theme-on-background);
+        text-align: left;
+        cursor: pointer;
+        transition: background-color $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease;
+        &:hover,
+        &:focus-visible { background: var(--sw-hover-bg); }
+        &:focus-visible { outline: none; box-shadow: inset var(--sw-focus-ring); }
+        &--closed > svg { color: var(--b3-theme-primary); }
+        > svg { width: var(--sw-icon-xs, 14px); height: 14px; flex: none; color: var(--b3-theme-on-surface-light); }
+        .sw__history-copy { display: flex; flex-direction: column; min-width: 0; gap: var(--sw-space-2xs, 2px); }
+        .sw__history-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--sw-font-sm, 12px); }
+        .sw__history-meta { color: var(--b3-theme-on-surface-light); font-size: var(--sw-font-2xs, 10px); }
+    }
+
+    // 桌面端快捷入口：固定在内容区底部，不压缩中央卡片的横向宽度
+    .sw__quick-actions,
+    .sw__quick-rail {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: var(--sw-space-sm, 6px);
+        min-height: 46px;
+        padding: var(--sw-space-sm, 6px) var(--sw-space-lg, 12px);
+        border-top: 1px solid var(--b3-border-color);
+        background: color-mix(in srgb, var(--b3-theme-surface) 88%, var(--b3-theme-background));
+        overflow-x: auto;
+
+        &.fn__none {
+            display: none;
+        }
+    }
+
+    .sw__quick-rail {
+        flex: 0 1 auto;
+        width: max-content;
+        min-width: 72px;
+        max-width: min(22vw, 180px);
+        box-sizing: border-box;
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: flex-start;
+        padding: 10px var(--sw-space-md, 8px);
+        border-top: none;
+        border-left: 1px solid var(--b3-border-color);
+        overflow-x: hidden;
+        overflow-y: auto;
+
+        .sw__quick-action {
+            width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
+        }
+    }
+
+    .sw__quick-action {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: var(--sw-space-sm, 6px);
+        min-width: 58px;
+        height: 32px;
+        padding: 0 var(--sw-space-md, 8px);
+        border: 1px solid transparent;
+        border-radius: $sw-radius-md;
+        background: transparent;
+        color: var(--b3-theme-on-surface);
+        cursor: pointer;
+
+        &:hover,
+        &:focus-visible {
+            border-color: var(--b3-border-color);
+            color: var(--b3-theme-primary);
+            outline: none;
+        }
+    }
+
+    .sw__quick-action-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--sw-icon-sm, 16px);
+        height: 16px;
+        font-size: var(--sw-font-lg, 15px);
+
+        svg {
+            width: var(--sw-icon-sm, 16px);
+            height: 16px;
+        }
+
+        .sw__quick-action-icon-image {
+            width: var(--sw-icon-sm, 16px);
+            height: 16px;
+            object-fit: contain;
+            border-radius: 3px;
+        }
+    }
+
+    .sw__quick-action-label {
+        max-width: 12em;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: var(--sw-font-sm, 12px);
+    }
+
+    .sw__quick-action--collapse {
+        order: 99;
+        margin-left: auto;
+    }
+
+    &.sw--quick-rail {
+        .sw__toolbar {
+            gap: var(--sw-space-sm, 6px);
+            padding-inline: var(--sw-space-md, 8px);
+
+            .sw__search-wrap {
+                flex-basis: 140px;
+            }
+
+            .sw__select-label {
+                display: none;
+            }
+
+            .sw__fav-trigger,
+            .sw__select-wrap .sw__sort {
+                min-width: 78px;
+                max-width: 104px;
+            }
+        }
+    }
+
+    .sw__quick-actions--icons {
+        .sw__quick-action {
+            min-width: 32px;
+            width: 32px;
+            padding: 0;
+            justify-content: center;
+        }
+
+        .sw__quick-action-label {
+            display: none;
+        }
+    }
+
+    .sw__quick-actions--hidden {
+        display: none !important;
+    }
+
+    .sw__quick-actions--collapsed {
+        min-height: 30px;
+        padding-block: var(--sw-space-2xs, 2px);
+        justify-content: flex-end;
+        overflow: hidden;
+
+        .sw__quick-action--collapse {
+            min-width: 28px;
+            width: 28px;
+            height: var(--sw-control-h-md);
+            padding: 0;
+            justify-content: center;
+        }
+    }
+
+    .sw__quick-rail.sw__quick-actions--icons {
+        flex-basis: 42px;
+        width: 42px;
+        max-width: 42px;
+        align-items: center;
+    }
+
+    .sw__quick-rail.sw__quick-actions--collapsed {
+        flex-basis: 34px;
+        width: 34px;
+        max-width: 34px;
+        align-items: center;
+        padding: var(--sw-space-xs, 4px);
+    }
+
+    .sw__quick-rail .sw__quick-action--collapse {
+        margin-left: 0;
+        margin-top: auto;
+    }
+
+    &.sw--sidebar {
+        .sw__quick-actions {
+            min-height: 42px;
+            // T-7207：侧栏 compact 间距走密度档。
+            padding: var(--sw-space-sm, 6px) var(--sw-space-md, 8px);
+            gap: var(--sw-space-xs, 4px);
+        }
+    }
+
+    &.sw__mobile {
+        .sw__quick-actions {
+            min-height: 42px;
+            padding: var(--sw-space-sm, 6px) var(--sw-space-md, 8px);
+            padding-bottom: calc(var(--sw-space-sm, 6px) + env(safe-area-inset-bottom, 0px));
+            gap: var(--sw-space-xs, 4px);
+        }
+
+        .sw__quick-action {
+            // T-6876（RZ-6）：移动底栏改图标在上、标签在下的堆叠布局
+            // （移动端标准底部导航模式；44px 命中区不降级）。
+            flex-direction: column;
+            justify-content: center;
+            gap: var(--sw-space-2xs, 2px);
+            min-width: 52px;
+            min-height: 44px;
+            height: auto;
+            padding: var(--sw-space-xs, 4px) var(--sw-space-md, 8px);
+
+            .sw__quick-action-label {
+                font-size: var(--sw-font-2xs, 10px);
+            }
+
+            .sw__quick-action-icon,
+            .sw__quick-action-icon svg,
+            .sw__quick-action-icon .sw__quick-action-icon-image {
+                width: var(--sw-icon-md, 18px);
+                height: 18px;
+            }
+
+            &--add {
+                color: var(--b3-theme-primary);
+            }
+        }
+    }
+
+    // ==================== 缩略图网格与卡片 ====================
+    .sw__grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: var(--sw-space-lg, 12px);
+    }
+
+    // 卡片：极简细边框，hover 轻微上浮+阴影；当前页签仅主色细边框（无底色填充）
+    .sw__card {
+        position: relative;
+        border-radius: var(--sw-radius-card);
+        border: 1px solid var(--b3-border-color);
+        background-color: var(--sw-card-float-bg, var(--b3-theme-surface));
+        overflow: hidden;
+        cursor: pointer;
+        box-shadow: var(--sw-shadow-bento);
+        transition: border-color $sw-dur-base, box-shadow $sw-dur-base, transform $sw-dur-base;
+        flex-direction: column;
+        display: flex;
+
+        &:hover {
+            border-color: var(--b3-theme-primary);
+            transform: translateY(-2px);
+            box-shadow: var(--sw-shadow-bento), 0 8px 24px color-mix(in srgb, var(--b3-theme-primary) 12%, transparent);
+        }
+
+        &.sw__focused {
+            border-color: var(--b3-theme-primary);
+            box-shadow: 0 0 0 1.5px var(--b3-theme-primary), var(--sw-shadow-bento);
+        }
+
+        &.sw__active {
+            border-color: var(--b3-theme-primary);
+            box-shadow: 0 0 0 1.5px var(--sw-color-accent, var(--b3-theme-primary)), var(--sw-shadow-bento);
+        }
+
+        &:focus-visible {
+            outline: none;
+            border-color: var(--b3-theme-primary);
+            box-shadow: var(--sw-focus-ring), var(--sw-shadow-bento);
+        }
+
+        // 置顶页签：左上角主色细条
+        &.sw__pinned::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background-color: var(--b3-theme-primary);
+            z-index: 1;
+        }
+    }
+
+    // T-7237：首屏打开性能——桌面切换器/侧栏可能同时承载几十到上百张
+    // 卡片。保留完整 DOM 和 IntersectionObserver 的缩略图契约，但让浏览器
+    // 跳过可视区外卡片的布局与绘制；固有尺寸避免滚动条在卡片进入视口时跳动。
+    // 手机端使用独立卡片密度和宿主滚动语义，继续走原有路径，避免旧 WebView
+    // 对 content-visibility 的实现差异影响触控焦点。
+    &:not(.sw__mobile) .sw__card {
+        content-visibility: auto;
+        contain-intrinsic-size: 220px 176px;
+    }
+
+    // 缩略图框（高度可由 --sw-thumb-height 变量控制）
+    .sw__thumb {
+        position: relative;
+        width: 100%;
+        height: var(--sw-thumb-height, 128px);
+        overflow: hidden;
+        background-color: var(--b3-theme-background);
+        border-bottom: 1px solid var(--b3-border-color);
+
+        &::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, transparent 60%);
+        }
+
+        .sw__thumb-loading {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: var(--sw-space-sm, 6px);
+            background: color-mix(in srgb, var(--b3-theme-surface) 72%, var(--b3-theme-background));
+            font-size: var(--sw-font-sm, 12px);
+            color: var(--b3-theme-on-surface-light);
+
+            .sw__spin {
+                width: var(--sw-icon-md, 18px);
+                height: 18px;
+                animation: sw-spin 1s linear infinite;
+            }
+        }
+    }
+
+    // 被缩放的克隆内容：颜色全部跟随当前主题，切换主题即自动变化
+    .sw__thumb-content {
+        width: 800px;
+        transform-origin: top left;
+        pointer-events: none;
+        color: var(--b3-theme-on-background);
+        font-size: 14px;
+        line-height: 1.7;
+        background: var(--b3-theme-background);
+        overflow-wrap: break-word;
+        word-break: break-word;
+        // 防 FOUC：JS rescale 前隐藏，避免 800px 原始宽度瞬间撑满卡片
+        visibility: hidden;
+
+        img, svg, iframe {
+            max-width: 100%;
+        }
+    }
+
+    // JS 缩放完成后显示
+    .sw__thumb-content.thumb-scaled {
+        visibility: visible;
+    }
+
+    // 无预览内容时的占位
+    .sw__thumb-placeholder {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        font-size: var(--sw-font-sm, 12px);
+        color: var(--b3-theme-on-surface-light);
+        padding: var(--sw-space-md, 8px);
+        box-sizing: border-box;
+        overflow: hidden;
+    }
+
+    // 卡片底部信息
+    .sw__meta {
+        display: flex;
+        align-items: center;
+        gap: var(--sw-space-sm, 6px);
+        padding: var(--sw-space-sm, 6px) 10px;
+        font-size: var(--sw-font-md, 13px);
+        color: var(--b3-theme-on-background);
+        min-width: 0;
+
+        // T-6883（T-6848）：更新时间徽标——今天显示时刻（主色 fresh），其余显示日期
+        .sw__updated-badge {
+            flex: none;
+            margin-left: auto;
+            font-size: var(--sw-font-xs, 11px);
+            font-weight: var(--sw-weight-semibold, 600);
+            color: var(--b3-theme-on-surface-light);
+            white-space: nowrap;
+
+            &.is-fresh {
+                color: var(--b3-theme-primary);
+            }
+        }
+
+        .sw__changed-badge {
+            flex: none;
+            padding: 1px var(--sw-space-sm, 6px);
+            border-radius: 999px;
+            background: color-mix(in srgb, var(--b3-theme-primary) 12%, var(--b3-theme-surface));
+            color: var(--b3-theme-primary);
+            font-size: var(--sw-font-2xs, 10px);
+            font-weight: var(--sw-weight-semibold, 600);
+            white-space: nowrap;
+        }
+
+        .sw__icon {
+            flex: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: var(--sw-icon-xs, 14px);
+            min-height: 14px;
+            color: var(--b3-theme-on-surface-light);
+
+            svg {
+                display: block;
+                width: 14px;
+                height: 14px;
+                fill: currentColor;
+            }
+
+            &.sw__icon-emoji {
+                font-size: 14px;
+                line-height: 1;
+                color: inherit;
+            }
+
+            // 图标未成功加载时仍保留占位，避免标题偏移或按钮错位
+            &:empty::before {
+                content: "";
+                display: block;
+                width: var(--sw-icon-xs, 14px);
+                height: 14px;
+            }
+        }
+
+        .sw__title {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    }
+
+    // ==================== 卡片悬浮操作按钮（带毛玻璃底，避免与缩略图内容混淆） ====================
+    // 注意：规则限定在 .sw__card 内。顶栏收藏下拉框的类名是 .sw__fav（select），
+    // 卡片收藏按钮使用独立类名 .sw__fav-btn，避免同名样式互相覆盖导致下拉框被隐藏
+    .sw__card .sw__pin,
+    .sw__card .sw__fav-btn,
+    .sw__card .sw__close {
+        position: absolute;
+        top: 6px;
+        width: 22px;
+        height: 22px;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: var(--b3-theme-surface);
+        background: color-mix(in srgb, var(--b3-theme-background) 80%, transparent);
+        backdrop-filter: var(--sw-blur-sm);
+        border: none;
+        border-radius: 50%;
+        color: var(--b3-theme-on-surface);
+        padding: 0;
+        margin: 0;
+        font: inherit;
+        line-height: 0;
+        -webkit-appearance: none;
+        appearance: none;
+        z-index: 2;
+        cursor: pointer;
+        transition: color $sw-dur-fast;
+
+        svg {
+            width: var(--sw-icon-xs, 14px);
+            height: 14px;
+        }
+
+        &:hover {
+            color: var(--b3-theme-primary);
+            background: var(--b3-theme-surface);
+        }
+    }
+
+    .sw__card .sw__pin {
+        left: 8px;
+    }
+
+    // 收藏按钮紧邻置顶按钮右侧；未收藏空心星（思源星标图标通过 --b3-icon-star-fill 控制填充）
+    .sw__card .sw__fav-btn {
+        left: 32px;
+
+        svg {
+            --b3-icon-star-fill: none;
+        }
+    }
+
+    .sw__card .sw__close {
+        right: 8px;
+    }
+
+    // 置顶/收藏的卡片常显对应按钮，并高亮为主色（实心图钉 / 实心星）
+    .sw__card.sw__pinned .sw__pin {
+        display: flex;
+        color: var(--b3-theme-primary);
+    }
+
+    .sw__card.sw__faved .sw__fav-btn {
+        display: flex;
+        color: var(--b3-theme-primary);
+
+        svg {
+            --b3-icon-star-fill: currentColor;
+        }
+    }
+
+    .sw__card:hover .sw__close,
+    .sw__card:hover .sw__pin,
+    .sw__card:hover .sw__fav-btn {
+        display: flex;
+    }
+
+    .sw__card:focus-within .sw__close,
+    .sw__card:focus-within .sw__pin,
+    .sw__card:focus-within .sw__fav-btn {
+        display: flex;
+    }
+
+    // ==================== 侧边栏紧凑模式（dock 面板内） ====================
+    &.sw--sidebar {
+        // 单列卡片，匹配侧边栏窄宽度（sidebarLayout=enlarge 默认）
+        .sw__grid {
+            grid-template-columns: 1fr;
+        }
+
+        // sidebarLayout=columns：随侧边栏拉伸自动增列，显示更多缩略图（auto-fill 随宽度实时重排；
+        // min(200px,100%) 保证侧边栏过窄时回退为单列填满，避免横向溢出）
+        &.sw--sidebar-columns {
+            .sw__grid {
+                grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
+            }
+        }
+
+        .sw__toolbar {
+            flex-wrap: wrap;
+
+            .sw__search-wrap {
+                flex: 1 1 100%;
+            }
+
+            // 收藏与排序下拉组平分第二行（控件弹性伸缩，标签常显）
+            .sw__select-wrap {
+                flex: 1 1 0;
+                min-width: 0;
+
+                .sw__sort {
+                    flex: 1 1 auto;
+                    width: auto;
+                    min-width: 0;
+                }
+
+                .sw__fav-dd {
+                    flex: 1 1 auto;
+                }
+
+                .sw__fav-trigger {
+                    width: 100%;
+                    min-width: 0;
+                }
+            }
+        }
+    }
+
+    // ==================== 手机端切换器弹窗内部样式 ====================
+    // 注意：必须是 .speed-switch 的直接子块。手机端弹窗根元素只有 sw__mobile 类、
+    // 没有 sw--sidebar 类，一旦嵌进 sidebar 块，编译出的复合选择器将永远匹配不到，整块样式失效
+    &.sw__mobile {
+            // 手机端顶部胶囊拖拽手柄指示条
+            &::before {
+                content: "";
+                display: block;
+                width: 36px;
+                height: 4px;
+                margin: var(--sw-space-xs, 4px) auto var(--sw-space-2xs, 2px);
+                border-radius: var(--sw-platform-radius-pill, 999px);
+                background: color-mix(in srgb, var(--b3-theme-on-surface) 22%, transparent);
+            }
+
+            // 手机端工具栏：复用桌面 sw__toolbar 基础样式（搜索图标/输入框/图标按钮尺寸由此而来），
+            // 仅做紧凑化覆盖——单行排列：搜索框弹性伸缩 + 排序 + 收藏 + 设置，窄屏自动换行
+            .sw__mobile-toolbar {
+                // 两行结构：行1 搜索+排序+关闭，行2 收藏/最近/设置芯片（见 .sw__toolbar-row2）
+                flex-wrap: wrap;
+                row-gap: var(--sw-space-sm, 6px);
+                padding: var(--sw-space-md, 8px) 10px;
+                gap: var(--sw-space-xs, 4px);
+
+                .sw__search-wrap {
+                    flex: 1 1 128px;
+                    // 保底最小宽：单行空间不足时搜索框也不允许被压缩消失
+                    min-width: 120px;
+                }
+
+                .sw__sort {
+                    flex: 0 1 auto;
+                    width: auto;
+                    max-width: 40vw;
+                    height: 32px;
+                    min-width: 0;
+                    padding: 0 var(--sw-space-2xs, 2px);
+                    border: 1px solid var(--b3-border-color);
+                    background: var(--sw-control-bg);
+                    color: var(--b3-theme-on-background);
+                    border-radius: var(--sw-radius-control);
+                    font-size: var(--sw-font-sm, 12px);
+                }
+
+                .sw__sort-btn {
+                    flex: none;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 34px;
+                    min-width: 34px;
+                    height: 32px;
+                    padding: 0;
+                    border: none;
+                    border-radius: var(--sw-radius-control);
+                    background: var(--sw-control-bg);
+                    color: var(--b3-theme-on-background);
+
+                    svg {
+                        width: var(--sw-icon-md, 18px);
+                        height: 18px;
+                    }
+
+                    &:focus-visible {
+                        outline: none;
+                        background: var(--sw-hover-bg);
+                        box-shadow: var(--sw-focus-ring);
+                    }
+                }
+
+                .sw__mobile-fav-btn,
+                .sw__journal-btn,
+                .sw__settings-btn {
+                    position: relative;
+                    flex: none;
+                    width: 34px;
+                    height: 32px;
+                    color: var(--b3-theme-on-surface);
+                    -webkit-tap-highlight-color: transparent;
+                    touch-action: manipulation;
+                    border: 0;
+                    padding: 0;
+                    background: transparent;
+                    appearance: none;
+                    -webkit-appearance: none;
+
+                    // 透明伪元素扩大触控热区（34×32 → 44×42），视觉尺寸不变保持极简
+                    &::after {
+                        content: "";
+                        position: absolute;
+                        inset: -5px;
+                    }
+
+                    &:active {
+                        color: var(--b3-theme-primary);
+                    }
+                }
+            }
+
+            // 手机端网格：默认单列，双列模式双列，自动模式竖屏单列横屏双列
+            .sw__mobile-grid {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 10px;
+
+                &.sw__mobile-grid--double {
+                    grid-template-columns: 1fr 1fr;
+                }
+
+                &.sw__mobile-grid--auto {
+                    grid-template-columns: 1fr;
+
+                    @media (min-width: 480px) and (orientation: landscape) {
+                        grid-template-columns: 1fr 1fr;
+                    }
+                }
+            }
+
+            // 手机端卡片：缩略图更紧凑，卡片间距更小
+            .sw__mobile-card {
+                border-radius: $sw-radius-md;
+                border: 1px solid var(--b3-border-color);
+                overflow: hidden;
+                cursor: pointer;
+                transition: border-color $sw-dur-base;
+                display: flex;
+                flex-direction: column;
+                -webkit-tap-highlight-color: transparent;
+                position: relative;
+
+                &:active {
+                    border-color: var(--b3-theme-primary);
+                }
+
+                &.sw__active {
+                    border-color: var(--b3-theme-primary);
+                    box-shadow: 0 0 0 1px var(--b3-theme-primary);
+                }
+
+                &.sw__pinned::before {
+                    content: "";
+                    position: absolute;
+                    left: 0;
+                    top: 0;
+                    bottom: 0;
+                    width: 3px;
+                    background-color: var(--b3-theme-primary);
+                    z-index: 1;
+                }
+
+            // 手机端操作按钮：不悬浮在缩略图上，改为落在底部 meta 行右侧（关闭/收藏/置顶），
+            // 弱化为纯图标（无底色圆形），缩略图完整无遮挡；激活态才显示主色。
+            // 28px 视觉 + 透明伪元素热区（28→36px），按钮中心距 36px 恰好互不侵占。
+            // 选择器保持在 .sw__mobile-card 内（不写 &），由 SCSS 拼成
+            // .speed-switch.sw__mobile .sw__mobile-card .sw__pin 等 5 类选择器，
+            // 比桌面 .speed-switch .sw__card .sw__pin（4 类）多 1 类，确保手机端规则始终胜出。
+            .sw__pin,
+            .sw__fav-btn,
+            .sw__close {
+                position: absolute !important;
+                top: auto !important;
+                bottom: 0 !important;
+                width: 28px !important;
+                height: 28px !important;
+                min-width: 28px !important;
+                min-height: 28px !important;
+                max-width: 28px !important;
+                max-height: 28px !important;
+                display: flex !important;
+                align-items: center;
+                justify-content: center;
+                background: transparent;
+                -webkit-backdrop-filter: none;
+                backdrop-filter: none;
+                border: none;
+                border-radius: $sw-radius-sm;
+                color: var(--b3-theme-on-surface-light);
+                z-index: 2;
+                cursor: pointer;
+                -webkit-tap-highlight-color: transparent;
+                padding: 0 !important;
+                margin: 0 !important;
+                box-sizing: border-box !important;
+                line-height: 0 !important;
+                font-size: 0 !important;
+                text-indent: 0;
+                letter-spacing: 0;
+                user-select: none;
+                -webkit-user-select: none;
+                outline: none;
+                -webkit-appearance: none;
+                appearance: none;
+
+                &::after {
+                    content: "" !important;
+                    position: absolute !important;
+                    inset: -4px !important;
+                    // 让扩展后的透明区域参与命中测试，保持按钮视觉尺寸不变的同时
+                    // 提供更稳定的触控热区（约 36×36px）。
+                    pointer-events: auto;
+                }
+
+                svg {
+                    display: block;
+                    width: var(--sw-icon-xs, 14px) !important;
+                    height: 14px !important;
+                    min-width: var(--sw-icon-xs, 14px);
+                    min-height: 14px;
+                    max-width: var(--sw-icon-xs, 14px);
+                    max-height: 14px;
+                    flex: 0 0 auto;
+                }
+
+                &:active {
+                    color: var(--b3-theme-primary);
+                }
+            }
+
+                .sw__pin { left: auto; right: 80px; }
+                .sw__fav-btn { left: auto; right: 44px; }
+                .sw__close { right: 8px; }
+
+                &.sw__pinned .sw__pin {
+                    display: flex;
+                    color: var(--b3-theme-primary);
+                }
+                &.sw__faved .sw__fav-btn {
+                    display: flex;
+                    color: var(--b3-theme-primary);
+                    svg { --b3-icon-star-fill: currentColor; }
+                }
+
+                .sw__pin, .sw__fav-btn, .sw__close {
+                    display: flex;
+                }
+
+                // 手机端缩略图和元信息更紧凑
+                .sw__thumb {
+                    height: var(--sw-thumb-height, 80px);
+                    border-bottom: 1px solid var(--b3-border-color);
+
+                    .sw__thumb-loading .sw__spin {
+                        width: var(--sw-icon-sm, 16px);
+                        height: 16px;
+                    }
+                }
+
+                .sw__meta {
+                    padding: var(--sw-space-xs, 4px) 114px var(--sw-space-xs, 4px) var(--sw-space-md, 8px);
+                    font-size: var(--sw-font-sm, 12px);
+                    gap: var(--sw-space-xs, 4px);
+
+                    // 手机窄卡保留改动语义，用色点避免与底栏三枚操作键争宽。
+                    .sw__changed-badge {
+                        width: 7px;
+                        height: 7px;
+                        padding: 0;
+                        border-radius: 50%;
+                        background: var(--b3-theme-primary);
+                        font-size: 0;
+                        overflow: hidden;
+                    }
+
+                    .sw__icon svg {
+                        width: 12px;
+                        height: 12px;
+                    }
+                    .sw__icon.sw__icon-emoji {
+                        font-size: var(--sw-font-sm, 12px);
+                    }
+                }
+            }
+
+            // 手机端滚动区：减少内边距
+            .sw__scroll {
+                padding: var(--sw-space-md, 8px) 10px var(--sw-space-lg, 12px);
+            }
+    }
+}
+
+// ==================== 手机端全局样式（直接挂载到 document.body） ====================
+
+// 悬浮按钮（FAB）：继续上移避开思源底部工具条（含编辑态加高的情况），落在单手拇指区；缩小 + 半透明
+
+// ==================== T-6820 数字直达角标 ====================
+// 前 9 个可见卡片右上角的数字徽标（CSS ::after 渲染 data-sw-digit），
+// 与键盘数字直达一一对应；T-6873（RZ-3）改为 kbd 芯片皮肤——不透明 surface 底
+// +边框+代码字体（设计原型 01），预览图上依旧清晰（不透明底），与键位提示同语言。
+.sw__card[data-sw-digit] {
+  position: relative;
+
+  &::after {
+    content: attr(data-sw-digit);
+    position: absolute;
+    // T-7015b（用户实测：数字被遮挡看不全）：角标从骑边框（top:-6px）改为卡内
+    // 右上——.sw__card 是 overflow:hidden，悬出部分被裁掉导致数字残缺。
+    top: 4px;
+    right: 4px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 var(--sw-space-xs, 4px);
+    border: 1px solid var(--b3-border-color);
+    border-radius: var(--sw-radius-sm, 6px);
+    background: var(--b3-theme-surface);
+    color: var(--b3-theme-on-surface);
+    font-family: var(--b3-font-family-code, ui-monospace, Consolas, monospace);
+    font-size: var(--sw-font-2xs, 10px);
+    font-variant-numeric: tabular-nums;
+    line-height: 14px;
+    text-align: center;
+    font-weight: var(--sw-weight-semibold, 600);
+    pointer-events: none;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.22), 0 1px 3px rgba(0, 0, 0, 0.12);
+    z-index: 1;
+  }
+}
+
+// T-6837 文档结果行数字角标：与卡片角标同款语义（前 9 条可见行 1-9，kbd 芯片皮肤）
+.sw__doc-item[data-sw-digit] {
+  position: relative;
+
+  &::after {
+    content: attr(data-sw-digit);
+    position: absolute;
+    // T-7015b：同卡片角标，内嵌防裁切
+    top: 3px;
+    right: 2px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 var(--sw-space-xs, 4px);
+    border: 1px solid var(--b3-border-color);
+    border-radius: 4px;
+    background: var(--b3-theme-surface);
+    color: var(--b3-theme-on-surface);
+    font-family: var(--b3-font-family-code, ui-monospace, Consolas, monospace);
+    font-size: var(--sw-font-2xs, 10px);
+    line-height: 12px;
+    text-align: center;
+    font-weight: var(--sw-weight-semibold, 600);
+    pointer-events: none;
+    box-shadow: var(--sw-shadow-xs);
+    z-index: 1;
+  }
+}
+
+// ==================== P3 工作台停靠坞 ====================
+// 独立于滚动流的固定区域：零查询时显示工作台内容，页签再多也常驻首屏。
+.sw__workbench-dock {
+  border-top: 1px solid var(--b3-border-color);
+  max-height: 240px;
+  overflow-y: auto;
+  padding: var(--sw-space-md, 8px) var(--sw-space-lg, 12px);
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--b3-theme-surface) 96%, var(--b3-theme-primary) 4%);
+
+  &.fn__none { display: none; }
+}
+
+// P2 骨架屏（关联内容等待期）
+.sw__workbench-related--loading {
+  display: flex;
+  align-items: center;
+  gap: var(--sw-space-md, 8px);
+  padding: var(--sw-space-md, 8px) var(--sw-space-2xs, 2px);
+  color: var(--b3-theme-on-surface-light);
+  font-size: var(--sw-font-sm, 12px);
+
+  &::before {
+    content: "";
+    display: inline-block;
+    width: var(--sw-icon-xs, 14px);
+    height: 14px;
+    border: 2px solid var(--b3-theme-primary);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: sw-spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+}
+
+@keyframes sw-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes sw-doc-skeleton-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.9; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sw__doc-status-skeleton-line { animation: none; }
+}
+
+// ==================== 移动端底部主导航（Mobile Bottom Nav ≤4项，触控 ≥44px） ====================
+.sw__mobile-bottom-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    min-height: 50px;
+    padding-top: var(--sw-space-2xs, 2px);
+    padding-bottom: max(4px, env(safe-area-inset-bottom, 0px));
+    background: var(--b3-theme-surface);
+    border-top: 1px solid var(--b3-theme-surface-lighter, rgba(0, 0, 0, 0.08));
+    flex-shrink: 0;
+    z-index: 10;
+}
+.sw__mobile-nav-item {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: var(--sw-space-xs, 4px) 10px;
+    background: transparent;
+    border: none;
+    color: var(--b3-theme-on-surface);
+    opacity: 0.72;
+    font-size: var(--sw-font-2xs, 10px);
+    touch-action: manipulation;
+    cursor: pointer;
+    transition: opacity $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease;
+
+    svg {
+        width: 20px;
+        height: 20px;
+        margin-bottom: var(--sw-space-2xs, 2px);
+    }
+
+    &.is-active, &:hover, &:active {
+        opacity: 1;
+        color: var(--b3-theme-primary);
+    }
+}

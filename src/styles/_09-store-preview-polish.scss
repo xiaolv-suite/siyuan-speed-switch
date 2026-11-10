@@ -1,0 +1,606 @@
+@use "00-tokens" as *;
+.sw-home__cell[data-module-id="external-anime-bangumi"] {
+    overflow: hidden;
+    border-color: color-mix(in srgb, #d86682 52%, var(--b3-border-color));
+    background:
+        radial-gradient(circle at 92% 8%, rgba(255, 255, 255, 0.46), transparent 25%),
+        linear-gradient(145deg, color-mix(in srgb, #f6d6de 64%, var(--b3-theme-surface, #fff)), color-mix(in srgb, #d8d5f5 56%, var(--b3-theme-surface, #fff)));
+    --sw-home-accent: #a83f61;
+}
+
+.sw__home-media-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+    gap: 10px;
+    margin: 0;
+    padding: var(--sw-space-xs, 4px) 0 0;
+    list-style: none;
+}
+
+.sw__home-media-item {
+    min-width: 0;
+
+    &.is-source { grid-column: 1 / -1; }
+}
+
+.sw__home-media-action {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-sm, 6px);
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--b3-theme-on-background);
+    text-align: start;
+    cursor: pointer;
+    touch-action: manipulation;
+
+    &:focus-visible {
+        outline: 2px solid var(--sw-home-accent, var(--b3-theme-primary));
+        outline-offset: 2px;
+    }
+}
+
+.sw__home-media-cover-wrap {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 12px;
+}
+
+.sw__home-media-cover {
+    display: block;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--b3-border-color) 48%, transparent);
+    box-shadow: 0 5px 14px rgba(57, 31, 47, 0.13);
+    object-fit: cover;
+    transition: transform $sw-dur-base $sw-ease, box-shadow $sw-dur-base $sw-ease;
+}
+
+.sw__home-media-badge {
+    position: absolute;
+    top: var(--sw-space-sm, 6px);
+    right: var(--sw-space-sm, 6px);
+    padding: 1px var(--sw-space-sm, 6px);
+    border-radius: var(--sw-radius-sm, 6px);
+    background: rgba(18, 18, 24, 0.82);
+    backdrop-filter: var(--sw-blur-sm);
+    color: #fff;
+    font-size: var(--sw-font-2xs, 10px);
+    font-weight: var(--sw-weight-medium, 500);
+    letter-spacing: 0.02em;
+    line-height: 1.4;
+    pointer-events: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+}
+
+.sw__home-media-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+}
+
+.sw__home-media-progress-bar {
+    display: block;
+    height: 100%;
+    background: var(--sw-home-accent, var(--b3-theme-primary));
+    transition: width $sw-dur-base $sw-ease;
+}
+
+.sw__home-media-action:hover .sw__home-media-cover {
+    box-shadow: 0 8px 20px rgba(57, 31, 47, 0.2);
+    transform: translateY(-2px);
+}
+
+.sw__home-media-copy { display: flex; flex-direction: column; gap: var(--sw-space-2xs, 2px); min-width: 0; }
+.sw__home-media-title {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: var(--sw-font-xs, 11px);
+    line-height: 1.35;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+.sw__home-media-secondary { color: var(--b3-theme-on-surface-light); font-size: var(--sw-font-2xs, 10px); }
+.sw__home-media-item.is-source .sw__home-media-action { display: block; padding: var(--sw-space-2xs, 2px) 0; color: var(--b3-theme-on-surface-light); font-size: var(--sw-font-2xs, 10px); }
+.sw__home-media-item.is-source .sw__home-media-title { font-size: var(--sw-font-2xs, 10px); font-weight: var(--sw-weight-medium, 500); }
+
+@media (max-width: 560px) {
+    .sw__home-media-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+// ==================== 商店实时预览弹窗 ====================
+.sw-store-preview {
+    height: 100%;
+    overflow: auto;
+
+    &__meta {
+        position: sticky;
+        z-index: 2;
+        top: 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--sw-space-sm, 6px);
+        margin: 0 0 var(--sw-space-md, 8px);
+        padding: var(--sw-space-sm, 6px) var(--sw-space-2xs, 2px) var(--sw-space-md, 8px);
+        min-width: 0;
+        border-bottom: 1px solid color-mix(in srgb, var(--b3-border-color) 60%, transparent);
+        background: color-mix(in srgb, var(--b3-theme-surface) 92%, transparent);
+        color: var(--b3-theme-on-surface-light);
+        font-size: var(--sw-font-xs, 11px);
+        line-height: 1.35;
+        backdrop-filter: var(--sw-blur-md);
+    }
+
+    &__meta-chip {
+        display: inline-flex;
+        align-items: center;
+        max-width: 100%;
+        min-width: 0;
+        padding: var(--sw-space-xs, 4px) var(--sw-space-md, 8px);
+        border: 1px solid var(--b3-border-color);
+        border-radius: 999px;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        user-select: text;
+
+        // T-6967 S2（G6 收口）：联网/本机/离线是**能力事实**而非进行态或新鲜度——
+        // 一律中性 chip（同 is-source），彩色语义只留给真正的进度/新鲜度徽标；
+        // 修正「联网」误用 loading 橙的历史观感。
+        &.is-source { color: var(--b3-theme-on-background); }
+        &.is-network,
+        &.is-local,
+        &.is-offline { color: var(--b3-theme-on-background); }
+        &.is-context { border-style: dashed; color: var(--b3-theme-on-surface-light); }
+        &.is-privacy { opacity: .84; }
+    }
+
+    &__body {
+        display: flex;
+        flex-direction: column;
+        gap: var(--sw-space-md, 8px);
+        min-width: 0;
+        min-height: 0;
+        overflow-wrap: anywhere;
+        padding: var(--sw-space-xs, 4px) var(--sw-space-2xs, 2px) var(--sw-space-md, 8px);
+
+        .sw__home-module {
+            border: 1px solid var(--b3-border-color);
+            border-radius: var(--sw-radius-card, 14px);
+            background: var(--b3-theme-surface);
+        }
+    }
+}
+
+.sw-home-store__preview-btn {
+    color: var(--b3-theme-primary);
+
+    &:hover {
+        border-color: var(--b3-theme-primary);
+    }
+}
+
+// ==================== 面板交互与显示优化 ====================
+// 折叠按钮紧凑化：箭头图标替代文字，减少头部常驻视觉噪音；声明 hover 与 focus 微触感
+.sw-home .sw-home__cell .sw__home-module-fold {
+    min-height: 22px;
+    min-width: 22px;
+    padding: 0 var(--sw-space-xs, 4px);
+    font-size: 0;
+    border-radius: var(--sw-radius-sm, 6px);
+    transition: background-color $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease, transform $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease;
+
+    svg { width: 12px; height: 12px; }
+
+    &:hover {
+        color: var(--b3-theme-primary);
+        background: color-mix(in srgb, var(--b3-theme-primary) 12%, transparent);
+        transform: scale(1.08);
+    }
+
+    &:focus,
+    &:focus-visible {
+        outline: none;
+        color: var(--b3-theme-primary);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--b3-theme-primary) 35%, transparent);
+    }
+
+    &:active {
+        transform: scale(0.94);
+    }
+}
+
+// 日历采用固定 6 周月视图，视觉结构接近系统日历小组件。
+.sw__home-module[data-module-id="journal-calendar"] {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+
+    .sw__home-module-body {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-height: 0;
+    }
+}
+
+@media (max-width: 560px) {
+    .sw-store-preview__meta { font-size: var(--sw-font-2xs, 10px); gap: var(--sw-space-xs, 4px); }
+    .sw-store-preview__meta-chip { padding: var(--sw-space-xs, 4px) var(--sw-space-sm, 6px); }
+}
+
+@media (forced-colors: active) {
+    .sw-store-preview__meta { border-bottom-color: CanvasText; background: Canvas; }
+    .sw-store-preview__meta-chip { border-color: CanvasText; color: CanvasText !important; }
+}
+
+.sw__home-calendar-nav {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--sw-space-xs, 4px);
+    margin: 0 0 var(--sw-space-sm, 6px);
+
+    .sw__home-calendar-period {
+        margin-right: auto;
+        min-width: 0;
+        overflow: hidden;
+        color: var(--b3-theme-on-background);
+        font-size: 14px;
+        font-weight: var(--sw-weight-bold, 700);
+        letter-spacing: -0.02em;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: var(--sw-control-h-md, 28px);
+        min-height: var(--sw-control-h-md, 28px);
+        padding: var(--sw-space-2xs, 2px) var(--sw-space-xs, 4px);
+        border: 0;
+        border-radius: var(--sw-radius-sm, 6px);
+        background: transparent;
+        color: var(--sw-home-accent, var(--b3-theme-primary));
+        font-size: var(--sw-font-sm, 12px);
+        line-height: 1;
+
+        &:hover { background: color-mix(in srgb, var(--sw-home-accent, var(--b3-theme-primary)) 11%, transparent); }
+
+        &:focus-visible {
+            outline: none;
+            box-shadow: var(--sw-focus-ring);
+        }
+    }
+
+    .sw__home-calendar-period-select {
+        min-height: var(--sw-control-h-md, 28px);
+        padding: 0 var(--sw-space-sm, 6px);
+        margin-left: var(--sw-space-2xs, 2px);
+    }
+}
+
+// 日历必须显式声明 7 列网格；否则 span/button 会退化为连续文本，
+// 在窄面板和默认主题下尤其明显。
+.sw__home-calendar {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-rows: 18px repeat(6, minmax(20px, 1fr));
+    flex: 1;
+    gap: var(--sw-space-2xs, 2px) var(--sw-space-xs, 4px);
+    align-items: stretch;
+    width: 100%;
+    min-height: 140px;
+}
+
+.sw__home-calendar-head,
+.sw__home-calendar-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 0;
+    box-sizing: border-box;
+    text-align: center;
+}
+
+.sw__home-calendar-head {
+    color: var(--b3-theme-on-surface-light);
+    font-size: var(--sw-font-2xs, 10px);
+    font-weight: var(--sw-weight-emphasis, 650);
+    letter-spacing: 0.03em;
+
+    &:nth-child(6),
+    &:nth-child(7) { color: color-mix(in srgb, var(--b3-theme-error, #d23f31) 68%, var(--b3-theme-on-surface-light)); }
+}
+
+.sw__home-calendar-cell {
+    position: relative;
+    flex-direction: column;
+    min-height: 20px;
+    padding: 1px;
+    border: 0;
+    border-radius: $sw-radius-md;
+    background: transparent;
+    color: var(--b3-theme-on-background);
+
+    .sw__home-calendar-primary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 21px;
+        height: 21px;
+        border-radius: 50%;
+        font-size: var(--sw-font-xs, 11px);
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+    }
+
+    .sw__home-calendar-secondary {
+        display: block;
+        max-width: 100%;
+        margin-top: -1px;
+        overflow: hidden;
+        color: var(--b3-theme-on-surface-light);
+        font-size: 7px;
+        line-height: 1;
+        opacity: 0.72;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    &.is-weekend:not(.is-outside) .sw__home-calendar-primary {
+        color: color-mix(in srgb, var(--b3-theme-error, #d23f31) 72%, var(--b3-theme-on-background));
+    }
+
+    &.is-outside {
+        opacity: 0.32;
+    }
+
+    &.is-today .sw__home-calendar-primary {
+        background: var(--sw-home-accent, var(--b3-theme-primary));
+        color: var(--b3-theme-on-primary, #fff);
+        font-weight: 750;
+    }
+
+    // T-6871：节假日红与平台徽标同款处理——宿主 error 原色在暗色背景下不足 3:1
+    // （对比度采样修正背景解析后实测 2.91），混入正文色保住色相并回到徽章线以上。
+    &.is-holiday:not(.is-today) .sw__home-calendar-primary {
+        color: color-mix(in srgb, var(--b3-theme-error, #d23f31) 68%, var(--b3-theme-on-background));
+        font-weight: 720;
+    }
+
+    &.is-workday:not(.is-today) .sw__home-calendar-primary {
+        color: color-mix(in srgb, var(--b3-theme-on-background) 68%, var(--b3-theme-primary));
+    }
+
+    &.is-holiday .sw__home-calendar-secondary { color: color-mix(in srgb, var(--b3-theme-error, #d23f31) 68%, var(--b3-theme-on-background)); }
+    &.is-workday .sw__home-calendar-secondary { color: var(--b3-theme-primary); opacity: 0.88; }
+
+    &.has-journal {
+        color: inherit;
+
+        &:focus-visible {
+            outline: none;
+            box-shadow: var(--sw-focus-ring);
+        }
+    }
+}
+
+.sw__home-calendar-marker {
+    position: absolute;
+    bottom: 1px;
+    left: 50%;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--sw-color-data, var(--sw-home-accent, var(--b3-theme-primary)));
+    transform: translateX(-50%);
+    transition: transform $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease;
+}
+
+.sw__home-calendar-cell:hover .sw__home-calendar-marker,
+.sw__home-calendar-cell:focus-visible .sw__home-calendar-marker {
+    box-shadow: 0 0 4px color-mix(in srgb, var(--sw-color-data, #10b981) 60%, transparent);
+    transform: translateX(-50%) scale(1.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sw__home-calendar-cell.has-journal {
+        transition: none;
+    }
+}
+
+.sw__home-calendar-cell.has-journal {
+    cursor: pointer;
+    transition: background-color $sw-dur-base, color $sw-dur-base;
+
+    &:hover {
+        background: color-mix(in srgb, var(--sw-home-accent, var(--b3-theme-primary)) 12%, transparent);
+    }
+}
+
+// 天气组件：借鉴 iPad 卡片的单块渐变、超大温度与横向预报，但使用主题变量、
+// 不引入远程背景图片，确保深浅主题和窄侧栏仍可读。
+.sw-home__cell[data-module-id="external-weather-open-meteo"] {
+    overflow: hidden;
+    border-color: #6f9ed9;
+    background:
+        radial-gradient(circle at 88% 16%, rgba(255, 255, 255, 0.08), transparent 24%),
+        linear-gradient(145deg, #468ed8 0%, #7164c8 100%);
+    --sw-home-accent: #ffffff;
+
+    .sw__home-module-header,
+    .sw__home-module-context,
+    .sw__home-module-title,
+    .sw__home-module-meta,
+    .sw__home-stat-label,
+    .sw__home-stat-value { color: #fff; }
+
+    .sw__home-module-icon { background: rgba(255, 255, 255, 0.18); color: #fff; }
+    .sw__home-module-context {
+        display: table;
+        max-width: 100%;
+        padding: var(--sw-space-xs, 4px) var(--sw-space-sm, 6px);
+        border-radius: var(--sw-radius-sm, 6px);
+        background: rgba(10, 24, 48, 0.68);
+        color: #fff;
+    }
+    .sw__home-stat { padding-block: var(--sw-space-md, 8px) var(--sw-space-lg, 12px); }
+    .sw__home-stat-value { font-size: clamp(34px, 5vw, 52px); font-weight: 520; letter-spacing: -0.055em; }
+    .sw__home-stat-label { opacity: 0.88; }
+    .sw__home-module-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sw-space-sm, 6px); }
+    .sw__home-module-item {
+        min-width: 0;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.12);
+
+        &.has-link { grid-column: 1 / -1; background: transparent; }
+    }
+    .sw__home-module-item-action {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--sw-space-2xs, 2px);
+        width: 100%;
+        padding: var(--sw-space-md, 8px) var(--sw-space-xs, 4px);
+        border-left: 0;
+        color: #fff;
+        text-align: center;
+
+        &::before { display: none; }
+    }
+    .sw__home-module-item-label { overflow: hidden; font-size: var(--sw-font-xs, 11px); text-overflow: ellipsis; white-space: nowrap; }
+    .sw__home-module-item-secondary { color: rgba(255, 255, 255, 0.72); font-size: var(--sw-font-2xs, 10px); white-space: nowrap; }
+    .sw__home-module-item.has-link .sw__home-module-item-action { align-items: flex-start; padding-block: var(--sw-space-xs, 4px) 0; opacity: 0.72; font-size: var(--sw-font-2xs, 10px); }
+    .sw__home-module-toggle { color: #fff; border-color: rgba(255, 255, 255, 0.35); }
+}
+
+@media (max-width: 560px) {
+    .sw-home__cell[data-module-id="external-weather-open-meteo"] .sw__home-module-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}
+
+// 条目悬停：左侧强调色条
+.sw-home__cell .sw__home-module-item-action {
+    border-left: 2px solid transparent;
+    transition: border-color $sw-dur-base, background-color $sw-dur-base;
+
+    &:hover {
+        border-left-color: var(--sw-home-accent, var(--b3-theme-primary));
+        background: color-mix(in srgb, var(--b3-theme-primary) 4%, transparent);
+    }
+}
+
+// stat hero 数字在面板格子里更醒目
+.sw-home__cell .sw__home-stat-value {
+    font-size: 1.4em;
+    font-weight: var(--sw-weight-bold, 700);
+    letter-spacing: -0.02em;
+}
+
+.sw-home__cell .sw__home-stat-label {
+    font-size: 0.85em;
+    opacity: 0.7;
+}
+
+// ==================== 面板交互体验优化 ====================
+// 折叠体平滑过渡（max-height + opacity 渐变，不干扰内部滚动）
+.sw-home__cell .sw__home-module-body {
+    max-height: 600px;
+    overflow: hidden;
+    transition: max-height $sw-dur-panel $sw-ease, opacity $sw-dur-slow $sw-ease;
+
+    &[aria-hidden="true"] {
+        max-height: 0;
+        opacity: 0;
+    }
+}
+
+// 进度条圆角端点
+.sw-home__cell .sw__home-progress,
+.sw-home__cell .sw__home-progress-fill {
+    border-radius: 99px;
+}
+
+// 条目过渡：悬停与选中反馈更流畅
+.sw-home__cell .sw__home-module-item {
+    transition: background-color $sw-dur-fast $sw-ease;
+}
+
+// ==================== 面板平滑滚动 ====================
+.sw-home .sw-home__panel-scroll {
+    scroll-behavior: smooth;
+}
+
+// ==================== 周打卡行（Duolingo 式） ====================
+.sw__home-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: var(--sw-space-xs, 4px);
+    align-items: center;
+}
+
+.sw__home-weekday {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sw-space-2xs, 2px);
+
+    &-dot {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--sw-icon-md, 18px);
+        height: 18px;
+        border-radius: 50%;
+        border: 1px solid color-mix(in srgb, var(--b3-border-color) 80%, transparent);
+        background: color-mix(in srgb, var(--b3-theme-background) 60%, transparent);
+        color: transparent;
+        transition: background-color $sw-dur-base, border-color $sw-dur-base;
+
+        svg { width: 11px; height: 11px; }
+    }
+
+    &.is-done &-dot {
+        border-color: var(--sw-home-accent, var(--b3-theme-primary));
+        background: var(--sw-home-accent, var(--b3-theme-primary));
+        color: var(--b3-theme-background);
+    }
+
+    &-label {
+        font-size: var(--sw-font-2xs, 10px);
+        opacity: 0.65;
+    }
+}
+
+// ==================== 高对比度偏好（prefers-contrast: more）====================
+// Apple 无障碍指南要求适配"增强对比度"偏好。与上方 forced-colors 分工明确：
+// forced-colors 是系统强制覆盖（改用 CanvasText / Canvas 等系统色）；
+// prefers-contrast 仍属用户偏好——继续沿用主题色，只把低透明度的软层收紧为
+// 更实的表面色，使层次边界不再依赖细微的透明度差。
+// 这里仅覆盖令牌，不改布局、尺寸或阴影，因此默认外观完全不受影响。
+// 置于文件末尾，以便同时命中 .speed-switch 与 .sw-settings 两个令牌作用域。
+@media (prefers-contrast: more) {
+    .speed-switch,
+    .sw-settings {
+        --sw-accent-soft: color-mix(in srgb, var(--b3-theme-primary, #8576e8) 20%, transparent);
+        // 按下态须始终比悬停更实，故一并抬高一档，避免高对比度下反馈反转。
+        --sw-accent-pressed: color-mix(in srgb, var(--b3-theme-primary, #8576e8) 30%, transparent);
+        --sw-surface-muted: var(--b3-theme-surface);
+        --sw-control-bg: var(--b3-theme-surface);
+    }
+}

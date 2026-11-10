@@ -1,0 +1,250 @@
+"use strict";
+
+// Fixed workspace plans are proposed read-only, then executed after the host's
+// whole-plan confirmation. Local callers can additionally supply an AbortSignal.
+const {normalizeAgentDocumentId, normalizeAgentDocumentIds, normalizeAgentNotebookId, sanitizeJournalAppend} = require("./agent-capabilities.js");
+
+const MAX_PLAN_STEPS = 8;
+const MAX_PLAN_TTL_MS = 10 * 60 * 1000;
+const PLAN_ACTIONS = Object.freeze(["open-document", "open-documents", "restore-document-set", "update-task-status", "create-document", "append-to-journal"]);
+const WRITE_ACTIONS = Object.freeze(["update-task-status", "create-document", "append-to-journal"]);
+const RECEIPT_STATUSES = Object.freeze(["completed", "skipped", "failed", "cancelled"]);
+const PLAN_RESULT_STATUSES = Object.freeze(["completed", "partial", "failed", "cancelled", "denied", "expired"]);
+
+const WORKSPACE_PLAN_SPEC = Object.freeze({
+    name: "workspace-plan",
+    title: "小驴雷切工作区执行计划",
+    description: "只读生成待审阅的工作区动作计划。仅列出固定白名单动作和有界目标，不执行任何导航或写入。",
+    inputSchema: Object.freeze({
+        type: "object",
+        properties: {
+            steps: {
+                type: "array",
+                minItems: 1,
+                maxItems: MAX_PLAN_STEPS,
+                items: {
+                    type: "object",
+                    properties: {
+                        action: {type: "string", enum: PLAN_ACTIONS},
+                        id: {type: "string", maxLength: 64},
+                        ids: {type: "array", maxItems: 5, items: {type: "string", maxLength: 64}},
+                        setId: {type: "string", maxLength: 64},
+                        done: {type: "boolean"},
+                        notebook: {type: "string", maxLength: 64},
+                        title: {type: "string", maxLength: 128},
+                        markdown: {type: "string", maxLength: 4096},
+                        content: {type: "string", maxLength: 512},
+                    },
+                    required: ["action"],
+                    additionalProperties: false,
+                },
+            },
+            ttlMs: {type: "integer", minimum: 1000, maximum: MAX_PLAN_TTL_MS},
+        },
+        required: ["steps"],
+        additionalProperties: false,
+    }),
+    outputSchema: Object.freeze({
+        type: "object",
+        properties: {
+            planId: {type: "string", maxLength: 32},
+            createdAt: {type: "integer", minimum: 1},
+            expiresAt: {type: "integer", minimum: 1},
+            requiresConfirmation: {type: "boolean"},
+            requiresWrite: {type: "boolean"},
+            steps: {
+                type: "array",
+                maxItems: MAX_PLAN_STEPS,
+                items: {
+                    type: "object",
+                    properties: {
+                        index: {type: "integer", minimum: 0, maximum: MAX_PLAN_STEPS},
+                        action: {type: "string", enum: PLAN_ACTIONS},
+                        ids: {type: "array", maxItems: 5, items: {type: "string", maxLength: 64}},
+                        setId: {type: "string", maxLength: 64},
+                        done: {type: "boolean"},
+                        notebook: {type: "string", maxLength: 64},
+                        title: {type: "string", maxLength: 128},
+                        markdown: {type: "string", maxLength: 4096},
+                        content: {type: "string", maxLength: 512},
+                        requiresWrite: {type: "boolean"},
+                    },
+                    required: ["index", "action", "requiresWrite"],
+                    additionalProperties: false,
+                },
+            },
+        },
+        required: ["planId", "createdAt", "expiresAt", "requiresConfirmation", "requiresWrite", "steps"],
+        additionalProperties: false,
+    }),
+});
+
+const WORKSPACE_PLAN_RECEIPT_SCHEMA = Object.freeze({
+    type: "object",
+    properties: {
+        planId: {type: "string", maxLength: 32},
+        status: {type: "string", enum: PLAN_RESULT_STATUSES},
+        completed: {type: "array", maxItems: MAX_PLAN_STEPS, items: {type: "integer", minimum: 0, maximum: MAX_PLAN_STEPS}},
+        skipped: {type: "array", maxItems: MAX_PLAN_STEPS, items: {type: "integer", minimum: 0, maximum: MAX_PLAN_STEPS}},
+        failed: {type: "array", maxItems: MAX_PLAN_STEPS, items: {type: "object", properties: {index: {type: "integer", minimum: 0, maximum: MAX_PLAN_STEPS}, reason: {type: "string", maxLength: 32}}, required: ["index", "reason"], additionalProperties: false}},
+        cancelled: {type: "array", maxItems: MAX_PLAN_STEPS, items: {type: "integer", minimum: 0, maximum: MAX_PLAN_STEPS}},
+        receipt: {type: "string", maxLength: 64},
+    },
+    required: ["planId", "status", "completed", "skipped", "failed", "cancelled", "receipt"],
+    additionalProperties: false,
+});
+
+// T-1219 执行链（ADR 0063 宿主路线）：整份计划是一次确认单元——本能力声明
+// localWrite，宿主确认卡展示计划内容，批准即按序执行并返回有界回执。
+// 输入即 workspace-plan 的输出（plan 对象）；过期与结构校验在执行侧强制。
+const WORKSPACE_EXECUTE_SPEC = Object.freeze({
+    name: "execute-workspace-plan",
+    title: "小驴雷切执行工作区计划",
+    description: "执行一份未过期的工作区计划：按序运行固定白名单动作（最多 8 步）并返回有界回执。整份计划是一次确认单元，可在宿主确认卡中取消；当前宿主未提供执行期间的取消信号。",
+    inputSchema: WORKSPACE_PLAN_SPEC.outputSchema,
+    outputSchema: WORKSPACE_PLAN_RECEIPT_SCHEMA,
+});
+
+function buildWorkspacePlan(input, now = Date.now()) {
+    const source = input && typeof input === "object" ? input : {};
+    const createdAt = Number.isFinite(now) && now > 0 ? Math.floor(now) : Date.now();
+    const ttlMs = Math.min(MAX_PLAN_TTL_MS, Math.max(1000, Math.trunc(Number(source.ttlMs) || MAX_PLAN_TTL_MS)));
+    const steps = [];
+    (Array.isArray(source.steps) ? source.steps : []).slice(0, MAX_PLAN_STEPS).forEach((raw) => {
+        if (!raw || typeof raw !== "object" || !PLAN_ACTIONS.includes(raw.action)) return;
+        const action = raw.action;
+        const item = {index: steps.length, action, requiresWrite: WRITE_ACTIONS.includes(action)};
+        if (action === "open-document" || action === "update-task-status") {
+            const id = normalizeAgentDocumentId(raw.id);
+            if (!id) return;
+            item.ids = [id];
+            if (action === "update-task-status") item.done = raw.done === true;
+        } else if (action === "open-documents") {
+            const ids = normalizeAgentDocumentIds(raw.ids, 5);
+            if (!ids.length) return;
+            item.ids = ids;
+        } else if (action === "restore-document-set") {
+            const setId = typeof raw.setId === "string" ? raw.setId.trim().slice(0, 64) : "";
+            if (!setId) return;
+            item.setId = setId;
+        } else if (action === "create-document") {
+            const notebook = typeof raw.notebook === "string" ? raw.notebook.trim().slice(0, 64) : "";
+            const title = typeof raw.title === "string" ? raw.title.trim().slice(0, 128) : "";
+            if (!notebook || !title) return;
+            item.notebook = normalizeAgentNotebookId(notebook) || notebook;
+            item.title = title;
+            item.markdown = typeof raw.markdown === "string" ? raw.markdown.slice(0, 4096) : "";
+        } else if (action === "append-to-journal") {
+            const content = sanitizeJournalAppend(raw.content);
+            if (!content) return;
+            item.content = content;
+        }
+        steps.push(item);
+    });
+    const requiresWrite = steps.some((step) => step.requiresWrite);
+    const expiresAt = createdAt + ttlMs;
+    return {
+        planId: makePlanId(createdAt, steps),
+        createdAt,
+        expiresAt,
+        requiresConfirmation: steps.length > 0,
+        requiresWrite,
+        steps,
+    };
+}
+
+function isWorkspacePlanExpired(plan, now = Date.now()) {
+    return !plan || !Number.isFinite(now) || Math.floor(now) >= Number(plan.expiresAt);
+}
+
+function validateWorkspacePlan(plan) {
+    if (!plan || typeof plan !== "object" || typeof plan.planId !== "string" || !Array.isArray(plan.steps) || plan.steps.length > MAX_PLAN_STEPS) return {ok: false, reason: "invalid_plan"};
+    for (let index = 0; index < plan.steps.length; index += 1) {
+        const step = plan.steps[index];
+        if (!step || step.index !== index || !PLAN_ACTIONS.includes(step.action) || step.requiresWrite !== WRITE_ACTIONS.includes(step.action)) return {ok: false, reason: "invalid_step"};
+        if ((step.action === "open-document" || step.action === "update-task-status") && (!Array.isArray(step.ids) || step.ids.length !== 1 || !normalizeAgentDocumentId(step.ids[0]))) return {ok: false, reason: "invalid_target"};
+        if (step.action === "open-documents" && (!Array.isArray(step.ids) || !step.ids.length || step.ids.length > 5 || normalizeAgentDocumentIds(step.ids, 5).length !== step.ids.length)) return {ok: false, reason: "invalid_targets"};
+        if (step.action === "restore-document-set" && (typeof step.setId !== "string" || !step.setId.trim())) return {ok: false, reason: "invalid_set"};
+        if (step.action === "update-task-status" && typeof step.done !== "boolean") return {ok: false, reason: "invalid_done"};
+        if (step.action === "create-document" && (
+            typeof step.notebook !== "string" || !step.notebook.trim() || step.notebook.length > 64
+            || typeof step.title !== "string" || !step.title.trim() || step.title.length > 128
+            || typeof step.markdown !== "string" || step.markdown.length > 4096
+        )) return {ok: false, reason: "invalid_payload"};
+        if (step.action === "append-to-journal" && (
+            typeof step.content !== "string" || !sanitizeJournalAppend(step.content) || step.content.length > 512
+        )) return {ok: false, reason: "invalid_payload"};
+    }
+    return {ok: true};
+}
+
+function buildWorkspaceReceipt(plan, results, now = Date.now(), forcedStatus = "") {
+    const source = Array.isArray(results) ? results : [];
+    const completed = [], skipped = [], cancelled = [], failed = [];
+    for (let index = 0; index < Math.min(MAX_PLAN_STEPS, plan?.steps?.length || 0); index += 1) {
+        const result = source[index] && typeof source[index] === "object" ? source[index] : {};
+        const status = RECEIPT_STATUSES.includes(result.status) ? result.status : "skipped";
+        if (status === "completed") completed.push(index);
+        else if (status === "cancelled") cancelled.push(index);
+        else if (status === "failed") failed.push({index, reason: cleanReason(result.reason)});
+        else skipped.push(index);
+    }
+    let status = PLAN_RESULT_STATUSES.includes(forcedStatus) ? forcedStatus : "completed";
+    if (!forcedStatus && isWorkspacePlanExpired(plan, now)) status = "expired";
+    else if (!forcedStatus && cancelled.length && !completed.length && !failed.length) status = "cancelled";
+    else if (!forcedStatus && (failed.length || skipped.length || cancelled.length)) status = completed.length ? "partial" : "failed";
+    return {planId: typeof plan?.planId === "string" ? plan.planId.slice(0, 32) : "", status, completed, skipped, failed, cancelled, receipt: makeReceiptId(plan?.planId, now, status)};
+}
+
+// 执行状态机只依赖注入的 runStep，不接触思源 API；宿主接入时可复用同一套取消/过期语义。
+async function runWorkspacePlan(plan, options = {}) {
+    const now = () => typeof options.now === "function" ? Number(options.now()) : Number(options.now || Date.now());
+    const structure = validateWorkspacePlan(plan);
+    if (!structure.ok) return buildWorkspaceReceipt({planId: typeof plan?.planId === "string" ? plan.planId : "", steps: []}, [], now(), "failed");
+    if (isWorkspacePlanExpired(plan, now())) return buildWorkspaceReceipt(plan, [], now(), "expired");
+    if (options.approved !== true) return buildWorkspaceReceipt(plan, [], now(), "denied");
+    const results = [];
+    let forcedStatus = "";
+    for (let index = 0; index < Math.min(MAX_PLAN_STEPS, plan.steps.length); index += 1) {
+        if (options.signal?.aborted) {
+            forcedStatus = "cancelled";
+            for (let cursor = index; cursor < plan.steps.length && cursor < MAX_PLAN_STEPS; cursor += 1) results[cursor] = {status: "cancelled"};
+            break;
+        }
+        if (isWorkspacePlanExpired(plan, now())) {
+            forcedStatus = "expired";
+            break;
+        }
+        if (typeof options.runStep !== "function") {
+            results[index] = {status: "failed", reason: "executor_missing"};
+            continue;
+        }
+        try {
+            const result = await options.runStep(plan.steps[index], index, {signal: options.signal});
+            results[index] = result && typeof result === "object" ? result : {status: "completed"};
+        } catch (error) {
+            results[index] = {status: "failed", reason: error?.reason || error?.code || "executor_failed"};
+        }
+    }
+    return buildWorkspaceReceipt(plan, results, now(), forcedStatus);
+}
+
+function cleanReason(value) {
+    const text = typeof value === "string" ? value.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32) : "failed";
+    return text || "failed";
+}
+
+function makeReceiptId(planId, now, status) {
+    const base = `${String(planId || "plan").slice(0, 24)}:${Math.floor(Number(now) || Date.now())}:${status}`;
+    let hash = 0;
+    for (const char of base) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+    return `rc-${hash.toString(36)}`;
+}
+
+function makePlanId(createdAt, steps) {
+    let hash = createdAt >>> 0;
+    JSON.stringify(steps).split("").forEach((char) => { hash = (hash * 33 + char.charCodeAt(0)) >>> 0; });
+    return `wp-${createdAt.toString(36)}-${hash.toString(36)}`.slice(0, 32);
+}
+
+module.exports = {MAX_PLAN_STEPS, MAX_PLAN_TTL_MS, PLAN_ACTIONS, WORKSPACE_PLAN_SPEC, WORKSPACE_EXECUTE_SPEC, WORKSPACE_PLAN_RECEIPT_SCHEMA, buildWorkspacePlan, isWorkspacePlanExpired, validateWorkspacePlan, buildWorkspaceReceipt, runWorkspacePlan};

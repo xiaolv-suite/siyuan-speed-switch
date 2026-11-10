@@ -1,0 +1,43 @@
+const {readSourceText} = require("./source-scan.cjs");
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const source = readSourceText(path.join(__dirname, '..', 'src', 'index.ts'));
+const storeUiSource = readSourceText(path.join(__dirname, '..', 'src', 'home-store-ui.ts'));
+const zh = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'src', 'i18n', 'zh-CN.json'), 'utf8'));
+const en = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'src', 'i18n', 'en.json'), 'utf8'));
+
+test('store title receives stable id', () => assert.match(storeUiSource, /title\.id = `sw-home-store-title-/));
+test('availability badge has aria label', () => assert.match(storeUiSource, /badge\.setAttribute\("aria-label", badge\.textContent\)/));
+test('availability badge has native title', () => assert.match(storeUiSource, /badge\.title = badge\.textContent/));
+test('support text has aria label', () => assert.match(storeUiSource, /support\.setAttribute\("aria-label", this\.i18n\.homeStoreSupportedSurfaces\)/));
+test('source chips have native title', () => assert.match(storeUiSource, /chip\.title = label/));
+// T-7856 起 size 瓷贴补 {size} 插值与「官方推荐尺寸」后缀（⭐ 荐标可达）。
+test('size tiles have aria labels', () => assert.match(storeUiSource, /tile\.setAttribute\("aria-label", \(this\.i18n\.homeStoreSizeHint\.replace\("\{size\}", baseLabel\)\) \+ \(isRec \? " · 官方推荐尺寸" : ""\)\)/));
+test('config button has native title', () => assert.match(storeUiSource, /configButton\.title = configButton\.getAttribute\("aria-label"\)/));
+test('remove button has aria label', () => assert.match(storeUiSource, /removeButton\.setAttribute\("aria-label"/));
+test('inline preview metadata has native titles', () => assert.match(storeUiSource,/sizeChip\.title = sizeChip\.textContent/));
+test('size hint has Chinese translation', () => assert.equal(zh.homeStoreSizeHint, '选择尺寸：{size}'));
+test('size hint has English translation', () => assert.equal(en.homeStoreSizeHint, 'Choose size: {size}'));
+test('size hint preserves placeholder', () => assert.ok(zh.homeStoreSizeHint.includes('{size}') && en.homeStoreSizeHint.includes('{size}')));
+test('title ids are module scoped', () => assert.match(storeUiSource, /sw-home-store-title-\$\{moduleId\}/));
+test('availability copy remains localized', () => assert.match(storeUiSource, /homeStoreAvailabilityExternal/));
+test('conditional copy remains localized', () => assert.match(storeUiSource, /homeStoreAvailabilityConditional/));
+test('surface copy remains localized', () => assert.match(storeUiSource, /homeStoreSupportedSurfaces/));
+test('size copy remains localized', () => assert.match(storeUiSource, /homeStoreSizeHint/));
+test('config copy includes component title', () => assert.match(storeUiSource, /homeConfig} · \$\{def\.title/));
+test('remove copy includes component title', () => assert.match(storeUiSource, /homeStoreRemove} · \$\{def\.title/));
+test('preview copy includes component title', () => assert.match(storeUiSource, /homeStorePreview} · \$\{def\.title/));
+test('source chip title uses rendered label', () => assert.match(storeUiSource, /chip\.textContent = label/));
+// T-7856 起推荐档瓷贴以 innerHTML 追加 ⭐ 徽标；可见文案仍必须来自 HOME_WIDGET_SIZE_LABELS 渲染。
+test('size tile label uses rendered text', () => assert.match(storeUiSource, /const baseLabel = HOME_WIDGET_SIZE_LABELS\[sizeKey as HomeWidgetSize\] \|\| sizeKey;\s*tile\.innerHTML = isRec \? `\$\{baseLabel\} <span class="sw-home-store__size-rec-badge" title="推荐尺寸">⭐<\/span>` : baseLabel;/));
+test('support aria remains stable across surfaces', () => assert.match(storeUiSource,/supportedDevices\.map/));
+test('title id does not expose config values', () => assert.doesNotMatch(storeUiSource, /title\.id = .*config/));
+test('native titles remain bounded to visible labels', () => assert.match(storeUiSource, /title = .*textContent/));
+test('remove action remains a button', () => assert.match(storeUiSource, /removeButton\.type = "button"/));
+test('config action remains a button', () => assert.match(storeUiSource, /configButton\.type = "button"/));
+test('inline preview body remains a scoped region', () => assert.match(storeUiSource, /body\.classList\.add\("sw-store-preview__body"\)/));
+test('size hint is referenced from runtime', () => assert.match(storeUiSource, /homeStoreSizeHint\.replace/));
+test('aria labels use component title fallback', () => assert.match(storeUiSource,/def\.title \|\| moduleId/));

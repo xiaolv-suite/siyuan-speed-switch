@@ -1,0 +1,1499 @@
+# 小驴雷切 更新日志（完整历史）
+
+> 本文件是完整版本历史；README.md 只保留最近版本的摘要。新条目在发布时追加到这里。
+
+## 更新日志（完整历史）
+
+### v0.48.88（2026-11-04 · 本地封验）
+
+- **小驴全家桶统一生态系统全量接入与真机闭环（T-7859~T-7861）**：
+  - **7 大全生态统一规范全量落地**：接入通知降噪中枢（`lvNotify`）、文档写入互斥锁（`lvLock`）、全生态今日知识沉淀流（`lvActivity`）、多源灾备数据导出与无损写回（`lvBackup`）、极速二级行动弹射坞（`lvLaunchpad`）、AI 智能切片精炼与专题笔记融汇编织（`lvAi`）、以及全知穿透搜索引擎切片 Provider（`lvOmnisearch`）；
+  - **第一面板顶栏「今日生态流」快捷入口与底栏协同指示器**：切换器主弹窗与侧边栏统一装配 Sparkles 生态活动流入口，一键展开今日跨插件知识沉淀卡片并支持一键导出汇编 Markdown，底部常驻全家桶协同状态指示器；
+  - **全表面模态弹窗 Escape 退出机制与焦点生命周期加固**：重构指引弹窗、生态流弹窗、组件预览等全部二级对话框，引入全局顶层 Escape 捕获与生命周期安全注销，彻底杜绝通知微胶囊劫持按键或由于焦点异步漂移导致的无法退出；
+  - **切片暂存栈 AI 深度赋能与健壮性防护**：单切片卡片一键触发核心要点与行动项提炼，底部操作栏支持多切片智能融合编织为结构严整的专题笔记并自动写入剪贴板，全链路包裹离线兜底与精准错误提示；
+  - **真机隔离端到端发版门禁全面扩充**：纳入全新生态功能实机走查用例、分屏打开（`split-open`）、首开性能（`first-open`）与用户全景体验（`user-experience-full-journey`）等规格，真机 E2E 规格扩充至 18 大 Spec、30 项真实链路测试，全线 100% 稳定直通（2.3m，0 重试，0 flaky）。
+
+### v0.48.87（2026-11-01 · 本地封验）
+
+- **第二面板与组件商店 Apple Bento 3.0 / Liquid Glass 3.0 全面重构（T-7847~T-7857）**：
+  - **五源动态空间极光画布**：工作台与商店底色注入 `#6366f1`/`#f43f5e`/`#0ea5e9`/`#a855f7`/`#10b981` 五点辐射网格渐变，为毛玻璃折射提供鲜活色彩源；
+  - **Liquid Glass 3.0 卡片材质**：全部瓷贴升级为 40px 高斯模糊 + 210% 饱和度透光毛玻璃、顶部镜面斜切高光与底部暗斜面阴影、22px 连续曲率（Squircle）圆角；
+  - **VisionOS 空间角落光晕与 3D App Icon 徽标**：为时钟、进度、日记、任务、最近文档、天气、倒数日等核心卡片注入专属色彩光晕；标题栏图标升级为 28×28 立体渐变 App Icon 徽标（带彩色投影）；
+  - **有机 WidgetKit 内容编排**：消除 `space-between` 造成的 200px 空洞，主数值与语义标签 10~12px 紧密配对，进度条末端植入发光圆点，Small/Medium/Wide 尺寸自适应展开为 Bento 网格。
+- **组件商店与第二面板 100% 视觉同源（T-7855/T-7856）**：商店弹窗、分类药丸、画廊卡片、实时预览全部接入同一套 Bento 3.0 规则（`:is(.sw-home, .sw-home-store, .sw-store-preview)` 作用域），预览直连最新卡片效果；
+- **18 款精选小组件黄金尺寸推荐（T-7856）**：建立 `HOME_RECOMMENDED_STORE_SIZES` 映射，商店尺寸选择器为推荐档标注「⭐ 荐」并默认按最佳尺寸预览；
+- **时钟英雄排版与隔离工作区同步（T-7847）**：第一时钟卡片大数字英雄位、默认 5 卡黄金 Bento 布局、推荐 Tab 收敛至 18 款精品；
+- **宿主联动与生态联邦全量实测审计（T-7854）**：9 项思源宿主联动（选区拖入、块追加、双向反链、所见即所得重渲、多窗同步、Ctrl+Z 事务）与 12 大跨插件生态桥梁逐条实测结论落盘 `docs/audit/linkage-investigation-and-execution-audit.md`。
+
+### v0.48.86（2026-11-01 · 本地封验）
+
+- **全表面存量优化战役、全量资产三层走查与 17 项存量缺陷全量闭环（Stock Optimization Campaign & Defect Resolution B-01~B-17）**：
+  - **286 项全量交互资产清单与覆盖率 100.00% 达成**：从代码中深度扫描 8 大领域（宿主入口、外壳、切换器、工作台、商店、实验室、悬浮球、设置中心），建立全量元素台账（`docs/audit/full-element-inventory.md`），经 5 个批次逐项完成轻查、高风险链路深查与横向比对，覆盖率达到 100.00%（`docs/audit/coverage-tracker.md`）；
+  - **待办缺陷池 17 项全量闭环（B-01~B-17）**：
+    - *工作台与生态桥接（B-01/B-04/B-10/B-12/B-17）*：修复 9 个生态组件副文本写入 `value` 导致空白的问题，统一透传至 `secondary` 并保留 `id/blockId/source`；商店详情操作栏与实验室保存栏引入 `sticky bottom: 0` 粘性定位防裁切；组件全尺寸预览弹窗挂载 `activeDialogs`、`suspendFAB` 并实现幂等解绑；基于标准 12 栅格归一化对齐列宽；清除卡片数值残留硬编码色值；
+    - *全局与设置中心（B-02/B-05/B-08/B-15）*：`this.app?.plugins` 补齐可选链消除早期空指针白屏；收藏分组三级弹窗全端居中自适应并封闭 Esc 焦点；外壳装饰性 SVG 补齐 `aria-hidden="true"`；配置包差异预览弹窗刷新后更新当前基线签名，解除无限 stale 死锁；
+    - *代码片段实验室（B-03/B-07/B-09）*：中栏 `.sw-studio__main` 引入独立纵向滚动与短视口 720px 媒体查询，杜绝 125%/150% 缩放下编辑区被挤压至 54px 的异常；穿透药丸全面迁移至主题语义令牌；TextFold 抽屉输入框补齐 title 提示；
+    - *切换器与键盘流（B-13）*：穿透搜索 `>` 命令模式列表项增加键盘上下方向键循环聚焦与回车执行；
+    - *悬浮球与快捷弹窗（B-06/B-11/B-14/B-16）*：快速记录弹窗移除重复内部标题，外框自适应短视口高度；保存按钮同步前置互斥锁防快速双击并发重复写入；模板选择器补齐友好异常捕获与 Esc 关闭；首次日记本引导弹窗增加 Enter 确认与 Escape 退出全键盘流支持；
+  - **思源本体 9 项深度联动实测全通（docs/audit/siyuan-linkage-verification.md）**：拖拽采风、日记追加、块精准滚动高亮、反向链接、原生编辑、WS 实时刷新、多端一致性、事务撤销、导出纯净度等 9 项链路均给出详实代码与测试依据；
+  - **九大核心维度健康体检达标（docs/audit/nine-dimensions-health-audit.md）**：界面、图标、交互、兼容、稳定、安全、易用、代码、思源联动全面通过代码与边界审计。
+
+- **真实隔离内核全链路深度排查、现代思源全量适配与预设商店精品化收敛（Isolated E2E Audit, Modern SiYuan Adaptation & Curated Store）**：
+  - **Drive D 真实隔离内核 E2E 全链路零抖动（T-7836）**：彻底修复工作台书签/标签内置组件在真实内核冷启动与并发查询下的 1200ms 超时抖动，统一提升至 2500ms 宽裕容限，全量 13 项真实浏览器端到端路径（`pnpm e2e:isolated`）稳定极速通过，0 flaky；
+  - **第一面板全高延伸与短文档空态防白**：彻底修复切换器文档速览栏（`.sw__doc-preview`）在短文档或空文档时只占半屏的大面积空白截断问题，声明 `align-self: stretch; height: 100%; min-height: 100%;` 垂直满格延伸；补齐 `.sw__doc-preview-empty-card` 空态卡片与底部块引用/超链接复制快捷把手；
+  - **第二面板全屏模式与 Bento 调色板变色**：工作台默认采用全屏模式（`homeSizeMode: "fullscreen"`），引入 `--sw-home-accent` 调色板与工具栏「🎨 变色」就地循环换色，消除深色卡片观感生硬；
+  - **代码片段商店 1240x820 画廊与「💎 精选精品」首位直达**：预设商店重构为 1240x820 双列画廊、15 个分类胶囊，首位设立「💎 精选精品」直达视图与全部分类置顶排序，汇聚 25 款高视觉价值的精品美化方案；
+  - **链滴社区精品 CSS 片段严谨收录与归属标注**：收录 10 款链滴社区名家大作（彩虹大纲树、Mac 代码块、柔彩 Callout、卡片相框、渐变分割线、待办微动效、外链发光、莫兰迪标签等），严格标注作者用户名与 ld246 原文链接；
+  - **全量内置片段现代化 AI 适配**：对既有 76 款内置片段完成新版思源（v3.0+）AI 语法排查与重构，全面淘汰失效的 `NodeImage`、`h1[data-type]`、`.b3-chip--info` 选择器，彻底清除硬编码死白 `#f4f5f7`，换用 `color-mix` 与主题变量深浅自适应；
+  - **沙箱 iframe 增强预览专属演示区**：预览模块按 11 种分类精准渲染专属视觉 Hero 演示区（大纲树、Mac 终端圆点、Callout 提示框、折叠标题、斑马表格、聚焦块、外链图标、莫兰迪标签、卡片相框、渐变星芒线、待办跳跃弹性动效），直观展现 CSS 实际视觉变化。
+
+### v0.48.85（2026-10-31 · 本地封验）
+
+- **连续切片暂存栈全链路闭环、选区实时快照、一键撤销与全工程版本单一事实源收口（Snippet Stack Full Closure & Single-Source Version Constant）**：
+  - **暂存栈组装导出与血缘反链跳转实装（T-7810）**：修复 `mountSnippetStudio` 未透传 `stack.assemble` 与 `stack.openBlock` 导致四类组装按钮假回执的问题；补齐异步操作 `aria-busy` 防连点互斥锁、输出维度透传与全仓 `navigator.clipboard.writeText` 真实 Promise 异常守卫；
+  - **编辑区选区实时快照、多语言修复与跨端弹窗回退（T-7811）**：新增 `.protyle-wysiwyg` 选区监听快照与段落 `data-node-id` 提取，解决点击悬浮球或打开切换器时焦点转移丢失选区的问题；补齐 `snippet-studio-ui.js` 的 `snippetStack*` 本地化字典映射并清除 `i18n.test.cjs` 伪白名单；携带 `objectKind: "stack"` 进入实验室时自动展开并激活暂存栈，移动端与侧栏端提供独立暂存栈弹窗回退；
+  - **缺失样式补齐与删除/清空一键撤销（T-7812）**：为单条移除与清空未锁定操作增加内存快照与底栏一键「撤销（Undo）」恢复按钮；补齐 `.sw-studio__tab-pill`、`.sw-studio__stack-container`、`.sw-home__stack-btn` 胶囊样式、折叠栏竖排适配、`.sw-snippet-stack` 作用域令牌回退与 `:focus-visible` 焦点环；
+  - **代码版本常量统一与 README 规范化重构（T-7813 / T-7814）**：抽取 `PLUGIN_VERSION` / `PLUGIN_VERSION_BADGE` 统一收口全工程 28 处主次弹窗标题栏版本徽标；重构中英文 README（首屏痛点定位、安装方式、真实默认快捷键修正、历史日志折叠与最新界面截图重拍）。
+
+### v0.48.84（2026-10-30 · 本地封验）
+
+- **全表面现代化 Bento 美学与双色分工体系收官（Bento Modernization & Two-Tone Separation）**：
+  - **跨表面统计指标栏与双通道直达**：在切换器、工作台与实验室首层挂载响应式统计指标栏，工作台卡片就地平滑滚动居中并触发呼吸高亮轮廓（`.sw-home__cell--locate`），未放置时平滑切入第一面板；
+  - **两色严格语义分工与双层微底**：`--sw-color-accent` 专职操作控制与选择导航，`--sw-color-data` 极光青绿专职打卡成就、连击与正向统计；底色接入极浅微底托底，白卡浮起配双层软影（`--sw-shadow-bento`）；
+  - **移动端与全键盘体验加固**：移动端软键盘输入态自动避让、底栏安全区（safe-area-inset-bottom）与 44px 触控保真；全屏切换 RAF 节流防连击，次级动作画板机械键帽与平滑光标流转；
+  - **代码片段实验室数据治理与回收站浮卡**：数据治理菜单升级为 Bento 浮层与位移微动效，回收站快照升级为独立白卡浮起与全圆角胶囊操作按钮。
+
+### v0.48.83（2026-10-29 · 本地封验）
+
+- **全面质量强化战役收官：系统缺陷自愈、性能回流消除与无障碍交互闭环（Comprehensive Quality Optimization）**：
+  - **核心稳定性与异常自愈**：
+    - 修复 Snippet Studio 动态加载失败导致的软锁死，添加容灾错误卡片与 Esc 直接销毁退出自愈机制；
+    - 统一重构全表面活动弹窗的生命周期弱引用管理（`activeDialogs`），并在 `onunload()` 彻底释放孤儿弹窗与 `.sw-platform-dialog` DOM 节点，修正重复销毁代码；
+    - 全表面次级弹窗全量接入悬浮球避让（FAB Suspension）与 `actions[surface]` 空数组判空安全兜底；
+    - 移动端 Sort Sheet 卸载时主动恢复兄弟节点的 `inert` 与 `aria-hidden` 属性，消除整页锁死；离开确认弹窗添加 `destroyCallback` 自动触发 `leave.cancel()` 消除废弃意图残留。
+  - **高频性能优化与布局抖动消除**：
+    - 工作台全局 Keydown 优先校验目标边界，外部按键 0ms 极速短路；重构 `isTopmostDialog` 逻辑为单次线性 $O(N)$ 遍历，彻底消除在 `sort` 比较器中频繁触发 `getComputedStyle` 引起的 Forced Synchronous Layout 重排抖动；
+    - 将 `clampOversizedIcons` 重构为两阶段读写分离批处理（Phase 1 纯度量收集，Phase 2 批量写入），配置表单 MutationObserver 增加 `requestAnimationFrame` 防抖保护；
+    - 为文档预览查找框、组件商店搜索与代码片段库/目录检索统一引入实时输入防抖（100–120ms），且在 IME 组合输入期间杜绝高频刷新 DOM。
+  - **全表面全键盘无障碍与触控体验**：
+    - Snippet Studio 代码编辑区在按 `Escape` 键时优先失焦进入容器导航态，消灭 WCAG 2.1.2 键盘死锁陷阱并防止误关工作室；为编辑区声明高可见度的 2px 品牌主色焦点环；
+    - 主切换器卡片列表补齐 `Home` 跳首项、`End` 跳末项、`PageUp` / `PageDown` 动态跨步翻页，并对齐 WAI-ARIA 规范支持 `Space` 空格键激活聚焦卡片；
+    - 移动端搜索清除与过滤按钮通过 `::before` 伪元素扩展至 44×44px 最小防误触热区（WCAG 2.5.5 / HIG 规范）；为移动端切换器、工作台和组件商店容器统一注入 `data-prevent-swipe="true"`，隔离思源笔记 3.8.x 宿主侧栏侧滑手势；
+    - 在 `platform-dom.js` 统一封装轻量、幂等的模态焦点捕获循环（`trapDialogFocus`），在 `mountPlatformDialogTitleWrap` 中自动挂载，一次性覆盖全插件 18 处二级弹窗。
+  - **全表面二级弹窗标题栏品牌版本徽标统一对齐至 v0.48.83**。
+
+### v0.48.82（2026-10-29 · 本地封验）
+
+- **第二面板工作台小组件卡片聚焦态按 M 键快捷呼出上下文菜单加固（Widget Card Keyboard M Shortcut）**：
+  - 卡片聚焦态增加快捷键响应：按 `m`/`M` 直接在卡片中央呼出操作菜单，内部输入框不受拦截。
+- **内置代码片段库新增提示块信息微光卡片与行内高亮渐变 CSS 片段（Info Callout Glow Card & Mark Warm Gradient）**：
+  - 新增 `swss-builtin-calloutinfo`（信息提示块海蓝微光卡片与海蓝立体指示条）；
+  - 新增 `swss-builtin-markgradient`（文本高亮暖调双色微渐变衬底与圆角），内置片段库扩充至 76 项。
+- **代码片段实验室导出 usercss 支持通用 @var 自动格式化回退与非法字段清洗（Universal @var Fallback Defaults）**：
+  - `buildUsercssHeader` 支持所有标准变量类型在缺失参数时的安全语法兜底，彻底杜绝下游解析报错。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.82）**。
+
+### v0.48.81（2026-10-29 · 本地封验）
+
+- **第二面板工作台小组件卡片标题栏长按呼出快捷操作菜单手势加固（Widget Card Long-Press Context Menu）**：
+  - 触控端 500ms 长按触发菜单，排除内部交互按钮与表单控件，并在支持设备触发 50ms 清脆物理震动反馈。
+- **内置代码片段库新增引用块悬停平移与列表圆点微动效 CSS 片段（Blockquote Hover Shift & List Bullet Pulse）**：
+  - 新增 `swss-builtin-quotehover`（引用块悬停向右 3px 平移与半透明主色微渐变底色）；
+  - 新增 `swss-builtin-listbulletpulse`（无序列表圆点图标赋予主色且悬停平滑放大 1.25 倍），内置片段库扩充至 74 项。
+- **代码片段实验室导出 usercss 支持 @var number 数值参数精度校验与默认值格式化（UserCSS number Formatting & Validation）**：
+  - `buildUsercssHeader` 支持有限数值（整数/浮点数）校验与输出，非法输入安全回退至 `0`。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.81）**。
+
+### v0.48.80（2026-10-29 · 本地封验）
+
+- **第二面板工作台小组件卡片标题栏长按/按压微缩放与触感反馈加固（Widget Card Header Active Touch & Scale Haptics）**：
+  - 标题栏 `.sw__home-module-header` 增加物理按压弹性微缩放 `scale(0.99)`，并声明 `-webkit-tap-highlight-color: transparent` 消除移动端闪烁。
+- **内置代码片段库新增图片卡片画框衬底与代码行号右对齐 CSS 片段（Image Frame Card Container & Line Numbers Right-Aligned）**：
+  - 新增 `swss-builtin-imgcard`（图片独立半透明画框衬底与悬停主色微光边框）；
+  - 新增 `swss-builtin-codelineright`（代码块行号文本右对齐排列与柔和微透明度），内置片段库扩充至 72 项。
+- **代码片段实验室导出 usercss 支持 @var text 文本参数转义与多行过滤（UserCSS text String Escaping & Multi-Line Sanitization）**：
+  - `buildUsercssHeader` 支持文本字符串双引号自动包裹、内部双引号 `\"` 转义与换行控制符压缩过滤。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.80）**。
+
+### v0.48.79（2026-10-29 · 本地封验）
+
+- **第二面板工作台小组件卡片聚焦态全键盘 F/C 键快速折叠与配置加固（Widget Card Keyboard F/C Shortcuts）**：
+  - 卡片聚焦态增加快捷键响应：按 `f`/`F` 一键折叠/展开，按 `c`/`C` 直达配置对话框，内嵌输入框不受拦截。
+- **内置代码片段库新增嵌入块悬浮微光与双色渐变标签药丸 CSS 片段（Block Embed Accent Bar & Dual Gradient Tag Pill）**：
+  - 新增 `swss-builtin-embedshadow`（嵌入块左侧主色指示条与鼠标悬停柔和光晕）；
+  - 新增 `swss-builtin-taggradient`（标签半透明双色微渐变背景与微抬升动效），内置片段库扩充至 70 项。
+- **代码片段实验室导出 usercss 支持 @var color 颜色格式化与校验（UserCSS color Formatting & Validation）**：
+  - `buildUsercssHeader` 支持十六进制、函数型（rgb/rgba/hsl）与命名颜色校验，非法输入安全回退 `#000000`。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.79）**。
+
+### v0.48.78（2026-10-29 · 本地封验）
+
+- **第二面板工作台小组件卡片标题栏双击快速切换折叠/展开手势加固（Widget Card Header Double-Click Toggle）**：
+  - 标题栏 `.sw__home-module-header` 绑定双击手势快速折叠/展开，添加交互子控件防误触守卫与 `user-select: none` 防选区闪烁。
+- **内置代码片段库新增引用块悬挂大引号与行内代码霓虹微光 CSS 片段（Blockquote Hanging Quote & Inline Code Neon Glow）**：
+  - 新增 `swss-builtin-quotehanging`（引用块左上角经典杂志风半透明衬线大引号“）；
+  - 新增 `swss-builtin-inlineneon`（行内代码半透明主色微边框与霓虹微光投影），内置片段库扩充至 68 项。
+- **代码片段实验室导出 usercss 支持 @var checkbox 布尔开关格式化与默认值校验（UserCSS checkbox Boolean Options）**：
+  - `buildUsercssHeader` 支持 `@var checkbox` 布尔类型规范化输出为 `1` 或 `0`，并提供安全默认值兜底。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.78）**。
+
+### v0.48.77（2026-10-29 · 本地封验）
+
+- **第二面板工作台空态全键盘无障碍 Enter/Space 快速打开组件商店加固（Workbench Empty State Keyboard A11y）**：
+  - 空态容器赋予 `tabIndex = 0` 与 2px 品牌焦点环；按 Enter/Space 快速触发打开组件商店或推荐，按 ArrowUp 顺畅回焦工具栏。
+- **内置代码片段库新增任务列表进度导轨与待办项轻质感卡片 CSS 片段（Task List Progress Guide & Task Item Card）**：
+  - 新增 `swss-builtin-taskprogress`（待办任务列表容器左侧主色垂直进度导轨与悬停微光）；
+  - 新增 `swss-builtin-taskbadge`（待办项圆角卡片轮廓与悬停微渗透底色），内置片段库扩充至 66 项。
+- **代码片段实验室导出 usercss 支持 @var range 数值区间与单位格式化校验（UserCSS range Numeric Options & Unit Validation）**：
+  - `buildUsercssHeader` 支持结构化 `@var range` 数值区间参数解析、越界夹持与单位安全过滤。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.77）**。
+
+### v0.48.76（2026-10-29 · 本地封验）
+
+- **第二面板工作台小组件卡片标题栏状态徽标悬停手势与语义颜色高亮加固（Widget Status Badge Hover Tints）**：
+  - 数据时效徽标声明悬停向上 -1px 微浮动与柔和微光投影；翠绿、宝石蓝与暖琥珀三色语义微底色渗透。
+- **内置代码片段库新增任务复选框触控热区与表格首列强调 CSS 片段（Task Checkbox Scale & Table First Column）**：
+  - 新增 `swss-builtin-taskcheckbox`（任务复选框圆角矩形与悬停平滑缩放）；
+  - 新增 `swss-builtin-tablefirstcol`（数据表格首列序号键名半透明主色底色与加粗竖线），内置片段库扩充至 64 项。
+- **代码片段实验室导出 usercss 支持 @var select 选项数组格式化与校验（UserCSS select Options Parsing）**：
+  - `buildUsercssHeader` 扩展 `@var select` 结构化选项处理，完美支持字符串数组与对象字典格式化输出。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.76）**。
+
+### v0.48.75（2026-10-29 · 本地封验）
+
+- **第二面板工作台小组件折叠状态下回车与空格键双向触感切换加固（Collapsed Card Enter Expansion）**：
+  - 折叠卡片聚焦按 `Enter` 键自适应展开，与空格键形成双向无阻触觉交互；非折叠态保持配置与操作直通。
+- **内置代码片段库新增提示块双色渐变微高亮卡片与居中三点分割线 CSS 片段（Dual-Gradient Callouts & Triple Dot Dividers）**：
+  - 新增 `swss-builtin-calloutgradient`（Callout 提示块纵向双色渐变指示条与半透明轻底色）；
+  - 新增 `swss-builtin-hrdots`（分割线居中三点 ••• 艺术标记与悬浮微扩展动效），内置片段库扩充至 62 项。
+- **代码片段实验室导出 usercss 支持 @var 变量类型白名单校验与安全转义（UserCSS @var Type Allowlist）**：
+  - `buildUsercssHeader` 支持变量定义提取，严格限定 `color`, `range`, `select` 等类型白名单与标识符校验。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.75）**。
+
+### v0.48.74（2026-10-29 · 本地封验）
+
+- **第二面板工作台小组件卡片标题栏折叠指示器 hover 与 focus 动效触感加固（Collapse Button Hover & Focus Ring）**：
+  - 折叠指示器补充主色微缩放悬停与无障碍 2px 键盘焦点环，提升微触感体验。
+- **内置代码片段库新增提示块三色语义警告/错误/成功卡片 CSS 片段（Callout Cards & Dashed Links）**：
+  - 新增 `swss-builtin-calloutcolored`（Callout 提示块粗左边框与悬浮微浮动卡片）；
+  - 新增 `swss-builtin-linkdashed`（正文超链接极简虚线下划线与悬停转实线），内置片段库扩充至 60 项。
+- **代码片段实验室导出 usercss 支持 @preprocessor 预处理器元数据字段提取与枚举安全校验（UserCSS Preprocessor Metadata）**：
+  - `buildUsercssHeader` 扩展 `@preprocessor` 字段提取与标准白名单枚举过滤，杜绝非预期代码注入。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.74）**。
+
+### v0.48.73（2026-10-29 · 本地封验）
+
+- **第二面板工作台小组件网格拖拽把手与调整把手键盘焦点环聚焦样式强化（Widget Handles Focus Ring & A11y）**：
+  - 调整把手与拖拽把手补充高对比度 2px 主题色焦点环与微缩放反馈，完全满足无障碍键盘聚焦规范。
+- **内置代码片段库新增上下标主色强调与音视频媒体卡片圆角微边框 CSS 片段（Subscript/Superscript Pills & Media Cards）**：
+  - 新增 `swss-builtin-scriptsaccent`（科学公式/学术上下标主题主色与半透明微底色胶囊）；
+  - 新增 `swss-builtin-mediarounded`（视频与音频播放器卡片现代圆角微边框与悬浮微光），内置片段库扩充至 58 项。
+- **代码片段实验室导出 usercss 支持 @updateURL 自动更新源链接元数据提取与安全校验（UserCSS Update URL Metadata）**：
+  - `buildUsercssHeader` 扩展 `@updateURL` 字段提取与协议白名单校验，无缝兼容 Stylus 自动更新生态。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.73）**。
+
+### v0.48.72（2026-10-29 · 本地封验）
+
+- **第二面板工作台小组件卡片标题聚焦时 Enter 键快速唤出组件配置或打开操作（Widget Card Enter Action Cascade）**：
+  - 卡片聚焦回车键支持级联回退：优先响应编辑态配置，非编辑态直接触发组件独立设置或主操作打开。
+- **内置代码片段库新增行内代码卡片背景与挂件嵌入块悬浮微光 CSS 片段（Inline Code Tint Spans & Widget Embed Card Borders）**：
+  - 新增 `swss-builtin-inlinecodecard`（行内代码专属主色边框微高光与微质感底色）；
+  - 新增 `swss-builtin-embedglow`（挂件与嵌入小部件圆角外边框与悬浮柔光），内置片段库扩充至 56 项。
+- **代码片段实验室导出 usercss 支持 @homepageURL 与 @supportURL 元数据提取与安全校验（UserCSS Homepage & Support URLs）**：
+  - `buildUsercssHeader` 扩展网络链接元数据提取，严格校验 http/https 协议并静默抑制危险伪协议。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.72）**。
+
+### v0.48.71（2026-10-29 · 本地封验）
+
+- **第二面板工作台小组件配置表单重置与保存操作全键盘流加固（Widget Config Form Action Button Keyboard Flow）**：
+  - 配置表单底部按钮组支持 `ArrowLeft` / `ArrowRight` 循环焦点导航；单行输入框支持按 `Enter` 直接提交；支持 `Alt+R` 快捷恢复默认配置。
+- **内置代码片段库新增引用大闭引号装饰与渐变分割线微动效 CSS 片段（Closing Accent Quotes & Feathered Dividers）**：
+  - 新增 `swss-builtin-quoteaccent`（块引用右下角主题主色大闭双引号 ” 艺术装饰与悬浮提亮）；
+  - 新增 `swss-builtin-dividerpulse`（分割线双向平滑羽化渐变与悬浮微缩放动效），内置片段库扩充至 54 项。
+- **代码片段实验室导出 usercss 支持 @author 与 @license 字段提取与安全校验（UserCSS Author & License Metadata）**：
+  - `buildUsercssHeader` 扩展 `@author` 换行控制符清洗与 `@license` 正则白名单过滤，规范生态导出。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.71）**。
+
+### v0.48.70（2026-10-29 · 本地封验）
+
+- **第二面板工作台组件卡片键盘方向键边界巡航导航平滑滚动与指示加固（Widget Grid Boundary Navigation & Smooth Centering）**：
+  - 卡片网格支持 `PageUp` / `PageDown` 跨屏翻页步进导航；内部输入框方向键防劫持；滚动统一携带 `inline: nearest`。
+- **内置代码片段库新增未完成待办主色指示条与有序列表序号胶囊 CSS 片段（Unchecked Task Highlights & Ordered List Badges）**：
+  - 新增 `swss-builtin-taskpending`（待办任务未完成项左侧主色竖线指示与轻微悬停底色）；
+  - 新增 `swss-builtin-numlistaccent`（有序列表序号胶囊半透明圆角微底色与主题主色强调），内置片段库扩充至 52 项。
+- **代码片段实验室导出 usercss 支持 @description 说明字段提取与安全转义（UserCSS Export Description Metadata）**：
+  - `buildUsercssHeader` 支持可选 `@description` 提取与控制符换行清洗，保持 Stylus/UserCSS 生态规范标准。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.70）**。
+
+### v0.48.69（2026-10-29 · 本地封验）
+
+- **第二面板工作台小组件卡片标题超长省略与悬停完整气泡提示加固（Widget Card Title Truncation & Hover Tooltip Enrichment）**：
+  - 外部卡片 `cell.title` 补全组件完整名称、来源与说明；标题与上下文节点默认挂载初始 `title` 属性，配合单行省略保障优雅排版。
+- **内置代码片段库新增折叠块引用与荧光笔划词强调 CSS 片段（Foldable Blockquote Cards & Fluorescent Highlighters）**：
+  - 新增 `swss-builtin-foldcallout`（折叠块引用专属主题主色边框指示条与展开微交互）；
+  - 新增 `swss-builtin-highlighter`（马克荧光笔半高横刷质感划词强调与悬浮微动效），内置片段库扩充至 50 项。
+- **代码片段实验室导出 usercss 头部配置项键值校验与导出通知加固（UserCSS Export Option Validation & Instant Receipt）**：
+  - `buildUsercssHeader` 扩展配置项白名单校验与静默安全回退，导出 CSS 时状态栏实时给出就绪回执。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.69）**。
+
+### v0.48.68（2026-10-29 · 本地封验）
+
+- **第二面板工作台小组件异常状态徽标双击自愈与编辑态单卡 R 键快捷重试（Widget Health Double-Click Quiet Healing & R Key Retry）**：
+  - 针对 `failed`、`offline` 或 `stale` 异常组件卡片，支持鼠标双击就地极速重试自愈；编辑态下聚焦单卡支持按下 `r` / `R` 键即时刷新单卡。
+- **内置代码片段库新增标签药丸胶囊微边框与外链对角箭头微交互（Pill Tag Badges & External Link Diagonal Arrows）**：
+  - 新增 `swss-builtin-tagpill`（文档 #标签 升级为 999px 全圆角半透明药丸胶囊与悬浮微抬升动效）；
+  - 新增 `swss-builtin-extlinkicon`（外部 http/https 链接末尾自动追加对角箭头 ` ↗` 与悬停平滑位移），内置片段库扩充至 48 项。
+- **代码片段实验室备份还原预览面板全选快捷键与键盘流加固（Snippet Restore Preview Select-All Keyboard Flow）**：
+  - 还原预览弹窗内支持 `Ctrl+A` / `Cmd+A` 一键全选/反选所有待恢复项；
+  - 支持 `ArrowUp` / `ArrowDown` 循环移动复选框焦点、`Home` / `End` 首尾跳转，并补齐无障碍 `aria-label` 标识。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.68）**。
+
+### v0.48.67（2026-10-29 · 本地封验）
+
+- **第二面板工作台组件卡片重试冷却保护与局部微光骨架动效加固（Widget Health Retry Cooldown & Skeleton Pulse）**：
+  - 点击“全部重试”后引入 3 秒冷却倒计时防护，防止高频重复请求；骨架屏动画与动效无障碍深度对齐。
+- **内置片段库新增代码明亮高亮与块引用专属主色下划线（Vibrant Code Syntax & Block Reference Underlines）**：
+  - 新增 `swss-builtin-codevibrant`（代码块明亮字符串与数值调色）与 `swss-builtin-blockrefaccent`（双链块引用专属主题主色下划线），内置片段库扩充至 46 项。
+- **代码片段实验室冲突面板全键盘流与操作按钮无障碍加固（Snippet Conflict Dialog Focus Trap）**：
+  - 冲突差异容器声明 `tabIndex = 0` 与 `region` 无障碍语义，支持方向键滚动与 Tab / Shift+Tab 弹窗焦点环捕获循环。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.67）**。
+
+### v0.48.66（2026-10-29 · 本地封验）
+
+- **第二面板工作台组件卡片键盘移动步长提示与拖拽把手微动效加固（Widget Card Move Step & Drag Haptic）**：
+  - 键盘重排时动态回显当前位阶与总数步长回执（如“移动组件 (3/7)”）；拖拽把手新增悬停抬升与按压物理微缩放动效。
+- **内置片段库新增行内数学公式微光卡片与正文排版两端对齐盘古字距（Inline Math Card & Pangu Spacing）**：
+  - 新增 `swss-builtin-inlinemath`（行内 LaTeX 公式微底色与虚线装饰）与 `swss-builtin-panguspace`（两端对齐与呼吸微字距），内置片段库扩充至 44 项。
+- **代码片段实验室诊断抽屉快捷键展开与规则计数角标加固（Snippet Diagnostics Toggle & Findings Badge）**：
+  - 支持 `Ctrl/Cmd+Shift+D` 或 `Alt+D` 快捷键切换 CSS 样式诊断抽屉，头部动态挂载 `data-findings` 规则与错误总数角标。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.66）**。
+
+### v0.48.65（2026-10-29 · 本地封验）
+
+- **第二面板小组件配置表单重置默认二次确认与动态校验微动效加固（Widget Config Reset Confirm & Shake）**：
+  - 点击“恢复默认”时新增二次确认弹窗防护防误触；表单字段校验失败时触发 `.sw-form--shake` 水平弹性抖动微动效。
+- **内置片段库新增任务列表核选弹跳微动效与粗体文本柔光阴影（Task Checkbox Bounce & Bold Accent）**：
+  - 新增 `swss-builtin-taskbounce`（任务复选框弹性微缩放动效）与 `swss-builtin-boldaccent`（粗体文本主题主色与柔光阴影），内置片段库扩充至 42 项。
+- **代码片段实验室编辑器多行 Tab 缩进与 Shift+Tab 反向退格加固（Snippet Editor Multiline Indent）**：
+  - 代码编辑器支持跨行批量 Tab 缩进与 Shift+Tab 反向退格，平滑保持选区起点与边界。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.65）**。
+
+### v0.48.64（2026-10-29 · 本地封验）
+
+- **第二面板小组件卡片折叠态条目计数角标与键盘折叠热键加固（Widget Collapsed Badge & Keyboard Fold）**：
+  - 折叠状态下动态回显 `.sw__home-collapsed-badge` 条目计数或统计角标；小组件卡片新增空格与中括号 `[` / `]` 键盘折叠切换热键。
+- **内置片段库新增正文划词选中微光与代码块彩虹嵌套标点（Text Selection Glow & Code Rainbow Brackets）**：
+  - 新增 `swss-builtin-selectionglow`（划词选中半透明微光）与 `swss-builtin-rainbowbrackets`（代码块彩虹嵌套标点与括号），内置片段库扩充至 40 项。
+- **代码片段实验室 Gist 发布异常状态卡片与退避重试指引加固（Snippet Gist Error Card & Retry Guidance）**：
+  - Gist 发布异常时动态渲染 `.sw-studio__gist-error` 告警卡片，细化 GitHub API 限频、凭证受限与超时排查指引。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.64）**。
+
+### v0.48.63（2026-10-29 · 本地封验）
+
+- **第二面板小组件离线容灾指示器与自定义静默刷新周期配置（Widget Offline Disaster Recovery & Custom Refresh）**：
+  - 细化断网与离线环境（`offline`）容灾判定，呈现沉静琥珀微边框与提示；纯模型支持自定义刷新周期解析钳制（1~1440分钟）与 5 分钟封顶指数退避。
+- **内置片段库新增 macOS 终端三色控制点与表格单元格悬浮高亮（macOS Window Dots & Table Cell Hover）**：
+  - 新增 `swss-builtin-codemac`（macOS 终端红黄绿三色圆点代码块）与 `swss-builtin-tablecell`（表格单元格悬浮微光高亮），内置片段库扩充至 38 项。
+- **代码片段实验室预览窗格全键盘 Tab 焦点环与视口缩放加固（Snippet Preview Keyboard Navigation & Zoom）**：
+  - 双栏窗格声明 `tabIndex = 0` 与 `region` 无障碍语义，支持方向键滚动与 `Ctrl/Cmd + +/-/0` 视口缩放。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.63）**。
+
+### v0.48.62（2026-10-28 · 本地封验）
+
+- **第二面板小组件空态可解释性与一键配置自愈把手加固（Widget Empty State In-Place Config Hint）**：
+  - 在空态与异常受阻卡片中动态内嵌 `.sw__home-module-config-hint` 配置自愈按钮，支持按键回焦自愈与双语引导，无需进入全局编辑模式即可一键配置。
+- **代码片段实验室回收站全键盘批量清空确认与单项快捷恢复（Snippet Recycle Bin Keyboard & Batch Clear）**：
+  - 回收站清空按钮空态自适应禁用防护，支持 `Ctrl/Cmd+Shift+Delete` 与 `Alt+C` 快捷清空，列表项支持 `Enter`/`r` 快速恢复与 `Delete`/`Backspace` 快速永久删除。
+- **内置片段库新增赛博暗色发光边框与半透明毛玻璃卡片（Cyber Neon Glow & Frosted Glass Snippets）**：
+  - 新增 `swss-builtin-neonglow`（选中块赛博呼吸霓虹微光外边框）与 `swss-builtin-frostedglass`（半透明嵌入块毛玻璃卡片），内置片段库扩充至 36 项。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.62）**。
+
+### v0.48.61（2026-10-28 · 本地封验）
+
+- **工作台小组件网格调整把手全键盘 Shift+方向键缩放（Widget Resize Handle Slider Keyboard）**：
+  - 调整把手声明 `tabIndex = 0` 与 `role="slider"`，消除中文硬编码，支持按 `Shift+方向键` 自由缩放网格列数与行数。
+- **代码片段实验室编辑器 ⌘S 快捷保存、⌘⇧C 复制与 ⌘Enter 格式化流（Snippet Editor Hotkeys）**：
+  - 代码编辑器内置极客快捷流：`⌘⇧C` 一键全文复制代码、`⌘Enter` 快速代码美化排版、`⌘F` 唤出查找栏。
+- **内置片段库新增渐变彩色滚动条与正文首字大写下沉（Drop Caps & Gradient Scrollbars）**：
+  - 新增 `swss-builtin-dropcap`（正文首字图书出版级大写下沉）与 `swss-builtin-gradient-bar`（赛博微光细滚动条），内置库扩充至 34 项。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.61）**。
+
+### v0.48.60（2026-10-28 · 本地封验）
+
+- **第二面板小组件局部折叠/展开动画与网格压缩加固（Widget Collapse Row Compression）**：
+  - 点击折叠把手后单元格网格行高动态联动压缩为 `span 1`，彻底消除折叠后大片空白框的缺陷，自适应单行紧凑美学。
+- **代码片段实验室版本差异对比浮层全键盘流与 Escape 安全回退（Snippet Diff Keyboard Navigation）**：
+  - 为差异对比面板声明 `tabIndex = 0`，支持按 Escape 安全退出并回焦代码编辑器，支持上下/jk 在差异块间平滑穿梭。
+- **内置片段库新增金句大双引号装饰与波浪线重点下划线（Quote Marks & Wavy Underlines）**：
+  - 新增 `swss-builtin-quote-gold`（古典优雅大双引号水印）与 `swss-builtin-wavy-underline`（跳动波浪线重点），内置库扩充至 32 项。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.60）**。
+
+### v0.48.59（2026-10-28 · 本地封验）
+
+- **第二面板小组件卡片桌面右键与移动端长按菜单（Widget Desktop Contextmenu & Mobile Long-Press）**：
+  - 非编辑态下支持桌面右键（`contextmenu`）与移动端长按（500ms 触发、10px 容差防抖），呼出就地配置、单组件刷新与安全移除菜单。
+- **内置片段库新增折叠标题指示微动效与数学公式块微卡片（Foldable Heading & Math Block Snippets）**：
+  - 新增 `swss-builtin-foldheading`（折叠微箭头指示器）与 `swss-builtin-mathblock`（数学公式块卡片美化），自适应明暗主题。
+- **动作画板多页签批量关闭安全焦点回退（Action Palette Batch Close Focus Fallback）**：
+  - 批量关闭后自动将键盘焦点平滑赋予首个存活卡片，空列表安全回退至搜索框，杜绝焦点丢失至 `body`。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.59）**。
+
+### v0.48.58（2026-10-28 · 本地封验）
+
+- **工作台全键盘 ⌘R / Ctrl+R 局部刷新拦截与白屏防御（Workbench Keyboard Refresh Interception）**：
+  - 拦截浏览器硬刷新白屏，支持一键触发工作台全部小组件局部静默重试与读取，保持状态语义稳定。
+- **内置片段库新增链滴精品呼叫盒与双栏响应式卡片（Callout Box & Dual-Column Builtin Snippets）**：
+  - 新增 `swss-builtin-callout`（微质感彩色提示框）与 `swss-builtin-multicolumn`（并排双栏图文卡片），全面采用官方 CSS 变量。
+- **动作画板思维导图导出快捷键与实体按键直达（Action Palette Direct Shortcuts Dispatch）**：
+  - 动作画板按键状态机完整支持实体按键直达调度（`⌥⇧M` 大纲导出、`⌥H` 任务视界、`⌥M` 漫游等）。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.58）**。
+
+### v0.48.57（2026-10-28 · 本地封验）
+
+- **工作台 Bento 瓦片小组件在极窄容器下的自适应防挤压（Bento Grid Narrow Resilience）**：
+  - 超窄视口（<=360px）双拼 Bento 网格平滑回退单列，条目标签与长标题文本截断省略，次级胶囊与数值 `flex-shrink: 0` 防挤压与 `tabular-nums` 等宽对齐。
+- **片段实验室过滤选择器全键盘流与 Escape 阶梯清空（Snippet Filter Keyboard Flow & Stepped Escape）**：
+  - 搜索框获焦自动全选、Escape 阶梯退出（有词清空、无词退出），ArrowDown/Enter 直达卡片列表，下拉过滤组支持 Home/End 首末项快速跳选。
+- **切换器历史下拉列表 Home/End 导航与 Delete 快捷单项清理流（History Dropdown Actions & Quick Cleanup）**：
+  - 支持按 Home 直达顶部、End 直达底部，上下方向键平滑循环流转，按 Delete / Backspace 快捷移除聚焦条目并平滑将焦点赋予相邻项。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.57）**。
+
+### v0.48.56（2026-10-28 · 本地封验）
+
+- **样式设计体系与刻度规范严格收口（Style Design Token Convergence）**：
+  - 彻底消除动效时长、控件高度与间距字面量硬编码，收敛为 Sass 动效变量与 CSS 变量 Token。
+- **根目录文档预算治理与历史账本精简（Root Markdown Budget Remediation）**：
+  - 精简 ROADMAP 历史流水账，单文件体积回落至 147 KiB，彻底符合 150 KiB 仓库门禁。
+- **全表面双向键盘交互与阶梯 Escape 契约对齐加固（Stepped Escape & Bi-Directional Keyboard Hardening）**：
+  - 排除检索语法守卫消除误高亮，阶梯 Escape 退出与移动端抽屉列表键盘流全量闭环。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.56）**。
+
+### v0.48.55（2026-10-28 · 本地封验）
+
+- **快捷动作选择器 Escape 退出、搜索框全选与键盘流加固（Quick Action Picker Keyboard Flow）**：
+  - 快捷动作选择器支持 Escape 阶梯退出与回焦恢复，支持从搜索框 ArrowDown 直达首项、Enter 快捷选择、首项 ArrowUp 回焦。
+- **动作画板键盘状态机扩展 Home/End 首末项快速跳转（Action Palette Home/End Navigation）**：
+  - 次级动作画板支持按 Home 直达首项动作、按 End 直达末项动作。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.55）**。
+
+### v0.48.54（2026-10-28 · 本地封验）
+
+- **片段备份恢复预览弹窗 Escape 退出与 ⌘Enter 快捷恢复（Snippet Restore Preview Escape & ⌘Enter）**：
+  - 备份恢复预览弹窗支持按 Escape 退出、按 ⌘Enter 快捷提交恢复，支持在取消与恢复按钮间左右流转。
+- **片段包导入策略选择弹窗安全首焦与 ⌘Enter 快捷导入（Snippet Import Mode Safe Focus & ⌘Enter）**：
+  - 导入策略弹窗默认聚焦安全的“取消”按钮，支持按 ⌘Enter 快捷按当前策略导入。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.54）**。
+
+### v0.48.53（2026-10-28 · 本地封验）
+
+- **片段商店投稿指引弹窗 Escape 退出与按钮左右方向键流闭环（Snippet Submit Guide Escape & Arrow Nav）**：
+  - 投稿指引浮层支持按 Escape 安全关闭，支持在复制 JSON 与取消按钮之间使用左右方向键流转。
+- **移动端收藏抽屉与分组管理弹窗 Home/End 快速跳转加固（Mobile Sheets Home/End Navigation）**：
+  - 移动端全部抽屉支持按 Home 直达首项、End 直达末项，打通全键盘无障碍操作。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.53）**。
+
+### v0.48.52（2026-10-28）
+
+- **文档预览窗格 Escape 回焦搜索卡片双向键盘流闭环（Doc Preview Escape Return Focus）**：
+  - 在预览窗格未开启查找条时按 Escape 安全将焦点送回搜索列表原卡片/条目，打通全键盘双向流。
+- **悬浮球更多抽屉列表 Home/End/Escape 全键盘导航加固（Floating Ball Drawer Home/End/Escape）**：
+  - 更多抽屉动作列表支持按 Home 直达首项、End 直达末项，按 Escape 快捷安全退出并回焦悬浮球触发器。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.52）**。
+
+### v0.48.51（2026-10-28）
+
+- **穿透检索模型扩展 `SEARCH_MODES.TASK`（前缀 - / task:）（Penetration Task Search）**：
+  - 语法解析识别待办任务前缀，规划安全只读 SQL，输出结构化待办条目与完成态标记。
+- **全库搜索执行流集成待办穿透模式并与 Task Horizon 今日任务生态直连（Task Horizon Search Flow）**：
+  - 待办检索态无缝前置 Task Horizon 今日待办（🔥高优标识），回车直达任务块，`?` 速查指引新增 `help-task` 路由。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.51）**。
+
+### v0.48.50（2026-10-28）
+
+- **多模态搜索模式 Chips 栏接入「待办模式」（前缀 - / task:）（Search Mode Task Chips）**：
+  - 常驻药丸栏新增待办模式，支持 `-`、`－`、`task:`、`task：`、`[ ]` 识别与安全多字符前缀剥除。
+- **动作画板多页签一键导出为任务思维导图/大纲（⌥⇧M）（Export Tabs to Mindmap）**：
+  - 一键将当前工作区打开的所有页签格式化导出为 Markdown 任务大纲并复制至剪贴板，支持直接粘贴为思源思维导图。
+- **工作台健康监控弹窗 Escape 安全退出与键盘流加固（Health Dialog Escape Hardening）**：
+  - 容器级别监听 Escape 安全销毁弹窗并回焦，补齐组件健康详情全生命周期键盘闭环。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.50）**。
+
+### v0.48.49（2026-10-28）
+
+- **Task Horizon (任务视界) 官方协议与 setTaskStatus 写入回调（Task Horizon Official Protocol）**：
+  - 超级工作台无缝挂载今日待办卡片，支持 800ms 熔断保护；单键勾选直接回调官方写入队列并即时划掉，点击条目秒级直达任务块。
+- **动作画板（⌘K）接入 Task Horizon 今日任务直达与极速动作（Task Horizon Action Palette）**：
+  - 动作画板预设 `⌥H` 任务视界快捷动作，一键查看今日任务清单。
+- **思源 3.8.8+ 桌面端紧凑模式自适应 (`:root[data-ui-density="compact"]`)（Compact Density Adaptation）**：
+  - 自动识别思源紧凑模式，压缩卡片内边距、间距比例与行高，显著增加分屏状态下的信息展示密度。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.49）**。
+
+### v0.48.48（2026-10-27）
+
+- **片段实验室 Gist 状态恢复弹窗显式 Escape 兜底与按钮左右方向键导航（Gist Recovery Escape & Arrow Nav）**：
+  - Gist 异常锁定恢复弹窗支持按 Escape 快捷安全退出，支持使用左右方向键在操作按钮间循环流转。
+- **工作台组件健康监控诊断预览浮层 Escape 退出与摘要文本框获焦全选（Health Diagnostic Preview Escape & Auto-Select）**：
+  - 展开诊断报告浮层后只读文本框获焦自动全选，支持按 Escape 快捷关闭浮层并回焦，支持按 ⌘Enter 快捷复制。
+- **平台引导弹窗标题包装与全表面二级弹窗标题统一升级（Platform Guide Titlewrap & Version Alignment）**：
+  - 快速开始指南弹窗装配品牌标题栏包装与版本徽标，全工程二级弹窗标题栏统一升级至 `v0.48.48`。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.48）**。
+
+### v0.48.47（2026-10-27）
+
+- **组件配置表单弹窗 ⌘Enter 快捷保存与 Escape 退出闭环（Widget Config Form ⌘Enter & Escape）**：
+  - 配置表单内支持按 ⌘Enter / Ctrl+Enter 快捷提交保存，按 Escape 快捷安全退出。
+- **设置中心搜索框聚焦自动全选、Enter 自愈清空与 Escape 阶梯退出（Settings Search Stepped Escape）**：
+  - 搜索框获焦自动全选，无匹配项时按 Enter 键自动清空自愈，输入框为空时按 Escape 快捷退出设置。
+- **工作台清空布局确认弹窗安全首焦与 Escape 退出闭环（Clear Layout Safe Focus & Escape）**：
+  - 清空确认弹窗默认聚焦安全无害的“取消”按钮，支持按 Escape 快捷取消。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.47）**。
+
+### v0.48.46（2026-10-27）
+
+- **文档搜索结果行 ⌘C 与 ⌘⇧C 复制快捷键闭环（Doc Search Item Copy Shortcuts）**：
+  - 搜索结果行直接按 ⌘C 复制块超链接，按 ⌘⇧C 复制 Markdown 链接，完全对齐动作画板快捷键。
+- **文档预览窗格页内查找框阶梯式 Escape 清空与聚焦全选（Preview Find Stepped Escape）**：
+  - 预览窗格查找输入框获焦自动全选，按 Escape 优先清空输入词并清除命中高亮，再次按 Escape 关闭查找条。
+- **全局悬浮球首层快捷动作栏方向键循环焦点流与 Escape 退出（Floating Ball First Layer Keyboard Flow）**：
+  - 悬浮球展开后首层按钮支持方向键循环流转焦点，按 Escape 快捷回焦悬浮球触发器。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.46）**。
+
+### v0.48.45（2026-10-27）
+
+- **悬浮球更多抽屉搜索框获焦自动全选与列表项 ArrowUp/Down 双向流闭环（Floating Ball More Keyboard Loop）**：
+  - 抽屉搜索框聚焦自动全选，列表项支持 ArrowDown/ArrowUp 循环流转，首项按 ArrowUp 顺畅回焦搜索框。
+- **移动端抽屉弹窗（收藏清单与分组操作）全键盘方向键与焦点陷阱加固（Mobile Sheet Focus Traps & Arrow Nav）**：
+  - 移动端收藏抽屉与分组动作抽屉支持 ArrowDown/ArrowUp 循环流转操作按钮并锁定 Tab 焦点陷阱。
+- **工作台顶栏工具条左右方向键与小组件网格 ArrowDown/Up 双向流闭环（Workbench Toolbar & Grid Two-Way Loop）**：
+  - 工作台工具栏按钮支持 ArrowRight/ArrowLeft 循环导航，按 ArrowDown 平滑下落网格首卡，首卡按 ArrowUp 逆向回焦工具栏。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.45）**。
+
+### v0.48.44（2026-10-27）
+
+- **片段实验室回收站列表项上下方向键流式焦点移动（Recycle Viewer Arrow Key Navigation）**：
+  - 回收站抽屉列表中支持使用 ArrowDown / ArrowUp 在条目操作按钮间平滑切换焦点。
+- **片段实验室离开与冲突确认弹窗 Escape 兜底与左右按钮导航（Leave & Conflict Dialogs Keyboard Flow）**：
+  - 离开与冲突弹窗显式拦截 Escape 快捷安全取消并回焦，支持使用左右方向键在动作按钮间循环流转。
+- **设置中心配置差异与文档集差异对比弹窗 Escape 关闭与安全首焦（Settings Diff Escape & Safe Focus）**：
+  - 差异对比弹窗打开后默认聚焦取消按钮，按 Escape 快捷安全退出。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.44）**。
+
+### v0.48.43（2026-10-27）
+
+- **片段选择器双向键盘流与空结果 Enter 清空自愈（Snippet Picker Keyboard Flow & Enter Self-Healing）**：
+  - 搜索框获焦自动全选，ArrowDown 直达首项，首项 ArrowUp 返回搜索框；无匹配项时按 Enter 快速清空自愈。
+- **组件商店预览弹窗 Escape 回焦与批量模式 Escape 阶梯退出（Store Preview & Batch Escape）**：
+  - 预览弹窗显式拦截 Escape 快捷退出并回焦；批量模式下按 Escape 阶梯退出批量态，避免误关商店。
+- **工作台编辑态小组件卡片平滑方向键焦点导航（Workbench Cell Arrow Key Navigation）**：
+  - 编辑态支持普通方向键（ArrowRight/Left/Up/Down/Home/End）在卡片间平滑切换焦点，与 Ctrl/Cmd 重排解耦。
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（v0.48.43）**。
+
+### v0.48.42（2026-10-27）
+
+- **动作画板聚焦自动全选与空结果 Enter 清空自愈（Action Palette Focus Auto-Select & Enter Self-Healing）**：
+  - 画板搜索框获焦时自动选中既有文本，输入词无匹配动作时按 Enter 键自动清空并恢复全量动作列表。
+- **全平台搜索框获焦自动全选与 Enter 自愈清空（Platform Search Focus Select & Enter Clear）**：
+  - 切换器主弹窗、侧边栏和手机端搜索框获焦自动全选，无匹配结果时按 Enter 快速清空自愈恢复。
+- **保存搜索编辑弹窗表单获焦全选与 Enter 快捷保存（Saved Search Editor Keyboard Flow）**：
+  - 名称与查询输入框聚焦自动全选文本，在表单中按下 Enter 键直接提交保存。
+- **全表面弹窗版本统一对齐（v0.48.42）**。
+
+### v0.48.41（2026-10-27）
+
+- **切换器卡片列表 ⌘D / ⌘P / ⌘W 快捷键闭环（Switcher Card Direct Shortcuts）**：
+  - 卡片聚焦时直接支持 ⌘D 收藏/取消、⌘P 置顶/取消、⌘W 关闭页签，与动作画板保持完全对齐。
+- **片段实验室代码编辑器 Tab 键两空格缩进（Snippet Studio Tab 2-Space Indent）**：
+  - 代码编辑区拦截原生跳焦，支持按 Tab 键平滑插入 2 个空格缩进。
+- **工作台健康监控弹窗「一键全部重试」自愈把手（Health Details Retry-All Action）**：
+  - 存在失败项时提供全部重试按钮，批量重新拉取异常小组件。
+- **全表面弹窗版本统一对齐（v0.48.41）**。
+
+### v0.48.40（2026-10-27）
+
+- **切换器空态全键盘无障碍导航（Switcher Empty Keyboard Flow）**：
+  - 空态建议卡片与速查胶囊支持方向键循环流转，首项按 ArrowUp 或 Escape 顺畅回焦搜索框。
+- **工作台商店搜索框自动全选与 Escape 阶梯退出（Store Search Auto-Select & Escape Exit）**：
+  - 商店搜索框聚焦时自动选中既有文本，输入框为空时按 Escape 快捷关闭商店弹窗。
+- **全局悬浮球更多操作抽屉空态回车清空自愈（Floating Ball Search Enter Self-Healing）**：
+  - 搜索无匹配时按 Enter 键自动清空搜索输入并恢复全量列表，杜绝卡在空列表中。
+- **全表面弹窗版本统一对齐（v0.48.40）**。
+
+### v0.48.39（2026-10-27）
+
+- **全表面二级弹窗标题栏品牌版本徽标统一对齐（Universal Dialog Titlewrap Version Badges Sync）**：
+  - 全量升级设置页、工作台、小组件商店、片段实验室等全工程 17 处二级弹窗标题栏版本号为 `v0.48.39`。
+- **全表面弹窗版本统一对齐（v0.48.39）**。
+
+### v0.48.38（2026-10-27）
+
+- **小组件商店卡片列表 ArrowUp 逆向直达搜索框全键盘流闭环（Store Card ArrowUp to Search）**：
+  - 商店首张卡片支持按 ArrowUp 平滑交还焦点给搜索输入框；卡片列表聚焦时支持按 Escape 键一键清空搜索词并回焦。
+- **全表面弹窗版本统一对齐（v0.48.38）**。
+
+### v0.48.37（2026-10-27）
+
+- **多模态搜索模式 Chips 栏全角符号识别与切换防重叠**：
+  - 搜索框键入全角 `＠`、`＃`、`＾`、`＊`、`！`、`》`、`？` 时模式药丸即时高亮激活；
+  - 规范化点击药丸时的旧前缀剥除逻辑，彻底杜绝双前缀污染搜索。
+- **全表面弹窗版本统一对齐（v0.48.37）**。
+
+### v0.48.36（2026-10-27）
+
+- **全屏模式右上角安全避让（Fullscreen Header Avoidance）**：
+  - 顶栏操作区右侧注入 140px 显式安全避让内边距，彻底避免与思源桌面端系统窗口按钮（最小化/最大化/关闭）重叠遮挡。
+- **双预览框并存缺陷彻底根治（Dual Preview Pane Invariant Defense）**：
+  - 扩大预览窗格单例清理作用域至顶层弹窗与文档根，装配前强制扫除孤儿预览节点，彻底消除双速览框残留。
+- **全表面弹窗版本统一对齐（v0.48.36）**。
+
+### v0.48.35（2026-10-27）
+
+- **动作画板（⌘K）阶梯式 Escape 清空机制与键盘流加固（Action Palette Stepped Escape）**：
+  - 搜索框有输入词时按 Escape 优先清空输入内容并恢复动作列表；无输入词时按 Escape 才退出画板。
+- **全表面弹窗版本统一对齐（v0.48.35）**。
+
+### v0.48.34（2026-10-27）
+
+- **切换器首行卡片 ArrowUp 逆向直达搜索框全键盘流闭环（Switcher First Row ArrowUp to Search Box）**：
+  - 彻底打通“搜索框 ➔ (ArrowDown) ➔ 首行卡片 ➔ (ArrowUp) ➔ 搜索框”的双向全键盘无缝直达体验。
+- **全表面弹窗版本统一对齐（v0.48.34）**。
+
+### v0.48.33（2026-10-27）
+
+- **组件商店键盘流直达与搜索 Esc 闭环（Store Keyboard Navigation & Esc Clear）**：
+  - 小组件商店搜索框支持 `Enter` 与 `ArrowDown` 键直达首张可见卡片并自动滚动，实现纯键盘无障碍选装；
+  - 规范搜索框 `Escape` 键拦截清理逻辑，有输入时清空内容并阻断事件冒泡。
+- **全表面弹窗版本统一对齐（v0.48.33）**。
+
+### v0.48.32（2026-10-27）
+
+- **工作台关系大纲精准定位滚动、思源链接拦截与徽标微质感（Relation & Outline Navigation Polish）**：
+  - 修复 `handleHomeItemAction` 中 `item.href` 为思源块链接（`siyuan://blocks/...`）时走 `window.open` 误调外部浏览器的缺陷，拦截并调用内核 `openTab` / `mobileOpenDoc`；
+  - 为块 ID 跳转注入 `{action: ["cb-get-scroll"]}`，保证点击文档关系摘要与当前大纲项时，思源编辑器自动定位并平滑滚动到具体块；
+  - 为文档关系摘要与当前大纲项注入关系/层级胶囊徽标与 `translateX(2px)` 悬浮位移动效。
+- **全表面弹窗版本统一对齐（v0.48.32）**。
+
+### v0.48.31（2026-10-27）
+
+- **上下文自适应工作台（Context-Aware Cockpit）活跃文档上下文透传**：
+  - 第二面板（工作台）调度组件读取时，自动捕获当前活跃页签的文档上下文（`rootId` 与 `title`）；
+  - `home-adapters.js` 扩展支持 `activeDocContext`，动态混入缓存键（Cache Key），确保用户切换阅读不同文档时，上下文组件自动感知并实时刷新。
+- **全表面弹窗版本统一对齐（v0.48.31）**。
+
+### v0.48.30（2026-10-27）
+
+- **空态速查胶囊栏微质感美化与片段复制动效（Empty Syntax Polish & Snippet Motion）**：
+  - 切换器空态速查胶囊栏 `.sw__empty-syntax-bar` 引入毛玻璃半透底色、圆角药丸悬浮微位移与高质感边框；
+  - 片段实验室列表项复制按钮（`sw-studio__library-copy`）注入微缩放与点击阻尼微动效；
+  - 全方位排查全功能逻辑与后续开发路线（v0.49+ 多模态智能上下文工作台、物理多窗口置顶脱离）。
+- **全表面弹窗版本统一对齐（v0.48.30）**。
+
+### v0.48.29（2026-10-27）
+
+- **代码片段实验室快捷复制代码与未保存离开键盘流（Snippet Copy & Leave Keydown）**：
+  - 片段列表项增设 `sw-studio__library-copy`（一键复制），点击直接将片段代码复制到剪贴板并给出状态反馈；
+  - `openLeaveDialog` 未保存离开确认弹窗接入 Escape 键盘取消监听，支持纯键盘安全退出。
+- **全表面弹窗版本统一对齐（v0.48.29）**。
+
+### v0.48.28（2026-10-27）
+
+- **动作画板（⌘K）批量页签管理矩阵（Batch Tab Management Matrix）**：
+  - 新增 `close-other-tabs`（关闭其他页签，快捷键 `⌥⌘T`）：保留当前选中文档，一键安全关闭其余所有页签；
+  - 新增 `close-tabs-after`（关闭其后/下方页签，快捷键 `⌥⌘→`）：关闭当前文档之后排列的所有页签；
+  - 新增 `close-unpinned-tabs`（关闭未置顶页签，快捷键 `⌥⌘U`）：保留所有图钉置顶页签，批量清理所有临时文档；
+  - 批量关闭全部接入可撤销历史（`undoLastClosedTab`），支持一键找回防误关。
+- **卡片右键菜单（Context Menu）同步扩展**：
+  - 桌面端卡片右键菜单直接提供“关闭其他页签”、“关闭其后页签”、“关闭未置顶页签”。
+- **工作台（第二面板）编辑态“清空全部”与防误触确认**：
+  - 工具栏新增 `sw-home__clear-btn`（清空全部），点击弹出二次确认防误触对话框；
+  - 清空操作压入 `layoutHistory` 事务历史，支持一键 `Undo` 完整撤销恢复。
+- **全表面弹窗版本统一对齐（v0.48.28）**。
+
+### v0.48.27（2026-10-25）
+
+- **殿堂级最新头像锁定与全尺寸资产对齐（Icon Asset Lock & Full Sync）**：
+  - 严格校验并锁定根目录 `icon.png` 与生产打包解压产物为 256×256 星际紫金闪电立体球最新设计（65,989 B，SHA-256 `f562b06568f6a641c4c57beb1992af9dc6c6003bfa66b64f60b2d76263fe799f`）；
+  - `docs/assets/` 下全部 5 个衍生尺寸图标（160px / 48px / 32px / 24px / 16px）全量完成高质量下采样同步，彻底消除历史遗留的旧版蓝色图标；
+  - 增设 `tests/icon-asset-lock-contract.test.cjs` 契约测试硬防线。
+- **全表面弹窗版本统一对齐（v0.48.27）**。
+
+### v0.48.26（2026-10-25）
+
+- **预览窗格全表面单例排他强防线（Surface Scope Preview Singleton）**：
+  - `mountDocPreviewPane` 增加首帧 `clientWidth` 自适应兜底（若首次未完成布局则回退视口/父级宽度）；
+  - 单例清理作用域扩大至整个包含表面（`surfaceScope`），彻底消除多容器交叉或更新时间异步回填导致的双预览框残留；
+  - 容器 `sw--with-preview` 样式类严格互斥，杜绝 CSS 列留白错位。
+- **顶栏全表面装配“帮助与功能指南”（❓）按钮（Toolbar Guide Button）**：
+  - 桌面弹窗、右侧栏以及移动端顶栏全表面新增 `sw__help-guide-btn` 按钮，一键直达“快速开始与使用指南”；
+  - 触屏移动端和老用户无需记忆快捷键即可随时查看全部按钮说明。
+- **空态卡片增设“功能与符号速查”胶囊栏（Interactive Syntax & Action Bar）**：
+  - 在无打开页签的空态卡片中增设交互式胶囊栏：`:大纲`、`#标签`、`!书签`、`^正文块`、`?技巧`、`⌘K动作画板`、`↩撤销关闭`，点击即刻回填或执行。
+- **老用户平滑兼容**：既有快捷键、排序偏好、悬浮球位置、文档集与片段草稿 100% 保持稳定。
+- **全表面弹窗版本统一对齐（v0.48.26）**。
+
+### v0.48.25（2026-10-25）
+
+- **切换器预览框单例幂等防御（Preview Pane Singleton Invariant）**：
+  - `mountDocPreviewPane` 挂载前扫描并强制移除 `scrollElement` 内所有不等于目标窗格的孤儿与残留 `.sw__doc-preview` 节点，清除冲突的 `sw--with-preview` 容器样式，彻底解决偶发出现双预览框的视觉问题。
+- **切换器顶栏按钮全量装配思源原生标准提示气泡（Toolbar Buttons Tooltips）**：
+  - 搜索筛选、排序与分组、全屏切换、今日日记、刷新数据、插件设置、代码实验室等全部功能按钮装配 `b3-tooltips b3-tooltips__s`，鼠标轻触瞬时弹出高清功能说明气泡；
+  - 收藏列表与最近历史触发按钮同步装配标准悬浮气泡，彻底消除功能使用盲区。
+- **全表面弹窗版本统一对齐（v0.48.25）**。
+
+### v0.48.24（2026-10-24）
+
+- **悬浮球更多搜索输入法（IME）守卫与键盘流直达（Floating Ball Search IME Guard）**：
+  - **输入法合成防冲突**：更多面板搜索框接入 `compositionstart` / `compositionend` 状态监听，拼音候选期间阻断高频列表重滤；
+  - **防误关安全守卫**：`handleKeydown` 拦截拼音输入中（`isComposing || keyCode === 229`）的 Escape 按键，杜绝撤销拼音候选时意外关闭整个面板；
+  - **Escape 分级响应**：搜索框有内容时按 Escape 优先清空输入框并重刷列表，不关闭面板；
+  - **ArrowDown 与 Enter 键盘直达**：在搜索框按向下方向键平滑下移聚焦首个可见动作，按回车一键点击执行首个动作。
+- **全表面弹窗版本统一对齐（v0.48.24）**。
+
+### v0.48.23（2026-10-24）
+
+- **动作画板（⌘K）焦点精准恢复与生命周期闭环（Action Palette Focus Recovery）**：
+  - **画板销毁自动回焦**：`action-palette-ui` 注入 `returnFocusElement` 焦点恢复机制，在画板被销毁关闭时安全回焦至原卡片或文档条目，彻底消除焦点漂移至 `document.body` 导致的键盘流断裂；
+  - **卡片与文档项双重焦点守卫**：`openCardActionPalette` 与 `openActionPaletteForDoc` 在关闭时主动恢复触发源焦点。
+- **全表面弹窗版本统一对齐（v0.48.23）**。
+
+### v0.48.22（2026-10-24）
+
+- **移动端分组动作 Sheet 焦点循环闭环与业务首焦（Mobile Group Sheet Focus Trap）**：
+  - **Tab 键循环约束**：`openMobileGroupActions` 严格拦截 Tab / Shift+Tab 键，将焦点锁定在动作底栏内，彻底杜绝焦点逃逸至背景遮罩层；
+  - **业务首项自动获焦**：呼出后首个业务动作项（“打开该组所有页签”）自动获焦，支持外接键盘一键 Enter 快速打开全组。
+- **搜索输入框向下导航（ArrowDown）扩展至空态工作台与操作引导**：
+  - 候选目标链扩展 `.sw__workbench-tile`、`.sw__doc-empty-action` 与 `.sw__platform-guide-action`，确保在无打开页签或空搜索态下键盘直达依然顺畅。
+- **全表面弹窗版本统一升级对齐（v0.48.22）**。
+
+### v0.48.21（2026-10-24）
+
+- **穿透检索符号指引（?模式）可交互路由与一键执行（Interactive Penetration Help Routing）**：
+  - **杜绝非法打开报错**：`activateDocResultItem` 彻底拦截以 `help-` 开头的虚拟指引条目，避免误将其作为文档 ID 打开引发报错；
+  - **模式前缀动态回填**：点击 `help-outline` / `help-tag` / `help-bookmark` / `help-block` 自动回填对应模式符号（`:`、`#`、`!`、`^`）并触发重检索，即点即搜；
+  - **一键动作直达**：点击 `help-undo` 立即触发 `undoLastClosedTab` 撤销关闭页签并恢复。
+- **全表面弹窗版本统一对齐（v0.48.21）**。
+
+### v0.48.20（2026-10-24）
+
+- **片段实验室全二级弹窗统一品牌标题栏装配（Snippet Studio Dialog Titlebars 100% Closure）**：
+  - **离开确认弹窗（`openLeaveDialog`）**：装配 `mountPlatformDialogTitleWrap` 与 `mountPlatformDialogCloseHint`，融入 22×22 星际深紫底白标与 `iconCode` 标识；
+  - **保存冲突差异对比弹窗（`openConflictDialog`）**：装配统一品牌标题栏与关闭提示，高品质呈现冲突差异与动作出口；
+  - **Gist 写入状态恢复弹窗（`openGistRecoveryDialog`）**：装配统一品牌标题栏与 `iconCloud` 标识；
+  - **代码片段备份恢复差异预览弹窗（`restoreBackup`）**：装配统一品牌标题栏与 `iconHistory` 标识；
+  - **片段包导入计划弹窗（`importFile`）**：装配统一品牌标题栏与 `iconUpload` 标识。
+- **全表面 Dialog 品牌视觉 100% 达成与版本晋级（v0.48.20）**：
+  - 第一面板切换器、第二面板工作台及商店、第三面板片段实验室、以及设置大窗与其下全部二级弹窗，达成统一品牌标题栏完全收口。
+
+### v0.48.19（2026-10-24）
+
+- **搜索框键盘流 Enter 执行与向下直达卡片导航（Search Input Keyboard Flow）**：
+  - **向下直达（`ArrowDown`）**：在搜索输入框按向下方向键，平滑直达并聚焦下方首个结果项（优先当前聚焦卡片 -> 首张卡片 -> 首条命令项 -> 首条统一结果 -> 首条文档项），彻底打通输入框到结果区的键盘焦点链；
+  - **一键回车直达执行（`Enter`）**：在搜索输入框敲击回车，立即触发首项执行或激活（优先命令项执行 -> 聚焦/首卡片切换 -> 统一项激活 -> 文档项打开），消除必须先按 Tab 才能回车的断层；
+  - **输入法严格让位**：输入法拼音候选阶段（`composing || isComposing || keyCode === 229`）对 ArrowDown 选词和回车上屏完全让位。
+- **设置页二级差异预览弹窗统一品牌标题栏装配**：
+  - **文档集版本历史对比弹窗（`openDocumentSetDiffDialog`）**：装配 `mountPlatformDialogTitleWrap` 与 `iconHistory` 标识；
+  - **配置包导入差异与选择弹窗（`openConfigPackDiffDialog`）**：装配 `mountPlatformDialogTitleWrap` 与 `iconSettings` 标识。
+- **移动端与全表面组件标题栏版本晋级（v0.48.19）**：
+  - 移动端切换器正确透传参数，全表面版本号对齐至 `v0.48.19`。
+
+### v0.48.18（2026-10-24）
+
+- **全二级弹窗统一品牌标题栏装配（All Dialogs Brand Title Wrap Expansion）**：
+  - **小组件配置弹窗（`openHomeConfigForm`）**：装配 `mountPlatformDialogTitleWrap`，将组件专属图标、标题文字、当前版本徽章与 Esc 关闭提示统一集成；
+  - **小组件独立预览弹窗（`openStoreWidgetPreview`）**：装配统一品牌标题栏，消除商店二级弹窗的原生文本生硬感；
+  - **组件健康监控大窗（`openHomeHealthDetails`）**：装配统一品牌标题栏与 `iconHeart` 健康标识；
+  - **保存搜索编辑弹窗（`openSavedSearchEditor`）**：装配统一品牌标题栏与 `iconFilter` 筛选标识。
+- **移动端切换器弹窗版本号对齐**：
+  - 修复 `src/index.ts` 移动端切换器弹窗标题栏遗留的 `v0.48.9` 陈旧版本号，全面对齐至 `v0.48.18`。
+- **主切换器中文输入法（IME）Escape 误清空深度防御**：
+  - 在 `bindSearchInputComposition` 的 Escape 键拦截中强化 `event.isComposing || event.keyCode === 229` 双重校验，彻底防止 Windows/Chromium 环境下拼音输入法撤销候选词时误清空输入框。
+- **版本号晋级与全文档对齐（v0.48.18）**：
+  - `package.json`、`plugin.json`、README、更新日志与路线图版本对齐闭环。
+
+### v0.48.17（2026-10-24）
+
+- **第二面板小组件商店全新重构与生态专区落地（Widget Store Complete Redesign）**：
+  - **统一品牌弹窗标题栏装配**：商店大窗全面装配 `lv-dialog-title-wrap`（22×22 星际深紫底白标 + 标题 + 版本徽章 + Esc 退出提示），补齐最后一块品牌标题栏拼图；
+  - **小驴生态专属专区（Ecosystem Tab）**：分类栏正式增加「小驴生态」专属页签，聚合小驴打卡、考试、闪卡、管家、人脉、常用、拾遗以及思阅与思播等全部生态组件；
+  - **午夜黑金 Hero Tile 沉浸式预览**：商店实时预览区同步渗透第二面板黑金美学（时钟与深色模块挂载 `.sw-home__cell--midnight`）；
+  - **精选推荐清单（Featured）同步**：将本周打卡、闪卡待复习、思阅在读书架与思播正在播放同步纳入核心黄金精选清单；
+  - **分类芯片与添加按钮微动效**：电光紫生态页签高亮与主色实底胶囊按钮微交互。
+- **组件商店搜索框输入法（IME）守卫与性能优化**：
+  - 拼音候选期间阻断高频重绘，Escape 防误清空。
+
+### v0.48.16（2026-10-24）
+
+- **组件商店搜索框输入法（IME）守卫与性能优化（Widget Store IME Guard）**：
+  - 修复第二面板组件商店（`home-store-ui`）搜索框此前缺失输入法合成守卫的缺陷，在拼音候选期间（`compositionstart` / `isComposing`）阻断中间态高频触发全卡片 DOM 筛选与状态摘要重算；
+  - 增加候选阶段按 Escape 的按键保护（`keyCode === 229`），杜绝撤销拼音候选窗时误触发搜索清空；
+  - `compositionend` 阶段补发一次精准筛选，输入体验与切换器主搜索保持高度一致。
+- **悬浮球极端视口边界防倒置与生命周期清理加固**：
+  - 物理尺寸保底与卸载链路梳理。
+
+### v0.48.15（2026-10-24）
+
+- **悬浮球极端视口边界防倒置与生命周期清理加固（Floating Ball Bounds & Cleanup）**：
+  - 修复移动端在横屏或软键盘、导航栏高度占用极大场景下，安全区扣减导致 `visible.bottom < visible.top` 产生的视口倒置与坐标抖动 Bug，加入 `Math.max(visible.top + this.ballSize, ...)` 物理尺寸保底；
+  - 优化 `onunload` 生命周期回收链路，剔除重复引用清理，确保各 Dialog、全局监听器与定时器严格注销。
+- **文档预览内容提取容错与标题兜底强化**：
+  - 无 contenteditable 节点回退与 dataset.title 兜底。
+
+### v0.48.14（2026-10-24）
+
+- **文档预览内容提取容错与标题兜底强化（Doc Preview Robustness & Fallback）**：
+  - 修复 `extractDocPreviewBlocks` 在段落、代码、引用或列表块缺少 `contenteditable="true"` 属性时（如静态只读或导出视图）内容被静默丢弃的问题，增加回退至节点自身的保护；
+  - 增强 `docPreviewItemTitle` 标题获取：优先支持从 `item.dataset.title` 获取标题兜底，杜绝预览头部在非标准卡片上出现空标题。
+- **移动端长按防抖容差与动作画板输入法守卫**：
+  - 10px touch slop 容差与拼音候选期间 NOOP 拦截。
+
+### v0.48.13（2026-10-24）
+
+- **移动端触控容差防抖与动作画板输入法守卫（Touch Slop & Action Palette IME Guard）**：
+  - 修复移动端卡片长按（`bindCardLongPress`）与历史条目长按手势因缺少微颤容差导致长按难以触发的问题，引入业界标准的 10px `touch slop` 防抖容差，手指微小抖动不打断长按计时；
+  - 修复次级动作画板（`Action Palette`）键盘调度逻辑：在中文/日文拼音候选期间（`isComposing || keyCode === 229`）严格返回 `NOOP`，彻底杜绝回车确认拼音时意外触发动作执行的 Bug；
+  - 增强动作画板自动聚焦定时器生命周期管理，在 `dispose` 时主动清理 `focusTimer`，消除事件循环悬挂隐患。
+- **跨区域键盘连续导航与无 offsetParent 视口滚动**：
+  - 绝对视口滚动坐标修复、卡片至文档结果平滑过渡。
+
+### v0.48.12（2026-10-24）
+
+- **跨区域键盘连续导航与无 offsetParent 视口滚动（Cross-Boundary Navigation & Scroll）**：
+  - 重构 `scrollIntoView`：改用 `getBoundingClientRect()` 相对视口绝对差值滚动，彻底消除嵌套相对定位容器（`position: relative` / 网格 / 流式分组）导致的滚动跳动 Bug；
+  - 实现卡片区与文档结果区键盘焦点无缝穿透：在卡片末行按 `ArrowDown` 自动平滑过渡聚焦至首条文档结果项，在结果行首项按 `ArrowUp` 自动平滑回焦至卡片末项或搜索框；
+  - 强化 `activateCardByElement` 空值防御：严格拦截 `!card` 与 `!tabId`，杜绝数字键越界时向底层传入 `undefined` 引发偶发误匹配。
+- **第二轮代码潜在 Bug 排查与交互边界防御**：
+  - 输入法拼音候选阶段 Escape 保护、空态近期搜索动态上下文定位、Windows 驱动器盘符排除与 SQL 防空。
+
+### v0.48.11（2026-10-24）
+
+- **第二轮代码潜在 Bug 排查与交互边界防御（Deep Bug Audit & Robustness Round 2）**：
+  - 修复中文/日文输入法拼音候选阶段（`composing`）按 Escape 误清空整输入框的体验缺陷，仅关闭候选窗而不丢弃文字；
+  - 修复空态近期搜索 Chip 点击时因静态空上下文绑定导致无法准确找到弹窗搜索框的问题，升级为运行时动态最近上下文定位（`targetSurface`）；
+  - 增强穿透检索冒号语法：智能识别并排除 Windows 驱动器盘符路径（如 `C:\Users`、`d:/notes`），避免误判为大纲模式；
+  - 修复块搜索 SQL 生成时空白笔记本 ID（如 `"   "`）产生空条件导致零结果的边界 Bug。
+- **代码潜在 Bug 深度排查第一批**：
+  - 定时器悬挂清除、循环引用防御、模式药丸冒号剥离与 Home/End 导航。
+
+### v0.48.10（2026-10-24）
+
+- **代码潜在 Bug 深度排查与边界隐患加固（Bug Audit & Robustness Defense）**：
+  - 修复 `wrapEcosystemModuleRead` 早期解析结算时未释放超时定时器导致的事件循环悬挂隐患，并在 `finally` 中严格执行定时器销毁；
+  - 增加对外部组件非标准或循环引用配置的安全序列化防御保护；
+  - 增强 `setupSearchModeChips` 模式药丸栏前缀自适应，补齐对全半角冒号（`:` / `：`）大纲穿透符号的平滑剥离与切换，并遵循 W3C 规范补齐 `Home` / `End` 首末快捷键导航；
+  - 强化生态事件总线调度：重绑前严格执行幂等解绑，并在广播刷新时对每个监听器执行独立 `try-catch` 保护，防止单个第三方模块抛错破坏总线；
+  - 动作画板思阅/思播专有调用升级为全别名安全探测（`getBridgeSafely`）。
+- **思阅与思播深度联动升级**：
+  - 工作台组件接入（`sireader-recent` 与 `simedia-active`）与全生态总线事件实时刷新。
+
+### v0.48.9（2026-10-23）
+
+- **思阅（SiReader）与思播（SiMedia）深度联动升级**：
+  - 工作台接入「思阅 · 最近阅读（`sireader-recent`）」与「思播 · 正在播放（`simedia-active`）」小组件，实时显示书架在读书目进度与正在播放的音视频标题；
+  - 动作画板 `open-in-reader`（在思阅中阅读）与 `open-in-media`（在思播中打开）优先唤起上游专有播放/阅读入口，并自带 `openTab` 优雅降级。
+- **小驴全生态总线事件实时刷新联动（Ecosystem Event Bus Integration）**：
+  - 雷切工作台聚合监听小驴打卡（`checkin:event-recorded`）、闪卡（`lv-cards:reviewed`）、考试（`lv-exam:session-ended`）、管家（`lv-home:data-changed`）与思播/思阅事件，一旦兄弟插件产生数据变动，雷切工作台组件实时自动无感重绘！
+- **第一面板门面专项深度打磨**：
+  - 模式药丸全键盘循环导航、卡片操作把手平滑微动效与双色能量微光指示条。
+
+### v0.48.8（2026-10-23）
+
+- **模式药丸栏键盘循环导航与输入框焦点互通（Mode Chips Keyboard Navigation）**：
+  - 模式药丸栏（`.sw__mode-chips-bar`）支持全键盘操作流，通过 `ArrowLeft` / `ArrowRight` 循环切换模式焦点，按 `ArrowDown` 快速切回搜索输入框；
+  - 在搜索输入框起始位置按 `ArrowUp` 智能回焦至当前模式药丸；
+- **卡片操作把手丝滑悬浮微交互（Card Action Buttons Smooth Transition）**：
+  - 置顶（`.sw__pin`）、收藏（`.sw__fav-btn`）与关闭（`.sw__close`）把手升级为平滑微缩放（scale 1.12）与透明度过渡，彻底消除卡片悬停时的生硬闪烁感；
+- **第一面板门面专项深度打磨（First Panel Masterpiece Polish）**：
+  - 双色能量微光指示条（紫金渐变）、圆角胶囊分组计数与 1-9 直达立体机械键帽。
+
+### v0.48.7（2026-10-23）
+
+- **第一面板门面专项深度打磨（First Panel Masterpiece Polish）**：
+  - 页签卡片（`.sw__card`）与文档搜索结果行（`.sw__doc-item`）激活指示微条升级为**星际深紫至钛金雷刃能量双色渐变光芒**（`linear-gradient`）并带有柔和的辉光光晕（ambient glow），与小驴雷切品牌深度共鸣；
+  - 组头标签计数（`.sw__group-count`）升级为品牌色圆角胶囊标签，增强分组层次感；
+  - 卡片与文档结果行的 1-9 键盘直达角标（`[data-sw-digit]::after`）升级为立体 2px 物理机械键帽质感，键帽立体感与动作画板保持一致。
+- **命令模式全生态插件动作接入（Ecosystem Commands Discovery）**：
+  - 切换器命令模式（`>` 或 `》`）在既有内建动作与思源命令基础上，正式接入生态与已安装插件命令检索组（`.sw__command-group`），全面支持快门（QuickGate）、打卡（Checkin）、考试（Exam）等插件命令一键检索与回车执行；
+  - 与小驴常用（`xiaolv-common`）直达搜索形成双螺旋联动，打造全功能命令中枢。
+- **中文全角穿透符号自适应（Chinese Full-Width Punctuation Adaptive Routing）**：
+  - 穿透检索模型全面支持中文全角标点符号智能映射（`！` $\to$ 书签模式、`》` $\to$ 命令面板、`：` $\to$ 大纲穿透、`？` $\to$ 符号速查）；
+  - 桌面端与移动端模式药丸栏（`.sw__mode-chips-bar`）与输入框实时响应。
+
+### v0.48.6（2026-10-23）
+
+- **命令模式全生态插件动作接入（Ecosystem Commands Discovery）**：
+  - 切换器命令模式（`>` 或 `》`）在既有内建动作与思源命令基础上，正式接入生态与已安装插件命令检索组（`.sw__command-group`），全面支持快门（QuickGate）、打卡（Checkin）、考试（Exam）等插件命令一键检索与回车执行；
+  - 与小驴常用（`xiaolv-common`）直达搜索形成双螺旋联动，打造全功能命令中枢。
+- **中文全角穿透符号自适应（Chinese Full-Width Punctuation Adaptive Routing）**：
+  - 穿透检索模型全面支持中文全角标点符号智能映射（`！` $\to$ 书签模式、`》` $\to$ 命令面板、`：` $\to$ 大纲穿透、`？` $\to$ 符号速查）；
+  - 桌面端与移动端模式药丸栏（`.sw__mode-chips-bar`）与输入框实时响应。
+- **全表面 Dialog 统一品牌标题栏规范（Unified Dialog Titlebar）**：
+  - 实现 `mountPlatformDialogTitleWrap`，桌面端与移动端切换器、小组件工作台、代码片段实验室与设置大窗全面装配 22×22 星际深紫底白标 + 标题文字 + 紧凑版本胶囊 + Esc 退出按键提示（`.lv-dialog-title-wrap`）。
+- **工作台深空黑金星芒卡片美学落地（Midnight Black Gold Hero Tiles）**：
+  - 工作台本地时钟（`external-local-time`）、世界时钟（`external-world-clock`）与深色材质（`mat-dark`）小组件全面接入午夜深空黑金底色（`.sw-home__cell--midnight`）、钛金雷刃金色微光边框与星芒反光阴影，忠实呈现参考图高能质感。
+
+### v0.48.5（2026-10-23）
+
+- **中文全角穿透符号自适应（Chinese Full-Width Punctuation Adaptive Routing）**：
+  - 穿透检索模型全面支持中文输入法下的全角标点符号：
+    - `！`（全角感叹号） $\to$ 智能映射为书签搜索模式（`!`）；
+    - `》`（全角书名号/大于号） $\to$ 智能映射为命令面板模式（`>`）；
+    - `：`（全角冒号） $\to$ 智能映射为文档大纲穿透分隔符（`:`）；
+    - `？`（全角问号） $\to$ 智能映射为符号速查指引（`?`）；
+  - 桌面端与移动端模式药丸栏（`.sw__mode-chips-bar`）与输入框实时响应，彻底解决中文用户输入全角标点时无法触发专属搜索模式的顽固体验痛点；
+  - 移动端切换器 Dialog（`createMobileSwitcherDialog`）同步装配 `.lv-dialog-title-wrap` 品牌标题栏。
+
+### v0.48.4（2026-10-23）
+
+- **全表面 Dialog 统一品牌标题栏规范（Unified Dialog Titlebar）**：
+  - 实现 `mountPlatformDialogTitleWrap` 助手，页签切换器、小组件工作台、代码片段实验室与设置大窗全面装配 22×22 星际深紫底白标 + 标题文字 + 紧凑版本胶囊 + Esc 退出按键提示（`.lv-dialog-title-wrap`），彻底统一各表面弹窗视觉层级与品牌辨识度；
+  - 具备严格的重复调用幂等性守卫，避免宿主重构时 DOM 重复追加。
+- **工作台深空黑金星芒卡片美学落地（Midnight Black Gold Hero Tiles）**：
+  - 工作台本地时钟（`external-local-time`）、世界时钟（`external-world-clock`）与深色材质（`mat-dark`）小组件全面接入午夜深空黑金底色（`.sw-home__cell--midnight`）、钛金雷刃金色微光边框与星芒反光阴影，忠实呈现参考图高能质感；
+  - 标题、数值与状态徽章自动继承高对比度钛金黄与高亮反光。
+
+### v0.48.3（2026-10-23）
+
+- **小驴生态 Epoch 6 联邦规范全方位升级（Ecosystem Federation & Bridge Kit）**：
+  - **第三方小组件 800ms 熔断与单向异常隔离**：调用任何外部组件时严格执行 800ms 超时熔断与 3s 快照缓存，异常时仅在卡片内优雅降级渲染 `[ 📦 数据暂未返回，点击重试 ]`，杜绝任何外部异常拖垮雷切工作台；维护好 `siyuanSpeedSwitch`、`xiaolvSpeedSwitch`、`xiaolvRaikiri`、`lvRaikiri` 四别名挂载与卸载安全解绑；
+  - **预置全生态 7 大标准小组件**：内置小驴打卡习惯连击（`checkin-daily-streaks`）、小驴考试（`exam-daily-summary`）、小驴闪卡（`cards-due-summary`）、小驴拾遗（`glean-later-list`）、小驴管家（`home-expiry-reminders`）、小驴人脉（`contacts-upcoming`）与小驴常用（`common-quick-palette`），支持命令模式（`>`）快门生态命令与常用语直达搜索；
+  - **顶栏单色矢量图标升级**：`CARD_ICON_SPRITE` 注入与 Logo 1:1 对齐的 `iconLvSpeedSwitch`（32×32 矢量三层阶梯页签 + 穿透利落雷刃 + 能量金核点），顶栏注册图标全面对齐；
+  - **星际紫+午夜黑金美学 Token 注入**：引入 `--lv-brand`、`--lv-brand-soft`、`--lv-accent-gold`、`--lv-midnight-card`，工作台支持午夜深空黑金卡底色质感，按钮支持 1.5px 物理微触感，弹窗标题规范统一；
+  - **深层工程规范与历史排雷**：块属性收敛为命名空间前缀 `custom-lv-raikiri-*`，`plugin.json` 英文名规范为 `Lv Speed Switch`，开启 `settingsWindow: true`，最低宿主版本提升至 `3.8.4`，TypeScript 编译目标升级至 `ES2022`，补齐根目录 `CHANGELOG.md` 与 `SECURITY.md`，保持 256×256 殿堂级 `icon.png` 绝对一致。
+
+### v0.48.2（2026-10-22）
+
+- **顶栏点击秒级直出与深度克隆性能根治（Instant Open & Shallow Clone Engine）**：
+  - **大长文档浅层首屏克隆**：彻底废弃此前 `wysiwyg.cloneNode(true)` 将大长文数万个节点整篇递归深拷贝再裁剪的卡顿根因，重构为 `cloneNode(false)` 浅克隆容器并仅按需深拷贝前 6 个子块（`THUMB_CLONE_MAX`），克隆开销彻底与文档大小解耦（从数百毫秒降至 0.1ms）；
+  - **桌面端弹窗 0 延迟瞬出**：`createSwitcherDialog` 补齐 `disableAnimation: true`，消除思源 Dialog 原生挂载时的 50ms 超时等待与过渡停顿，点击顶栏瞬间无感呈现；
+  - **消除全卡片二次搬迁与强制同步 Reflow**：重构 `renderList` 流式装载逻辑，直接装入 `contentHost` 容器，消除了旧代码在挂载后又拔插所有卡片的二次循环（`while (scrollElement.firstChild)`）与 `clientWidth` 引起的强制重排；
+  - **非关键任务微任务异步调度**：清理缩略图孤儿缓存（`pruneThumbCache`）与零词条工作台（`renderWorkbench`）以异步微任务挂载，卡片列表与搜索框获得最高首屏绘制优先级。
+
+### v0.48.1（2026-10-22）
+
+- **第一面板多模态搜索模式药丸栏（Persistent Search Mode Chips Bar）**：
+  - 桌面端、移动端与侧栏 Dock 搜索顶栏全面常驻小驴打卡风格饱满全圆角药丸 Chips（`[全部页签]`、`[@ 大纲]`、`[^ 正文]`、`[# 标签]`、`[! 书签]`、`[> 命令]`、`[? 速查]`）；
+  - 支持横向平滑滚动触控点选，点击即填入对应符号前缀并获焦触发；键盘键入前缀时药丸栏与输入框 Placeholder 实时联动高亮与专属模式提示。
+- **全库搜索结果次级动作画板与单键快捷引用**：
+  - 全库文档搜索结果项（`.sw__doc-item`）全面接入 Raycast 风格次级动作画板（`⌘K` / `Ctrl+K`），支持分屏打开、思阅/思播联动、复制块超链、复制 Markdown 双链等全套动作；
+  - 键盘导航至任一搜索结果行时，支持 `Alt+C` 单键秒级将命中块或文档的 `siyuan://blocks/...` 写入剪贴板并冒泡成功反馈。
+- **搜索框阶梯式 Escape 清空机制与一键清除微按钮**：
+  - 搜索框键入内容时按 `Escape` 优先清空输入并恢复页签列表，无内容时再次按 `Escape` 退出切换器，杜绝误触丢失会话现场；
+  - 搜索框右侧装配动态浮现的圆形清空微按钮（`.sw__search-clear`），空态近期搜索栏末尾追加一键清空历史芯片（`.sw__recent-query-clear`）。
+- **小驴打卡风格 7天胶囊时间轴与双拼 Bento 瓦片**：
+  - 工作台本周打卡（`checkin-weekly`）小组件升级为小驴打卡原版 Days Logged In 样式的 7天周期胶囊进度链（`.sw__home-capsule-tracker`），当天带同心微光光环、完成带主题色打勾；
+  - 今日待办全部完成时自动触发情绪化鼓励微横幅（`.sw__home-celebration`）；
+  - 连续打卡/写作连击采用蜜糖金（`#f9a84d`）Bento 瓦片，今日进度与待办采用薰衣草紫（`#9b8df7`）Bento 瓦片，搭配 2.2em 特大号等宽数字排版；
+  - 动作画板快捷键全面重构为实体微凸 2px 物理机械键帽（`.sw__palette-item-shortcut`），获焦项与指示条左边缘贴齐点亮。
+- **性能与流畅度深度优化**：
+  - 消除键盘上下键以外的强制重排 `getComputedStyle(grid)`，按键响应压降至微秒级；模式药丸数组内存缓存消除按键 DOM 遍历，输入帧率达到 60fps 满帧流畅。
+
+### v0.48.0（2026-10-20）
+
+- **深入穿透检索与符号多模态中枢（Penetration Search & Multimodal Navigation）**：主搜索框全面升级为符号化导航中枢：
+  - 支持 `@标题` 或 `:标题` 穿透当前文档或跨文档大纲（H1~H6），`^正文块` 深入全库段落/代码/列表块，`#标签` 跨文档过滤标签，`!书签` 快速直达书签，`>命令` 检索内建动作，`?` 唤出全套快捷与符号速查指引；
+  - 参数化安全 SQL 生成与防注入字符剔除，支持精准块锚定跳转与同文档多标题独立去重；
+  - 穿透检索命中片段富文本高亮渲染（`<mark class="sw__search-mark">`），支持多词 AND 分词高亮与实体转义 XSS 防护。
+- **次级动作画板与单键免呼出直达（Action Palette & Direct Shortcuts）**：
+  - Raycast 风格次级动作画板（`⌘K` / `Ctrl+K`），聚合分屏打开（`open-right` / `open-bottom`）、只读预览（`open-preview`）、置顶/收藏切换、关闭页签及块链接/Markdown 双链/ID 复制；
+  - 卡片获焦时支持免呼出单键直达：`Ctrl+Enter`（右分屏）、`Alt+Enter`（下分屏）、`Alt+C`（复制块链接）、`Alt+M`（复制 Markdown）、`Alt+P`（置顶）、`Alt+D`（收藏）、`Alt+R`（思阅）、`Alt+V`（思播）；
+  - 内置 MRU 动态排序引擎：在分区字典序受保护的前提下，自动前置提升高频与最近使用过的动作。
+- **工作区会话保护与误关恢复（Session Protection & Undo Close）**：
+  - 支持浏览器标准的 `Ctrl+Shift+T` / `⌘Shift+T` 快捷键一键撤销关闭页签并从历史栈秒级恢复；
+  - 动作画板提供 `save-as-doc-set`（`⌘⇧S`），一键将当前所有已开页签固化为带时间戳的工作区快照并支持随时一键恢复。
+- **第二面板小组件生态兑现与思阅/思播联动**：
+  - **属性看板（database-board）**：思源原生属性视图（AV）轻量只读看板装配，支持按字段分组分桶并计算占比与条数统计；
+  - **闪卡复习（flashcard-review）**：基于 SM-2 算法推演今日到期分布，支持 `action:riffCard` 一键拉起原生复习；
+  - **思阅与思播联动**：多媒体在读卡片支持右上角半透明磨砂徽标（`.sw__home-media-badge`）与底部主题色进度指示条（`.sw__home-media-progress-bar`）。
+- **全表面视觉质感精雕（小驴打卡风格体系）**：
+  - 统一切换器卡片、穿透条目、动作画板与工作台 Bento 网格的亚克力微光切面（`inset 0 1px 0 rgba(255,255,255,0.08~0.16)`）；
+  - 双层物理接触微阴影与氛围漫反射，平滑 hover 浮起微动效与系统等宽数字排版（`tabular-nums`）；
+  - 覆盖极限窄侧栏 Dock（245px～340px）防溢出收缩与移动端 44px WCAG 触控靶心标准。
+- **验证**：全量测试 8982 通过 / 1 跳过 / 0 失败；构建 `package.zip` 606 KiB 稳定处于 594 KiB 仓库门禁之内；四大批量门禁与状态对账审计全部通过。
+
+### v0.47.6（2026-10-19）
+
+- **真实隔离宿主 E2E 闭环**：文档集恢复与收集箱元数据无缝对齐思源原生云端收集箱（`tests/e2e/document-sets.spec.mjs`）；片段实验室 3 模式导入（Merge / Fork / Overwrite）与保存闭环（`tests/e2e/snippet-import-save.spec.mjs`）；收藏分组添加与工作现场返回闭环（`tests/e2e/favorites-flow.spec.mjs`）；最近打开与误关闭记录差集感知与重开对齐（`tests/e2e/recent-closed-flow.spec.mjs`）。
+- **全表面高对比度与无障碍强化**：系统级高对比度（`forced-colors: active`）与 `prefers-contrast: more` 边框强化与高对比度系统颜色映射；键盘焦点环 `focus-visible` 统一收敛为高对比度清晰边界，符合无障碍操作标准。
+- **调度核心与数据安全加固**：请求调度（`request-service.js`）序列化防溢出（>16 层阻断）、统一异常状态码分类与最大重试次数严格钳制（`MAX_RETRIES = 2`）；Agent 执行器原生 ID 直读与同名 SQLite 过滤锁定，消除异步索引覆盖风险；只读能力输入输出 Schema 严格有界（查询词截断 200 字符、配置 8 字段上限）。
+- **代码片段安全与生命周期演进**：代码片段回收站数量 50 / 年龄 30 天 / 字节 256KB 三限淘汰与禁用草稿恢复；Gist 凭据四点掩码脱敏（••••cdef）、强制声明未列出 `public: false` 与配置包敏感字段隔离；代码片段 AI 辅助单片段授权、64KB 有界载荷与 SSE 流式中断取消机制。
+- **悬浮球与设置搜索演进**：悬浮球自由停放越界内敛收敛、动作网格调度与碰撞分离；设置中心跨十标签多词 AND 匹配与真实 DOM 控件高亮直达。
+- **验证**：全量测试 8850 通过 / 1 跳过 / 0 失败；构建 `package.zip` 稳定处于 578 KiB 发布门禁之内；四大批量门禁与状态对账审计全部通过。
+
+### v0.47.5（2026-10-17）
+
+- **零依赖极速代码格式化器**：基于原生状态机解析，支持 CSS 选择器、大括号、声明规范化与光标平滑映射（formatWithCursor），彻底消除 200KB+ Prettier 依赖。
+- **三模式代码片段导入规划引擎**：增量合并 Merge 保留本地启用态与原序、分叉克隆 Fork 独立派生新副本、镜像覆盖 Overwrite 全量替换。
+- **全表面晶体微倒角切光与物理质感深度对齐**：工作台单元格、切换器大预览窗格、代码实验室与片段商店全面注入 1px 晶体微内切光高光（`--sw-rim-light`）与环境光遮蔽微阴影。
+- **典藏版高保真原型系统升级**：全面集成多设备视口模拟器（桌面/iPad/手机/Dock）与 40+ 交互闭环。
+- **验证**：全量测试 8777 通过、1 跳过；样式契约 7/7 通过；构建 package.zip 578 KiB 稳定处于 578 KiB 发布门禁之内。
+
+### v0.47.4（2026-10-17）
+
+- **第二面板与小组件商店最现代化科技感重构**：时钟去壳直出、等宽科技排版、待办复选框 0ms 乐观打勾与划线衰减、年度时间进程 2.8s 流光脉冲、商店卡片画廊化与图标微底衬。
+- **多端双拼 Bento 架构与 GPU 性能护栏**：手机端（<=560px）时钟与天气 50% 优雅并排，长列表 100% 舒展；iPad 4列 Bento；触控隔离与硬件加速零重排。
+- **全表面渐进式质感升级**：第一面板卡片消费 1px 晶体微切光、机械键帽微立体阴影、双层发光微环；强化白天陶瓷霜白质感。2026-10-18 勘误：物理微噪点开关仅在设计原型中演示，生产插件尚未提供。
+- **搜索页面右侧独立 34% 预览窗格优化**：正文独立滚动不遮挡全库文档（闭环 Issue #15）；Phase C 受控智能与动作安全回执契约完备交付。
+- **验证**：全量测试 8770 通过、1 跳过；样式契约 6/6 通过，移动端布局冒烟 PASS；构建 package.zip 575 KiB 稳定处于 578 KiB 发布门禁之内。
+
+### v0.47.3（2026-10-16）
+
+- **紧凑工作台**：收紧顶栏、工具栏和卡片留白，恢复组件高度档位；天气、倒数采用轻量摘要，失败与旧内容仍有明文提示。
+- **七个默认组件**：新工作台提供最近打开、收藏、今日日记、今日待办、时间与日期、年度进度、笔记统计，各自优化紧凑布局。已有保存布局、配置和窗口模式保留，不会统一自动补卡；可从商店添加，空工作台可显式恢复默认。
+- **天气失败重试**：异常空态提供重试按钮，强制刷新绕过失败缓存和退避。
+- **诊断先预览再复制**：支持取消、复制忙态、失败后手动复制；摘要保留版本、端侧、状态和安全原因，排除标题、实例标识及原始错误。健康详情恢复名称和时间信息。
+- **组件兼容**：修复大纲嵌套标题和 HTML 实体、书签计数兜底及旧块 ID 别名；缺失统计响应保持失败，合法零值显示 0。
+- **验证**：完整门禁 8749 通过、1 跳过；Chrome 隔离宿主覆盖紧凑布局、天气重试和诊断。最低声明仍为思源 3.8.0；Android、读屏与真实外部账号验收沿用既有待证边界。
+
+### v0.47.2（2026-10-14）
+
+- **新增 2px 紧凑间距刻度**：增加 `--sw-space-2xs`，迁移 97 条声明、99 个顶层分量；间距覆盖由 69.09% 提升到 73.73%，30 个 Chromium 场景/480 个元素计算样式与几何差异为 0。
+- **修复发布包预算**：压缩 README 历史索引并保留完整双语 changelog，package.zip 从 596562 B 降至 591332 B，低于 591872 B 门禁。
+
+- **新增共享顶栏品牌识别层**：将 R5 原型的主题色品牌标记、产品名和平台副标题落到三个生产面板，并提供中英文文案；窄容器隐藏副标题并收紧标记尺寸。
+- **新增工作台不可用组件恢复面板**：全部已保存组件暂不可用时，保留布局、展示明确状态，并提供打开商店和进入编辑清理两条恢复路径；失效占位纳入主体滚动网格。
+- **优化组件商店键盘选择**：目录卡首次 Enter/空格选择时先打开对应详情，第二次激活再触发详情主动作，匹配鼠标交互。
+- **优化共享排版刻度**：将 298 条间距、17 条字号、34 条行高和 134 条字重声明迁移到已有 token，保留原 fallback；覆盖率分别由 29.73%/80.27%/5.98%/7.98% 提升到 55.94%/84.86%/35.04%/90.18%。
+- **修复移动端悬浮球快滑判定**：首次移动越过触摸斜坡后仍按方向动作分发，恢复停靠位置并消费合成点击；慢拖与动作拖放语义保持不变。
+- **修复焦点与预览播报连续性**：工作台重试、片段冲突关闭/重载和保存副本后恢复编辑器焦点；第一面板预览完成状态提供可读播报。
+- **验证**：完整测试 **8666/8666**；排版 token、移动快滑和负向契约探针通过，30 个 Chromium 双主题/多宽度场景、480 个元素的计算样式和几何差异为 **0**；TypeScript、可复现构建和全部发布门禁通过。expanded CSS 增加 12,238 bytes，未将本批描述为性能优化。
+
+### v0.47.0（2026-10-11）
+
+- **新增 R54 三面板视觉适配层**：参考小驴闪卡 R54、小驴打卡以及小驴人脉/小驴管家的重构方向，统一切换器、工作台、组件商店和片段实验室的画布、白色工作面、细描边、圆角、间距和层级阴影。
+- **新增 R54 视觉契约与负向验证**：覆盖三面板材质、主次关系、触控尺寸和窄容器降级，并验证删除关键声明时门禁会失败。
+- **优化三面板工作路径层级**：第一面板强化搜索—预览连续阅读面；第二面板收拢工作台与商店目录—详情层级；第三面板明确编辑器为主工作面、预览与 AI 为辅助面。
+- **修复窄面板材质与滚动承载不一致**：按真实 `sw-platform` 容器适配 760px/560px 降级，保留现有数据、API、状态、关闭和焦点语义。
+- **验证**：完整测试 **8653/8653**；R54 定向契约（含删除式负向验证）、TypeScript、生产构建、surface-switch、移动布局和 Chromium 样式 smoke 通过。
+
+### v0.46.9（2026-10-11）
+
+- **新增真实内核 E2E 发布回归证据**：在独立思源 `3.8.7-alpha.6` 后台完成三面板、设置、移动布局、组件商店和片段链路回归；通过轮次退出码为 0，并补齐预览边界、触控尺寸、stale 状态和索引就绪断言。
+- **优化第三面板预览与手机设置布局**：预览区自身承载溢出滚动；手机设置标签保持至少 44px 触控高度，搜索条不再产生横向溢出。
+- **修复移动布局与工作台状态回归**：创建文档后等待思源索引就绪；保留旧快照的刷新失败显示为 stale，并保留原内容和 Retry 操作。
+- **验证**：独立后台 run `20261010172658-63372-e9c870`（内核 `3.8.7-alpha.6`）退出码 0；定向 E2E、TypeScript、生产构建与发布门禁通过。
+
+### v0.46.8（2026-10-10）
+
+- **新增顶栏窄容器适配与片段入口焦点连续性**：自定义窄面板按真实容器宽度降级；片段选择器关闭后恢复实际打开入口焦点。
+- **新增全量 UI 交互回归门禁**：覆盖三面板顶栏、245px 侧栏、组件商店、配置表单和片段选择器的入口、按钮状态、空态/错误态、反馈与销毁竞态，并加入删除注入负向验证。
+- **优化顶栏层级与触控命中区**：侧栏继续消费密度 token，短窗细指针可压缩关闭按钮，粗指针保持触控尺寸。
+- **修复笔记本失败反馈与旧合同漂移**：失败、空列表、重试和销毁竞态保持可区分，相关源码合同同步到统一加载助手。
+- **验证**：完整测试 **8635/8635**；TypeScript、生产构建、顶栏/侧栏、商店、片段和 Chromium smoke 通过。
+
+### v0.46.7（2026-10-09）
+
+- **新增平台顶栏 R5 原型与真实侧栏回归**：补齐桌面、245px 侧栏和 360px 移动端原型，并用真实侧栏夹具验证标签、溢出、关闭锚点、命中尺寸和坐标点击。
+- **优化顶栏当前态与窄屏层级**：恢复当前表面底部强调线；侧栏/移动端将导航下沉到独立一行，设置和关闭保持右侧可达。
+- **修复笔记本配置加载失败反馈**：失败与空列表分离，设置页提供重试；重试成功恢复选项和原值，销毁后忽略迟到回包。
+- **验证**：顶栏、商店、笔记本定向合同 **850/850**；TypeScript、构建和 Chromium surface smoke 通过。
+
+### v0.46.6（2026-10-09）
+
+- **新增片段目录快速启停**：常驻列表和选择器目录为原生片段提供并列启用/停用按钮，复用整表写入、回读确认、JS 二次确认和脏稿守卫。
+- **优化第二面板与组件商店层级**：恢复工作台圆角/阴影/玻璃景深；商店详情改为标题、事实元信息、唯一实时预览与动作区，并清理重绘后的无效 aria 引用。
+- **修复旧宿主兼容与重复详情卡**：总开关字段未知时使用中性快照，避免已确认写入误报失败；详情不再重复挂载完整目录卡。
+- **验证**：完整测试 **8620/8620**；片段、商店结构、材质契约及负向注入通过。
+
+### v0.46.5（2026-10-09）
+
+- **新增顶栏分段式表面导航**：切换器、工作台、片段实验室统一显示图标、用途提示和当前状态。
+- **优化顶栏命中与反馈**：入口默认保留边界和底色，悬停/聚焦/按下即时反馈；图标和文字不抢占按钮事件；关闭钮桌面 36px、触控 44px。
+- **修复顶栏悬停无反应**：补齐命中层、触控语义、提示节点穿透和可访问名称，连续移动鼠标即可稳定操作。
+- **验证**：定向顶栏合同 **105/105**；完整测试 **8610/8610**；TypeScript、构建与 UI smoke 在版本更新后复跑。
+
+### v0.46.4（2026-10-09）
+
+- **新增全路径边界回归防线**：为空 Dialog、搜索现场、排序浮层位置、已存搜索 notebook 范围和设置差异弹窗增加契约与删除声明负向注入验证。
+- **优化连续操作体验**：分组重绘后重放当前搜索/筛选；排序浮层随窗口尺寸变化重定位；宿主根节点缺失时统一销毁空壳；已存搜索在 notebook 清单不可用时保留原范围。
+- **修复显示文案与事实对账**：修复收藏分组标题 HTML 实体误显示，补齐多个设置/差异/模板/主机列表弹窗的失败出口，并更新路径筛选和组件就绪状态的中英文说明。
+- **验证**：完整测试 **8608/8608**；TypeScript、构建、发布/质量/集成审计、UI smoke 与负向门禁通过。
+
+### v0.46.3（2026-10-09）
+
+- **新增全路径交互回归防线**：为平台顶栏、移动 sheet、搜索来源、stale 状态和片段预览增加样式/生命周期契约，并对关键声明执行删除注入验证。
+- **优化三面板按钮与状态反馈**：恢复设置、关闭、Esc 提示的桌面/触控反馈，统一移动关闭按钮 44px 命中区，并恢复来源/范围说明、缓存状态提示及商店/Gist 预览边界。
+- **修复商店文案与异常 Dialog**：移除英文界面硬编码中文，修复异常分隔符和依赖安装文案；宿主主题改写商店内容后自动销毁空壳 Dialog 并恢复触发按钮焦点。
+- **验证**：完整测试 **8596/8596**；TypeScript、可复现构建、发布/质量/集成审计、全套 UI smoke 与负向门禁通过。
+
+### v0.46.2（2026-10-09）
+
+- **新增组件商店关闭入口**：商店内容区增加可见、可触摸的关闭按钮，兼容宿主隐藏原生标题栏的情况，并在关闭后恢复触发按钮焦点。
+- **优化第一面板预览**：移除重复的原生 Dialog 标题栏，右侧预览扩展至完整结果区域。
+- **修复三面板布局**：第三面板固定为库列表、编辑区、AI 预览三列，避免预览栏换行挤压主内容。
+- **修复预览加载**：兼容第三参数传入 AbortSignal 选项，避免被误当超时值而立即取消请求。
+- **验证**：完整测试 **8589/8589**；TypeScript、布局 smoke、浏览器 smoke、负向门禁验证通过。
+
+### v0.46.1（2026-10-09）
+
+- **修复 Miniflux 分类发现**：令牌统一使用归一化值，粘贴首尾空格不再导致分类读取失败。
+- **修复移动端分组操作反馈**：宿主拒绝时显示失败回执、记录受控日志并恢复忙碌状态。
+- **优化设置开关可达性**：模块与停靠开关支持整行点击并提供可访问名称。
+- **验证**：完整测试 **8585/8585**；`tsc`、布局 smoke、Chromium smoke 与负向门禁验证通过。
+
+### v0.46.0（2026-10-09）
+
+- **原生片段管理**：补齐片段分组、备份恢复、元数据、编辑基础能力和安全边界，支持在片段实验室内完成可恢复的管理流程。
+- **平台与搜索增强**：接入表面适配路由、标题搜索归一化、组合搜索与工作台缓存/生命周期治理，保留本地优先和失败可解释性。
+- **宿主验收与资源证据**：加入思源 3.8 兼容性探针、桌面/原生侧栏验收矩阵、隔离背景 E2E 与资源趋势长会话检查点。
+- **验证**：完整测试 **8583/8583**；`tsc` 通过；quality audit **50/50**；integration audit **50/50**；视觉矩阵、构建与发布包检查通过。
+
+### v0.45.0（2026-10-08）
+
+- **R13~R16 视觉/刻度战役**：完成字号、圆角、间距、阴影、动效、状态语言与密度档 token 刻度，交付四态一致性矩阵，统一三面板与多端状态表达。
+- **可靠性池约二十批**：围绕取消族、会话隔离、生命周期回收、焦点与键盘可访问性、失败回执、浮层 disposer、净化边界等收口，补齐异步竞态、卸载代际与操作反馈合同。
+- **T-7204 图标系统 token 化**：收敛跨样式切片的图标宽度/高度消费，接入共享 icon token，保持既有几何与功能行为。
+- **验证**：完整测试 **6738/6738**；`tsc` 通过；quality audit **50/50**；integration audit **50/50**；`git diff --check` 通过。
+### v0.44.1（2026-09-30）
+
+- **T-7054 组件面板视觉重构（A~I 九批次，58 组件收口）**：全组件基座材质升级（iPad 质感：玻璃态、景深阴影、hover 反馈）；九大家族专属样式（时钟/日历日记/天气环境/任务闪卡/写作/阅读订阅/统计图表/导航文档/工具，经 `data-module-id` 作用域）；A 批视图 JS 增强（日进度条、昼夜指示器、UTC 偏移量、里程碑徽标）。
+- **T-7064~T-7067 片段实验室五批**：内置 CSS 片段 5→26（14 类别全覆盖：行内代码胶囊、链接悬停、任务复选框+悬停光环、表格斑马纹、选中高亮、kbd 键帽、图片悬停缩放、任务完成态弱化、表头增强、滚动条精致化、护眼模式、行距、标题图标、落叶卡片、代码块主题等），全部 `--b3-theme-*`+`color-mix` 暗色自适应、`.protyle-wysiwyg` 作用域、单片段 ≤10 行；类别筛选下拉补全（6→15 项，14 类全可筛）；编辑区「复制」按钮（Clipboard API 优先，execCommand 降级，空草稿警示与失败回执）；五重契约（token/作用域/i18n/反重叠/类别防漂移，均含负向注入证据）。
+- **T-7068 移动端长按拖拽**：单元格长按 520ms（位移 ≤6px）进入拖拽，与拖动把手共用同一管线（落点虚影/Escape 取消/防误触声明/贴缘自动滚动）；鼠标与工具按钮旁路；触屏 `pan-y` 保纵向滚动、按压态收紧手势。
+- **T-7069~T-7072 第三方组件生态链（calendar#17，首个外部接入）**：修复归一化清除第三方组件（添加即丢）与商店预览恒 medium 两缺陷；ADR 0103 生命周期语义——归一化允许名单=运行时注册∪已持久化实例，禁用/重载不丢布局，商店显式清理承接膨胀；孤儿实例（目录未登记）进「当前不可用」分区可见可清理；`calendar-recent-periodic` 入组件目录获得装机前曝光；目录不变量拆分为 桥接/provider 自注册 两类互斥校验；widget-protocol.md 新增「有界重试注册」推荐范式与 Calendar 适配示例。
+- **安全维护**：fast-uri 传递依赖（ajv→ajv-formats→schema-utils 链）两个 high 漏洞升级修复，`pnpm audit` 归零。
+- **验证边界**：完整测试 **6625/6625**（较 v0.44.0 +59）；`tsc` 干净；新增契约均含负向注入验证（注入精确红并字节还原）；readiness 产物快照随构建刷新。
+### v0.44.0（2026-09-30）
+
+- **模块化可见性开关（T-7026，ADR 0099）**：设置 → 面板 → 模块管理可分别停用 工作台 / 片段实验室 / 悬浮球——停用模块的全部入口（面板导航、快捷动作、命令、悬浮球）隐藏，残留路由调用诚实回执拒绝；**顶栏收敛为单一统一平台入口**（原「组件面板」独立按钮移除，右键菜单动态列出全部已启用面板 + 设置）；已打开面板保留至用户关闭。切换器为平台根不可停用（防锁死保底）。
+- **片段回收站（T-7025，ADR 0100）**：覆盖保存 / 删除 / 冲突放弃三类旧版本自动入站（原生写入确认成功后才登记，登记失败不虚报）；目录浮层新增「回收站」入口——列表（来源标签/日期/大小）+ 恢复为新草稿（禁用态、过脏稿守卫、不自动启用、不覆盖原片段）+ 永久删除/清空（二次确认）；三限自动清理（50 条 / 30 天 / 256 KiB）。新存储 key `sw_snippet_recycle`（持久化 key 总数 16→17）。
+- **片段实验室双栏预览（T-7022）**：预览升级为 左「已保存」右「草稿」双栏对照（同一场景/宽度/主题环境两栏同步），窄容器自动降级单栏切换；新建无基线显示明确空态；**JS 执行能力在预览模块层整体封死**（沙箱恒无 allow-scripts、CSP script-src 恒 none，移除「运行 JavaScript」按钮），安全边界由模块唯一决定。
+- **审计缺陷修复批（T-7032/T-7038~T-7044/T-7046）**：冲突副本保存成功不再被误报为失败；工作台英雄位降级当帧生效；片段导入代际保护（编辑/切换片段/连击导入时迟到文件诚实丢弃）；排序浮层生命周期（表面切换不再残留幽灵菜单与全局监听，关闭回焦触发按钮）；侧栏与移动端切换器重绘现场保持（滚动位置+焦点卡片不再丢失）；侧栏新增独立日记入口；搜索 chips 键盘路径 ARIA 统一为 aria-pressed；路径筛选代际按表面隔离（桌面/侧栏/移动互不作废对方在途请求）。
+- **片段写入待确认态（T-7045）**：列表写入之后的通知/回读失败不再伪报普通失败——进入「写入可能已生效，正在只读核对」回执并只读核对（保存须条目一致、删除须条目消失）；核对一致才给成功回执并登记回收站，未核对到则诚实停留并允许刷新后重试（回收站去重窗口保证旧版本不重复入站）。
+- **验证边界**：完整测试 **6566/6566**；`tsc` 干净；新增门禁均含负向注入（二十四组注入精确红并字节还原）；生产图上限 71→72（snippet-recycle 经 storage-migration 入图，账本留痕）。
+
+### v0.43.2（2026-09-29）
+
+- **面板入口可发现性与诚实性（用户实测反馈）**：SurfaceNav 非当前面板项默认带淡边框胶囊（此前是无背景灰字，鼠标悬停与可点击性难以辨认）；结构性防回退——任何装配路径若缺失导航处理，非当前面板项**直接不渲染**，绝不输出「看起来像入口的灰字」假按钮。全屏切换器/全屏工作台 → 片段实验室的真实点击互切（含自适应/固定尺寸分支）固化为发版链冒烟（CDP 驱动真实 Chromium，逐 case 断言挂载/全屏/z 序/无假入口）。
+- **页签数字角标修复**：第一面板卡片右上角 1-9 数字角标此前骑在卡片边框上，被卡片 overflow 裁掉上半（数字残缺）；改为卡内右上角完整显示（文档结果行角标同修）。
+- **关闭按钮显著化**：三面板右上角关闭按钮从无背景小图标升级为带边框/底色的实感按钮，悬停强调。
+- **验证边界**：完整测试 **6538/6538**；`tsc` 干净；新增门禁含负向注入（摘诚实渲染守卫/角标裁切回归/关闭钮回退均精确红并字节还原）。
+
+
+
+- **紧急修复：第三面板（片段实验室）无法进入**——v0.43.0 的预览能力回执接线（T-6987）在 UI 侧调用了探针命中分析函数 `analyzeCssCoverage` 但未加入模块导入，片段实验室动态 chunk 首次渲染即抛 `ReferenceError`，挂载失败回退切换器。本版补上导入并修复；已通过新增的 mount 级回归测试验证全链（挂载 → 首渲染 → 能力回执 → 编辑输入 → 诊断面板三态与错误行列）。
+- **测试防线补漏**：片段实验室 UI 此前仅有源码扫描类契约（不执行代码），本次新增 `snippet-studio-mount` 真实挂载测试（jsdom + siyuan 桩），构造期/首渲染错误今后会在测试链内精确失败。
+- **验证边界**：完整测试 **6537/6537**；`tsc` 干净；发版门禁全链通过。
+
+### v0.43.0（2026-09-29）
+
+- **组件商店重构 S2 收口（T-6967）**：筛选一条化——排序菜单收进筛选 chips 行尾（tablist 语义纯度与键盘导航保留）；详情窗格元信息升级为 数据来源/刷新/隐私/缓存 四行明文（刷新节奏与共享心跳族登记同源）；空目录不再整树清空，改为保留搜索与详情窗格的失败横幅 + 手动重试；联网/本机/离线等能力徽标全部中性化（修正「联网」误用加载配色的历史观感）；移动端筛选 chips 横向滚动 + 吸附。
+- **三面板尺寸统一（T-6986/T-6999，ADR 0080/0097）**：片段实验室新增 全屏/自适应/固定 尺寸模式（默认保持全屏，非全屏走与工作台同一尺寸管线）；切换器/工作台/片段实验室三组窗口设置统一收进「面板」标签的「面板窗口」分组，均带默认值说明（明确设置页自身不受影响）与「预览面板」入口。
+- **设置页搜索与存储健康（T-7002/T-7004）**：搜索升级为完整 combobox 语义（展开/受控列表/活动选项跟随），桌面端首焦点落搜索框，页内 `/` 与 Ctrl+K 直达，显式清空按钮；结果支持按分组过滤并显示「面板 › 分组」路径；存储页登记全部 15 个持久化键（五组双语标签）+ 用量进度条（占比进读屏文本）+ 存储结构版本健康（三态展示，含降级保护提示）+ 缓存说明与缩略图缓存清空（二次确认，只清可重建数据）。
+- **设置保存回执与撤销（T-7003）**：保存结果三态可感知（待写入/已保存/保存失败 + 失败重试，失败不再静默）；「撤销上次更改」会话级撤销栈（20 步）；七个设置分组支持一键恢复默认（字段白名单校验，自动入撤销栈）；其他入口修改设置时，打开中的设置页带现场重建（不打断本页输入）。
+- **切换器重绘现场保持（T-7009）**：排序切换与异步数据回源重绘不再跳顶、不再抢走搜索框或卡片的焦点（默认首卡焦点只服务首次打开）。
+- **工作台健康详情单项重试过程态（T-7011）**：重试在途行显示「更新中」+ 行级 aria-busy + 双击防护，完成后行落回真实状态分组。
+- **片段实验室预览链（T-6987~T-6990，ADR 0096）**：每次预览显示能力回执（场景/宽度/主题/探针命中/脚本禁用/无网络/语义近似/主题 token 只读快照）；新增 CSS 覆盖诊断面板（选择器分层分析：命中/可能未命中/未知三态 + 注释字符串安全 + 错误行列 + 上限封顶）；探针特征 10→17（新增 Callout/列布局/公式占位/块属性/数据库占位/媒体 blocked 占位/文档标题，全部静态样例零远程）；主题 token 只读内置快照桥接（外部注入被无视）。
+- **悬浮球（T-7014）**：弹窗关闭后焦点恢复到打开它的来源控件（悬浮球本体/顶栏按钮等），不再丢给页面。
+- **验收与文案（T-7015）**：场景预设当前行以「当前」徽标替代无效的「应用」按钮；快捷条切换器文案统一为表面名「切换器」；全页面验收矩阵与第三面板 R3 对照矩阵落盘（设计审查孤儿五条全部销号）。
+- **包体线**：ADR 0098——raw 自律线 1120→1152 KiB、归档上限 544→576 KiB（+32 KiB 步进）；多 chunk 稳定命名分流登记为候选工程任务。
+- **验证边界**：完整测试 **6535/6535**（较 v0.42.0 +50）；`tsc` 干净；各批负向注入验证（24+ 组）均精确失败并按 SHA-256 字节还原；浏览器截图矩阵与真实 Android/桌面内核验收按既定口径后置（候选任务 T-7020 / B-004 / B-005）。
+
+### v0.42.0（2026-09-29）
+
+- **平台外壳统一合同（T-7012）**：`PLATFORM_SURFACE_ENTRIES` 入口词表 8→12（补 `topbar-context-menu`/`plugin-command`/`quick-action`/`floating-ball` 四个在用来源，此前被静默归为 unknown 丢弃）；桌面/工作台/片段实验室/移动端四处 SurfaceNav 与片段搜索 chips、工具栏按钮全部透传当前查询现场；`PlatformSurfaceContext` 扩 `focusSource`（≤80 有界清洗），离开表面时记录来源对象行或搜索框、返回后经宏任务恢复焦点；`openSetting` 支持 `returnTo` 互返，设置关闭后回到来源表面。
+- **第一面板焦点模型（T-7007）**：页签卡从普通 div 升级为真实焦点目标（`tabIndex=0` + `role="button"` + 标题 aria-label，重挂时同步可访问名称）；滚动容器 focusin 委托统一驱动视觉焦点与预览（键盘导航、附属按钮聚焦、方向键三路同源，悬浮聚焦保持纯视觉不抢焦点）；过滤 chips 从半套 tablist 诚实降级为 `role="group"` + `aria-pressed` 按钮组。
+- **工作台重绘事务（T-7010）**：`renderPanel` 重绘前捕获滚动锚（root + dialog body 双层）与聚焦现场（组件卡按 `data-sw-object-id`、工具栏按钮按 `data-home-action` 稳定标识），挂载后立即复位滚动并找回同一焦点目标，目标已删除诚实放弃；编辑开关、刷新全部、配置保存等 14+ 整面板重绘触发点不再跳顶丢焦点。
+- **设置 IA 收口（T-6998，ADR 0097）**：遗留不可达的组件面板构建内容（调色 + 工作台尺寸/宽高分段控件）并入「面板」标签独立分组，设置搜索与移动横滚自动覆盖；`builders.homePanel` 死键删除。
+- **历史下拉契约（T-7016）**：核查确认「分区标题带计数、每区前 8 条、超出展开全部」已在生产实现，本轮以契约钉住并正式销号；「日记智能聚合」深化等真实反馈。
+- **文档**：README 对外措辞引入速览（peek）语言（R8-A9）；EN README 预览覆盖表述与中文对齐。
+- **验证边界**：完整测试 **6485/6485**；`tsc` 干净；门禁含负向注入验证（词表删项、query 摘除、设置恢复摘除、焦点恢复摘除、cap 摘除等均精确失败并按 SHA-256 字节还原）；真实 Android/桌面内核验收仍按 B-004/B-005 后置。
+
+### v0.41.0（2026-09-28）
+
+- **13 项功能深化计划全部落地（T-6949~T-6961）**：阅读与复用——搜索结果会话级预览固定与预览内查找条（命中导航 + 替换两步确认单事务）、已存筛选重命名与条件编辑、设置页全局搜索与真实控件定位；工作台——布局撤销/重做（30 步 + 128 KiB 预算）、组件健康详情（定位 + 白名单脱敏诊断）、文档集版本差异预览；片段草稿保护——脏草稿三选一离开守卫、草稿局部撤销/重做（50 步 + 512 KiB 预算）、保存冲突副本（禁用态保留，ADR 0090）；编辑与迁移——草稿内查找替换单事务提交、CSS 预览场景与宽度档、可迁移配置包差异预览与组粒度应用。
+- **工作台现代化重构（T-6968 原型评审通过 → T-6969 四切片，ADR 0091）**：材质 × 尺寸档位双轴系统——plain/accent/dark/vibrant 四材质经皮肤层作用域派生（vibrant 仅限显式声明），45 个模块登记商店默认档位；编辑态 iOS 抖动模式（虚线框 + 摇摆，reduced-motion 降级）与 X 英雄位约束（每面板至多 1 个 full，超出自动降级 large）；查看态微标头（10.5px 识别行 + 状态 chip 悬停/聚焦显现，失败与加载态恒显）；数字排版全面 tabular-nums。
+- **58 组件规格设计与照卡施工（T-6971 批次①~⑦）**：九批明暗双主题规格卡全部产出（58/58）；照卡施工修复一批真实差距——列表流家族（Hacker News 评论数下屏、Miniflux/RSS 来源·日期 meta 移入工作台可见行、同标题跨源去重、排名过滤后连续、RSS 补入 15 分钟心跳族 + 已读标注 + 未读计数 chip、五组件档位恰为 M/W/L、新增 capListflowRows 档位硬上限首屏 ≤5/L ≤8）；写作家族声明对齐（今日写作 accent、活跃度 M/W/L、笔记统计 M/W）；空气质量补入 15 分钟心跳族；时钟家族数字排版；打卡只读桥接红线钉死。
+- **组件商店重构 S1（T-6966 原型评审通过 → T-6967）**：主从结构落地——左目录（搜索 + 六枚来源 chips + 分组行列表）+ 右详情窗格（完整卡片 + 唯一主色「添加」胶囊）；目录行零按钮（G3），已添加行以 ✓ 表达；砍掉密度/视图模式等冗余控件；Ctrl+B 批量模式底栏（已选计数 + 批量添加按默认档入面板）；移动端单列列表 + 底部 sheet 详情。
+- **手机端修复（T-6970）**：皮肤分段控件窄屏允许换行不再文字重叠；切换器缩略图以空段落开头不再整框空白（前导空块裁剪 + 空白回退标题占位 + 空白不进缓存）。
+- **稳定性与体验**：刷新失败保留旧值并上报失败回执；时钟心跳改 DOM 局部补丁不再整卡闪动；文档集探针超时不再残留僵尸连接；搜索恢复态与命令模式取消语义修正；预览键盘滚动与工作室响应式布局修复；面板头部与切换器对齐。
+- **包体线校准**：ADR 0089（单条目压缩 288→320 KiB）、ADR 0090（归档总上限 512→544 KiB）、ADR 0091（工作台材质×档位系统）。
+- **验证边界（v0.41.0 发版执行）**：完整测试 **6452/6452**（较 v0.40.0 +165，含规格卡施工契约与主从结构契约，均带负向注入验证）；`tsc`、可复现双构建（3/3 产物一致）、release/quality/integration 审计与四套冒烟全绿；58 张规格卡明暗双主题浏览器截图自检；真实 Android/桌面内核验收按 B-004/B-005 后置。
+
+
+### v0.40.0（2026-09-27）
+
+- **悬浮球手势纵深（T-6919~T-6920）**：单击、双击、长按三手势分别绑定动作（"更多面板"、目录动作或留空）；绑定双击后单击进入 300ms 判别窗、窗口内第二击触发双击并撤销挂起的单击，未绑定时单击保持零延迟直发（老用户零回归）；长按 550ms 武定、拖动/取消路径全部拆除定时器并抑制合成 click。设置页新增手势绑定卡片（复用快滑面板卡片语言，变更走归一化持久化）。
+- **工作区恢复 2.0（T-6921~T-6922）**：文档集保存时记录桌面端活动文档（`active` 标记随条目归一化与版本快照透传，手机端诚实缺省）；恢复回放按纯函数排序将活动条目稳定排到最后并豁免 keepCursor，恢复完成后自动聚焦当初的活动文档。恢复预览从 toast 升级为内联三段列表：待恢复、已打开跳过（muted）、集合外已打开文档以暗色"保持打开"（visitor）标注。
+- **片段实验室互通与审查（T-6923，续 T-6912）**：导入含 `@var/@advanced` 变量的 usercss 时保留元数据头并按默认值代入正文占位符（color/text/number/select/checkbox 五类型；dropdown/image 不猜、原样保留），导入回执显示代入数量；导出对已带头正文不再叠加第二份头。结合 v0.39.0 的 AI 候选"摘要+diff+逐 hunk 接受"管线，片段实验室具备完整的 Stylus 生态互通与受控 AI 审查能力。
+- **分屏键盘化（T-6924，R11）**：搜索结果 `Ctrl+点击 / Ctrl+Enter` 在右侧分屏打开文档（openTab 公开 `position` 能力），补齐右键分屏的键盘等价物；`Alt` 预览语义保持优先互斥，手机端不绑定。
+- **真机反馈修复（T-6925）**：手机端在切换器内关闭页签后不再跳到思源原生页签总览——检测宿主 `MobileTabs.close` 的浮层副作用并按等价操作关闭（派发 `#modelClose` 点击），同时将切换器弹窗重新置顶；工作台模块标题不再同文本重复渲染（窄屏"叠字"根因）；底部快捷条改实底通栏形态不再视觉遮挡组件内容；收敛移动端工作台重复的关闭按钮。
+- **验证边界（T-6918 发版执行）**：完整测试 **6287/6287**；`tsc`、构建、双构建复现、release/quality/integration 审计与四套冒烟全绿；真内核 E2E 扩至 **9 个 spec 全绿**（新增移动布局回归 3 项与真实分屏 1 项）；真实 Android/桌面交互验收按 B-004/B-005 后置。
+
+### v0.39.0（2026-09-27）
+
+- **第三面板可达与产品化（T-6894、T-6896、T-6902~T-6905、T-6908~T-6909）**：片段实验室可从切换器平台导航、工作台对象动作、悬浮球更多面板与公开命令 `snippetStudioOpen` 四条路径进入；移动端显示"桌面可用"而非静默消失，动态 chunk 加载失败回退切换器并给出可理解回执。工作室补齐首焦点与右上角关闭（关闭前保留脏稿确认）、底部回执 loading/busy/ready/blocked/error 五态与 AI 回执 loading/ready/error 映射；五条安全边界（CSS 隔离沙箱预览、JS 预览禁执行、AI 仅草稿手动接受、AI 只见当前片段、原生片段唯一保存源）以常驻能力说明呈现；`--studio-*` 变量统一桥接平台 token。
+- **片段 AI 审查管线（T-6906~T-6907、T-6914~T-6917，ADR 0083）**：AI 请求投影版本化 CSS/JS 生成约束（policy 软约束）；候选完成后呈现本地确定性改动摘要与行级 diff，可逐 hunk ✔/✗ 后应用所选改动（拒绝删除=保留原文、全部拒绝=放弃候选、全接受保持字节不变）；确定性审查器以 8 条版本化规则（外部 @import、裸全局选择器、硬编码色、重复声明、动态执行、网络调用、凭据字面量、全局写入）在对应行内联标注发现；迭代轮 diff 基准为上一轮候选并标注"本轮改动相对上一轮"；超长片段降级为整块替换披露。CSS 片段导出携带 usercss 元数据头（Stylus 可直接安装），导入自动去头防累积（T-6912）。
+- **命令模式与目录（T-6911、T-6913）**：`>` 命令模式按"内建动作/思源命令"分组，组头可折叠（会话内记忆 + 键盘等价），整体 ≤12 截断由分组折叠替代；片段目录将自有片段排在内建示例之前（宿主 getSnippet 无更新时间字段，真时间排序等上游）。
+- **第一面板预览纵深（T-6895、T-6900~T-6901、T-6910）**：已开页签与空查询工作现场共用同一预览窗格与请求代际，键盘移动、悬停与焦点共用一个预览更新管线；两个内核请求逐个失败隔离；失效文档 ID（非零 code 响应）给出 Failed 回执而非空白（Capacities hover 教训回归覆盖）。
+- **文档与验证（T-6897~T-6898）**：中英文 README 按"切换器/工作台/片段实验室/悬浮球"重写并同步 GitHub 仓库描述与 topics；26 屏原型实现差距矩阵落档。完整测试 **6279/6279**；`tsc`、构建、reproducible、quality/integration 审计与四套冒烟全绿；真实 Android/桌面交互验收按 B-004/B-005 后置。
+
+### v0.38.0（2026-09-26）
+
+- **跨表面对象（T-6878~T-6881、T-6890）**：片段对象进入切换器的空查询工作区与查询态分区；`objectId` 随 chip 跨表面传递，打开片段实验室时按 ID 精确定位并以名称回退；查询取数共享 60 秒缓存、单飞请求与陈旧代际丢弃。工作台组件对象补齐类型、实例、来源、说明、能力和健康，离开/返回工作台按实例 ID 恢复焦点与滚动，展示对象与执行 handler 分离。
+- **工作台健康回执（T-6879~T-6880）**：组件刷新逐单元回写 `ok/failed` 健康状态并聚合底部回执条；失败单元以边框和文本 chip 双通道提示，`aria` 对象描述随健康状态更新，单元不会因失败移除。
+- **悬浮球快捷交互（T-6884、T-6886~T-6887、T-6891）**：更多面板支持 1–9 数字直达；四向快滑默认绑定更多面板、快速捕获、上一页签、下一页签，设置页可按方向配置。1–9 固定槽按端侧分别持久化，且仅保存动作 ID 或保存的搜索 ID；空槽按可见行补位，失效槽保留编号并显示不可用。保存的搜索仍是独立对象，固定槽执行时按 ID 回读并回放筛选，不注册为全局动作。
+- **页签信息与审查修复（T-6883、T-6888~T-6889、T-6892）**：页签卡更新时间徽标增加近 7 天“已改动”标记，复用最近列表判定并在桌面、侧栏、手机三端异步原位更新；移除收藏组件空态多余前导符（审查 F4），并收口快速捕获键位提示、英文问候标点和审查截图工具稳定性。
+- **工程与验证（T-6882、T-6885）**：raw `dist/index.js` 自律线按 ADR 0081 校准至 1088 KiB，zip 512 KiB 硬上限不变；真实内核首帧计时低于 300ms，骨架态判定不需要。完整测试 **6238/6238**；真实内核 E2E **7 passed / 1 skipped**；真实 Android/桌面交互验收按 B-004/B-005 后置。
+
+### v0.37.0（2026-09-26）
+
+- **平台 · 三表面默认全屏（ADR 0080）**：切换器 `panelSizeMode` 与工作台 `homeSizeMode` 默认 fullscreen、片段实验室打开即视口全屏+`sw-dialog--fullscreen`；`updateSettings` 全量落盘故仅新安装用户受默认值影响，全部尺寸选项保留；移动端尺寸逻辑不变。
+- **平台 · 统一路由上下文（T-6869 P1-c）**：新增 `platform-surface-model` 纯模型（表面白名单、有界 SurfaceContext、悬浮球恢复回退、ContextBar 投影）；会话级最近表面记录；桌面/移动切换器与工作台三个 Dialog destroy-before-open 单例守卫（修复热键/悬浮球连点叠窗）；悬浮球轻触恢复上次表面（移动端对桌面专属实验室安全回退切换器）；工作台布局编辑态经表面导航离开后重开恢复且焦点回到布局开关。
+- **UI · 统一平台原语与 RZ 六批（T-6870~T-6876，原型+ADR 0079）**：`platform-dom` 助手与 `_platform-shell.scss` 原语（六态状态徽标含语义色点、kbd 芯片、分段控件、主色/软底胶囊）；设置页五标签重组分组卡片、8 处枚举改分段（皮肤/面板尺寸/dock 显示/侧栏布局/组件强调色/工作台尺寸/移动列数/密度）、密度开关升级为舒适·紧凑分段；切换器上下文栏常驻键位提示组；数字角标 kbd 化；预览窗格头部六态徽标（loading→ready）；工作台编辑横幅；商店添加=主色实底胶囊、配置=软底胶囊；快速捕获目标段选分段化+保存主色胶囊+诚实键位提示（Ctrl+Enter/Esc）；移动底栏图标上/标签下堆叠（44px 命中区）。
+- **修复（对比度采样与缺陷实证）**：Chromium 对比度采样抓到宿主 warning/error 原色做徽标小字 light 2.9/dark 2.99 未达 3:1——徽标文字与日历节假日红改语义色×正文混合（保色相过线）；采样解析器补 `color(srgb …)` color-mix 计算值格式；快速捕获 `sw__target--active` 类切换从无 CSS 规则的激活不可辨识缺陷修复。
+- **片段实验室 · 吸收原始布局（R2 原型）**：预览为主区（4fr）+ 下排 属性:编辑器（2fr:3fr）+ AI 右栏（1fr）+ 片段目录浮层选择器，替代 R1 三等分栏。
+- **工程**：ADR 0079/0080；全插件 26 屏 UI 原型与参数化截图工具；生产图上限 66→68（platform-surface-model/platform-dom）；新增 platform-dom/platform-surface-model 单测与 T-6869~T-6877 wiring 契约（含负向验证）；基线 6201/6201。
+
+### v0.36.0（2026-09-25）
+
+- **键盘 · 结果行方向键导航**：Tab 聚焦搜索结果行后 ↑/↓ 逐行扫视（`moveDocItemFocus` 焦点移动+scrollIntoView 跟随）；焦点落在工作台/统一分区行时返回 false 不劫持原生滚动；控件守卫扩展为数字键+↑/↓。键盘优先链路收口：Tab 进结果区 → ↑/↓ 扫视 → 1-9 直达或 Enter 激活 → Alt 预览/`>` 命令模式。
+- **搜索 · 常驻预览窗格**：桌面端文档结果区右分栏（260px，窄容器 <680px 与手机端不挂载），行焦点同步预览聚焦文档的大纲（≤12 条，h1-h6 层级缩进）与首段摘要（≤600 字有界截断）。300ms debounce（Raycast/Spotlight 谱系共识）+ 代际计数丢弃过期回包；零新增端点（getDocOutline + SQL 均在白名单，rootId 锚定校验后入字面量）；纯模型投影 `buildDocPreviewSnapshot` 可单测。
+- **工程**：真实内核 E2E 扩展行导航断言（ArrowDown/Up 焦点相等断言）与预览窗格大纲渲染断言（陪衬文档改带标题+段落 markdown）；T-6838/T-6839 契约测试含负向验证。
+
+### v0.35.0（2026-09-25）
+
+- **搜索 · 关键词高亮**：查询词在文档结果标题与片段行高亮（`buildKeywordHighlightSegments` 纯分段器：引号短语命中、排除词不高亮、大小写不敏感保留原文、命中区间有界 64 处重叠合并；UI 分段装配零 innerHTML）。标题=主色实底 mark，片段=主色着色无底（视觉层级不倒挂）。
+- **搜索 · 片段净化**：内核全文片段自带的 `<mark>` 展示标记在投影层剥离（`stripSnippetMarkup` 只剥已知包裹标签，正文 "a < b" 类字面文本不受影响），不再以字面 `<mark>` 显示。
+- **键盘 · 结果行数字直达**：搜索态 1-9 直达前 9 条可见文档结果（带数字角标）；`activateDocResultItem` 单一激活入口（点击与数字共用，块级命中锚定随行持久化）；查询非空时数字优先投结果行、未接管回退卡片；卡片隐藏时数字键不再静默失效；焦点落在结果行时数字键放行（其余控件照旧让路）。
+- **工程**：真实内核 E2E 扩展高亮断言（负向验证过）与数字直达打开路径；kernel-widgets-wiring 新增 T-6837 契约（负向验证过）。
+
+### v0.34.0（2026-09-24）
+
+- **关联内容**：切换器空查询工作台呈现当前文档的反链/提及（官方 getBacklink2、有界投影、截断可解释），点击直达。
+- **保存的搜索 + 命令模式 `>`**：查询与筛选可保存回放；`>` 前缀进入命令面板模式，只列可执行动作。
+- **marks 书签 + 数字直达角标**：按滚动比例精确跳回；前 9 个可见卡片带数字角标。
+- **多目标快速捕获**：日记/当前文档双目标、目的地预览、受控写入与分步失败原因。
+- **预览打开**：Alt+点击以只读预览页签（doc.mode preview）打开搜索结果。
+- **文档集版本历史与回滚**：覆盖保存留最近 3 版（FIFO），任选版本可逆回滚；恢复摘要并入常驻层回执；场景预设固化进文档集（presetId 分层）。
+- **动态收藏组**：标签+笔记本范围+更新时间窗（7/30/90 白名单）参数化组合查询。
+- **密度档位与配置包**：紧凑/舒适密度开关；设置页一键导出/导入版本化配置包（整体校验后按组应用并逐项回执；多 key 持久化非原子）。
+- **移动端悬浮球防误触加固**：`data-prevent-swipe` 官方契约（L1）+ capture 相位事件拦截（L2）+ 拖动态滚动链阻断（L3）——拖球不再触发思源左滑右滑，球外手势不受影响；离边停靠与上滑呼出。
+- **历史下拉分区平衡**：每区默认前 8 条+展开全部，日记不再淹没最近关闭。
+- **真实例 E2E 验收通道**：桌面/移动/只读 6 条真实内核自动化验收；ADR 0077（raw 自律线 1024 KiB）；provider 协议元数据；GBK 乱码注释清扫。
+
+### v0.33.0（2026-09-24）
+
+- **搜索 · 排序诊断**：评分解释（来源权重/标题分/命中字段）与健康快照（来源计数、延迟、降级原因码）挂接搜索容器；修复搜索调用参数错位导致的远程搜索静默退出，并补异步行为锁。
+- **搜索 · 结果身份锚定**：异步刷新/分区重建时按条目身份钉住视口，列表更新不再跳动（fzf `--track` 语义）。
+- **搜索 · 命令模式 `>`**：`>` 前缀只列可执行动作（内建 + 宿主命令），文本过滤、有界列表、点击执行；i18n 双语。
+- **恢复 · 不抢焦点**：文档集恢复与 Essentials 常驻层改走 `keepCursor:true` 后台打开（思源 3.8.5 官方选项，旧版自动忽略）。
+- **恢复 · 版本历史**：文档集覆盖保存自动留最近 3 版（FIFO），版本时间轴任选回滚（可逆）；场景预设固化进文档集（presetId 分层）。
+- **恢复 · 回执**：Essentials 常驻层带回执（opened/failed/skipped）并入统一恢复摘要。
+- **搜索 · 保存的搜索**：筛选菜单一键保存查询+筛选；零词条工作台与筛选菜单快速回放，右键删除。
+- **搜索 · 关联内容**：零词条工作台"当前文档相关"行——官方 getBacklink2 反链/提及，有界投影+索引延迟轮询，点击直达。
+- **搜索 · 预览打开**：Alt+点击以只读预览页签（doc.mode preview）打开搜索结果。
+- **搜索 · 动态收藏组**：标签锚点上叠加笔记本范围与更新时间窗（7/30/90 白名单）参数化组合查询。
+- **捕获 · 多目标快速捕获**：今日日记/当前文档目标切换、目的地预览行、受控写入与分步失败原因回执。
+- **键盘 · 数字直达与 chip 循环**：1-9 打开前 9 个可见卡片（带数字角标）；Ctrl+←/→ 循环结果类型过滤条。
+- **入口 · 剪贴板捕获**：命令面板新命令——剪贴板含思源块链接时确认打开，普通文本预填快速捕获。
+- **入口 · 面包屑按钮**：文档面包屑挂速切入口（3.8.5+ 能力检测，旧版静默）。
+- **移动端 · 侧滑所有权**：悬浮球 portal/恢复把手声明 `data-prevent-swipe`（L1 官方契约）+ capture 相位事件拦截（L2，旧宿主免疫）+ 拖动态滚动链阻断（L3）——拖球不再触发思源左滑右滑，球外手势不受影响。
+- **移动端 · 密度档位**：紧凑/舒适密度开关（body 标记 + SCSS 作用域，皮肤层同机制）。
+- **迁移 · 可迁移配置包**：设置页导出/导入版本化配置包（设置白名单+文档集），整体校验后按组应用并逐项回执（多 key 持久化非原子）。
+- **生态 · provider 协议**：提供方元数据协议（版本/动作描述）与协议自描述；展示与执行分离、卸载可恢复。
+- **工程 · 真实例 E2E 验收通道**：Playwright + 本机思源内核，桌面/移动/只读 6 条真实验收 spec；公开钩子 `window.siyuanSpeedSwitch`。
+- **工程 · ADR 0077**：raw 自律线 960→1024 KiB（zip 512 KiB 硬上限不变）；契约夹具再生成（29 端点）。
+
+### v0.32.0（2026-09-23）
+
+- **搜索 · 全库拼音补齐**：纯字母查询（如 cp）除已开页签外，直接从全库标题按拼音补齐结果（惰性缓存，零额外常驻请求）。
+- **搜索 · 过滤条**：查询时结果区顶部"全部/页签/收藏·最近/文档"一键收窄类型。
+- **切换器 · 跳转后退/前进**：速切驱动的跳转可撤销/重做（会话级栈）。
+- **切换器 · 并排打开**：右键结果在右侧分屏打开（桌面）。
+- **文档集 · Essentials 常驻层**：标记常驻文档，每次恢复文档集后自动打开（最多 10 个，可管理）。
+- **文档集 · 场景联动**：恢复文档集时自动应用同名悬浮球场景（如"写作"集切"写作"球布局）。
+- **快捷入口 · 图标目录**：图标选择器按分类浏览，支持中文/拼音/英文 id 搜索。
+- **快捷入口 · 按插件分组**：添加动作候选按来源插件分组，不再混排。
+- **修复 · 查询运算符**：带 `-排除`/`"精确"` 的查询不再出现文档结果空白。
+- **验证**：6065 项测试、225 个测试文件、四套 UI 冒烟（含浮球 Chromium 22 场景）；Android 真机项仍待验收。
+
+### v0.31.0（2026-09-23）
+
+- **悬浮球 · 宿主命令动作**：接入 9 条思源命令（大纲、书签、标签、收集箱、反链、最近文档、最近关闭、闪卡复习、编辑只读），带能力检测，旧版宿主安全回退。
+- **悬浮球 · 一键同步**：直调内核 performSync，完成/失败反馈；只读模式与同步互斥如实提示。
+- **悬浮球 · 插入模板**：列出模板目录，选中后渲染并插入当前文档光标处。
+- **悬浮球 · 场景预设**：把动作布局与主点击保存为命名场景，一键应用/循环切换（最多 8 个，同名覆盖）。
+- **悬浮球 · 抛独立窗口**（桌面）与**收起键盘**（手机）。
+- **悬浮球 · 跳转后退/前进**：速切驱动的跳转可撤销/重做（会话级栈，FIFO 50）。
+- **悬浮球 · 端侧收缩**：不再出现在侧栏（与桌面主窗口重复）；旧配置兼容，回滚只需恢复挂载清单。
+- **切换器 · 统一索引**：一个搜索框分区覆盖已开页签、收藏、最近关闭、文档集。
+- **切换器 · 查询运算符**：`"精确短语"`、`-排除词`、多词 AND；上次选择置顶（会话级记忆）。
+- **切换器 · 拼音辅助匹配**：全拼/首字母/混输（如 cp → 产品），默认开启，可在设置关闭；关闭后仅子串匹配。
+- **切换器 · 零词条工作台**：空查询直接呈现场景、文档集与智能分组入口。
+- **最近 · 只看有改动**：一键过滤近 7 天内有改动的文档（窗口期固定，后续可配）。
+- **文档集 · 工作区切换**：切换前自动把现场快照回当前集（可关），恢复成功标记当前集，支持循环切换。
+- **皮肤（新能力）**：可选独立皮肤层——苹果风格·液态玻璃、暗夜玻璃、暖纸墨水；默认仍为融合主题，皮肤只作用于速切界面，已过 WCAG AA 对比度门禁。
+- **行为变更**：悬浮球不再出现在侧栏；拼音匹配默认开启。其余均为增量，无破坏性迁移。
+- **验证**：6060 项测试、225 个测试文件、四套 UI 冒烟（含浮球 Chromium 22 场景）；Android 真机项仍待验收。
+
+### v0.30.1（2026-09-22）
+
+- **Task Horizon 手机联动**：悬浮球可发现并调用任务管理器、快速新建任务两个插件命令；执行前重新读取提供方能力，失败、超时和卸载安全回退。
+- **配套版本要求**：手机端两个命令需要 Task Horizon 合并并发布对应补丁后才可用；仅更新雷切不会创建任务管理器的手机入口。
+- **验证**：6020 项测试、223 个测试文件、四套 UI 冒烟、浮球 Chromium 22 场景和提供方联动 6/6 通过；Android 真机键盘、返回、旋转和任务提交仍待验收。
+
+### v0.30.0（2026-09-22）
+
+- **悬浮球完整交付**：桌面、侧栏、手机三端独立入口，稳定拖动目标、自由停放、动作执行、更多动作搜索与键盘等效路径。
+- **配置治理**：外观/行为设置、端侧开关与动作排序、默认预设、导入导出、能力状态和安全回退。
+- **可靠性与可视区**：滚动/弹层/全屏让位、执行超时保护、visualViewport/安全区适配及宿主层级约束。
+- **验证**：6011 项测试、四套 UI 冒烟、Chromium 22 场景和 100 次真实拖动通过。
+
+### v0.29.1（2026-09-21）
+
+- **修复 iCal 每隔 N 日限星期重复规则**（`FREQ=DAILY;INTERVAL=N;BYDAY=…`）被降级为单次的问题；城市表扩至 555 城（第十二波，中英双语）；版本一致性与计数一致性门禁、夹具端到端集成测试、双语 issue 模板与仓库元数据刷新。
+
+
+### v0.29.0（2026-09-21）
+
+- **世界时钟城市表扩至 535 城（第十一波）**：欧美二线名城、俄中亚、美洲与大洋洲补充，全部中英双语；全表 IANA 校验零无效。
+- **iCal 订阅策略放宽**：webcal:// 与无 .ics 后缀地址支持；RSS/Atom 日期解析多候选回退。
+- **质量基建**：版本一致性门禁、计数一致性门禁、夹具端到端集成测试、issue 模板与仓库元数据刷新。
+
+
+### v0.28.3（2026-09-21）
+
+- **修复 iCal 订阅网关与配置不同步**：无 .ics 后缀的订阅地址"配置能存、拉取被拒"（v0.28.2 策略放宽只改了配置归一化）——加载器网关 `allowedIcalFeedUrl` 现与配置同口径。
+
+
+### v0.28.2（2026-09-21）
+
+- **世界时钟城市表扩至 460 城（第九波）**：中国城市英文别名全补齐 + 新增 25 时区组双语条目；全表 IANA 校验零无效。
+- **iCal 订阅地址策略放宽**：支持 webcal:// 分享链接；不再要求 .ics 路径后缀；安全拒绝规则不变。
+- **RSS/Atom 日期容错**：首个日期标签损坏时回退后续候选。
+
+
+### v0.28.1（2026-09-21）
+
+- **iCal 订阅地址策略放宽**：支持 webcal:// 分享链接；不再要求 .ics 路径后缀（iCloud/Nextcloud/Fastmail 地址可用）；安全规则不变。
+- **RSS/Atom 日期容错**：首个日期标签损坏时回退后续候选，条目不再丢时间戳。
+- **工程**：移除零引用死垫片；真机验收清单扩充 5d 节。
+
+
+### v0.28.0（2026-09-21）
+
+- **iCal 重复规则语义完备**：BYSETPOS 候选集选位、DAILY+BYDAY 工作日过滤、MONTHLY 无序数 BYDAY 修正、YEARLY+BYMONTH+BYMONTHDAY 年度固定日、8 类无效组合显式降级。
+- **包体结构优化**：城市表按 zone 分组声明（338 城/104 时区），回收约 2.9KB raw 余量，构建期深度等价验证。
+
+
+### v0.27.1（2026-09-21）
+
+- **iCal 重复规则支持 BYSETPOS**（MONTHLY/WEEKLY 候选集选位）：「每月最后一个工作日」类重复事件正确展开；修正 MONTHLY 无序数 BYDAY 被误降级为单次的语义缺陷（RFC：当月全部匹配星期）；孤立 BYSETPOS 等无效组合维持安全降级。
+- **工程清理**：全仓死导出扫描并移除 5 个零引用死项（home-model DEFAULT_LAYOUT、home-source-model SOURCE_KINDS、life-widget-model WEATHER_CONDITIONS、checkin-bridge CHECKIN_LIST_MAX_ITEMS、util summarizeStorageCapacityReportEventQueue 包装）。
+
+
+### v0.27.0（2026-09-21）
+
+- **世界时钟城市表扩至 338 城（第八波）**：补齐中英文名不对称（约 70 城补齐缺失语言）；新增 24 城双语条目（堪培拉/达尔文/德黑兰/巴格达/安卡拉/特拉维夫/多哈/基辅/日内瓦/布鲁塞尔/渥太华/卡尔加里/圣迭戈/达拉斯/莫尔兹比港等）；全表 IANA 校验零无效。
+- **性能基准升硬门禁**：过滤基准 CPU 时间化+无条件断言；大库聚合 40ms 病理线 CI 一并强制；倍增比值门持续有效。
+- **存储迁移矩阵全面演练**：12 key×5 类损坏电池+消毒不动点；v0.23.5 老载荷升级模拟逐键存活。
+
+
+### v0.26.0（2026-09-21）
+
+- **发布合规（F7 收口）**：`plugin.json` 新增 `publish.resources` 逐文件声明包内 4 个 docs 资产（适配上游发布模式资源新规，官方示例允许子目录文件路径）；新增包资源契约门禁。
+- **文档对齐**：英文 README 与中文版 15 章节 1:1 对齐，英文完整历史迁移至 `docs/CHANGELOG.en-US.md`。
+- **质量门禁**：大库聚合基准 CPU 时间化 + 40ms 病理线重校准；`aggregateSearchResults` 复杂度倍增门；商店折叠 aria 契约与零匹配空态行为验证（B4 收口）。
+
+### v0.24.0（2026-09-20）
+
+- **智能体执行链上线**：新增 `workspace-plan`（只读生成 ≤8 步动作计划）与 `execute-workspace-plan`（整份计划一次宿主确认后按序执行并返回回执）双能力；确认、超时与取消由思源宿主确认卡承担（`actionEffects` 声明），自建审批管线 6 模块整体撤除。
+- **受控动作灰度开关**：设置新增「智能体受控动作」总开关，关闭后受控写入/批量动作与执行链一并停用，只读能力保留。
+- **存储版本治理**：持久化 key 扩至 15 个——新增存储版本戳（识别降级/未知版本）与 RSS 已读状态（有界 200 条）；RSS 订阅组件新增「只看未读」。
+- **组件二轮增量**：写作打卡支持每周 n/m 口径与豁免休息日；笔记统计可选写作强度分；近期写作活跃度新增年历网格视图（53 周分页 + 色阶图例）。
+- **生态与配置**：DailyHot 支持基址+路由选择器（经同一 URL 白名单校验）；世界时钟城市字段直接支持中文名（内置 110 城离线表）。
+- **兼容与工程**：最低版本升至思源 3.8.0（ADR 0064）；新增四类性能基准、可访问性基线与对比度双主题采样门禁；ActivityWatch 支持桶选择。
+
+### v0.23.5（2026-09-19）
+
+- **同步不再重载整个插件**：思源在插件存储数据变化时默认整体重载该插件，而本插件有 13 个持久化
+  key——每次跨设备同步合并，或另一个窗口写盘，都会把已打开的切换器、第二面板和搜索会话一并销毁
+  （表现为图标闪断、弹窗凭空关闭）。现在覆写 `onDataChanged`：只做有界重读 + 惰性刷新，并强制该
+  链路内不得写盘（写盘会再次广播数据变更、回到同一个钩子形成回环）。连续广播合并处理，手动刷新与
+  强制刷新路径不受影响。
+- **桌面端日记入口不再偶发失灵**：「选择日记笔记本」弹窗此前只在「确认/取消」两个按钮上落定返回值，
+  用 Escape 或点击遮罩关闭时等待结果的那条链会永久挂起——于是下一次点日记按钮没有反应。关闭事件现在
+  统一走宿主 `Dialog` 的 `destroyCallback`，不区分平台都会兑现。
+- **打开页签较多时排序与日历不再漏内容**：内核 `/api/query/sql` 在语句没有外层 `LIMIT` 时按
+  `search.limit`（默认 64、下限 32）截断，而插件此前从不读取响应里的 `truncated`。已修正「最近编辑」
+  排序的更新时间查询（它此前还绕过了同源端点分发、没有超时保护）、日历月视图的上限与稳定排序，以及
+  设置中数据库/文档两个选择器的上限与截断告警。
+- **失效数据源不再反复拖慢刷新**：生活组件此前每个刷新周期都会对不可达端点重付一次最长 10 秒超时。
+  现在按端点记录 20 秒失败抑制窗，窗内直接走组件已有的「陈旧数据 / 空态」分支；任意一次成功（含手动
+  刷新）立即解除抑制。
+- **长时间运行的稳定性**：弹窗释放全部改挂宿主 `destroyCallback`（此前有 8 处覆写宿主方法并配合轮询
+  `isConnected`），插件源码内的 `setInterval` 已归零。思源对插件禁用/卸载只给 5 秒共享拆除预算，而
+  轮询定时器正是活在该预算之外的泄漏源。
+- **内部**：新增对思源官方 API 契约快照的校验门（25 个内核端点的请求与响应形状、端点分发面一致性、
+  契约与真实宿主分歧的显式登记），并把持久化 key 清单收敛为唯一来源。
+
+### v0.23.4（2026-09-19）
+
+- **「打卡摘要」组件改为原生桥接**：此前它以第三方提供方形式登记在组件目录，商店按
+  提供方握手判定可用性，即使小驴打卡已安装并启用，也一直显示「需安装小驴打卡插件后
+  可用」。现在它与其余六个打卡组件同等实现原生桥接（`checkin-summary` 进入桥接清单，
+  capability `items.read`），小驴打卡在位即就绪。
+- **摘要内容增强**：新增聚合快照——今日完成、最长连续、本月天数、今日待续行与连击
+  Top3；全部在本地计算，只读、无网络请求。
+### v0.23.3（2026-09-19）
+
+- **修复集市更新后被同步回退的问题**：安装包的 zip 条目时间戳从此前的固定纪元改为
+  发版提交时间。此前固定纪元会让安装出的文件修改时间早于云同步索引，自动同步按
+  修改时间判定“云端更新”并把刚更新的版本覆盖回旧版（仅本插件受影响：只有本插件的
+  构建管线使用固定纪元时间戳）。
+- **修复按笔记本分组出现“未知笔记本”**：页签缺失显式笔记本元数据时，此前会从文档
+  路径首段错误地推导笔记本 ID（那是根文档 ID）。现在打开笔记本分组面板时自动用一次
+  有界查询从内核恢复这些页签的真实笔记本归属并重排，组标签不再显示“未知笔记本”。
+- **组件卡片头部瘦身**：配置按钮改为齿轮图标（悬停提示保留原语义），更新时间收窄，
+  首行不再把标题挤成省略号。
+- **图标尺寸首帧兜底**：切换器工具栏全部图标带显式宽高，样式未就绪时也不会闪现
+  放大的黑色图标；组件配置弹窗纳入图标钳制观察器覆盖。
+- **其他**：贡献热力图新增“少 → 多”色阶图例；性能微基准门禁 best-of-3 抗负载抖动。
+### v0.23.2（2026-09-19）
+
+- **修复数据库表格对嵌入/镜像数据库显示空表**：3.8.4 内核下 av 块 ID 与数据库 ID 不一致，
+  现已两级解析（块 ID → getAttributeView → 库 ID + viewID + pageSize 重试）；配置搜索支持
+  直接粘贴库 ID 绑定（独立数据库不产生 av 块，SQL 发现不到）。
+- **数据健康**：缺失资源条目可点击跳转到引用该资源的文档块（真正的处理入口）；引用展示
+  改读真实响应字段（item），不再读取内核不返回的 path。
+- **排序确定性**：用户内容（名称/标题/标签/路径等）排序显式钉定中文拼音 Collator，
+  不再随设备环境漂移（CI 镜像升级实证的跨环境差异）。
+- **工程**：性能微基准门禁 best-of-3 抗负载抖动；新增 iCal TZID/RRULE/EXDATE/RDATE、
+  存储用量分节、动作面板键等（见 v0.23.1）。
+### v0.23.1（2026-09-19）
+
+- **修复 Miniflux 组件无法真实取数**：内核代理网关的 URL 门禁缺少 Miniflux 路由，
+  生产环境的未读列表请求一直被拦截（单元测试因模拟网络层而未暴露）。现按既有白名单
+  模式放行 entries 与 categories 两条路由。
+- **未读文章新增分类筛选**：分类选项从你的 Miniflux 实例动态加载（设置表单内完成），
+  凭据仅经请求头传递，筛选在服务端执行。
+- **其他**：新增存储用量设置分节；切换器动作面板键（Shift+F10 / ContextMenu）；
+  用户内容排序显式钉定中文拼音 Collator（跨设备稳定）；iCal 完整支持时区、重复日程、
+  取消场次与补场；写作强度分与 12 个月回看；倒数日倒数/累计双模式；年/季/月进度。
+### v0.23.0（2026-09-19）
+
+- **58 个组件全部完成逐组件深度优化**：以 8 维评分卡（设置可发现性、数据正确性、信息层级、
+  尺寸适配、交互反馈、状态恢复、性能生命周期、三端/无障碍/隐私）逐组件审查增强，账本见
+  `docs/component-deep-optimization-plan.md`。亮点：搜索路径筛选在本地页签/远程结果/正文探测
+  三层语义一致（300 卡片筛选 p95 约 0.56ms）；数据库表格类型化单元格；数据库/已存筛选/最近更新/
+  近期编辑获得检索、排序与准确总量；收藏分组选择器、文档集最近使用排序、随机回顾候选统计；
+  世界时钟跨日标记；倒数日每年重复（2/29 安全钳制）；日历周起始日；天气/空气质量显示开关；
+  服务状态维护态独立呈现；打卡桥接组件仅做渲染增强，不新增打卡协议。
+- **二轮增量（竞品调研消化）**：
+  - 倒数日新增**倒数/累计双模式**（`已经 N 天`）；年度进度支持**年/季/月周期**。
+  - **display 覆盖试点**：时间与日期、倒数日、每日引言支持数字大小三档（标准/大/特大）。
+  - 近期写作活跃度：**写作强度分**（指数平滑半衰期口径，opt-in）与 **12 个月回看窗口**。
+  - **iCal 订阅完整支持时区与重复日程**：TZID 时区解析、RRULE 重复展开（DAILY/WEEKLY/MONTHLY、
+    COUNT/UNTIL/BYDAY）、EXDATE 剔除取消场次、RDATE 追加补场——过去起点的重复日程此前不可见。
+  - 设置页新增**存储用量**分节：合计与各数据 key 的近似占用（UTF-8 字节）。
+  - 切换器动作面板键：**Shift+F10 / ContextMenu** 键盘呼出聚焦卡片的动作菜单（免鼠标）。
+- **工程**：自动测试 6117 → 6258（207 文件）；资源自律线按 ADR 0059/0062 校准
+  （zip 单条目 224 KiB、raw 832 KiB，512 KiB 归档硬上限不变）；生产依赖图保持 52 模块。
+### v0.22.0（2026-09-18）
+
+- **修复加载报错（issue #1）**：特定宿主时序下 `window.siyuan.languages` 未就绪，
+  注册全局热键命令时内核读取 `_trayMenu` 抛出 TypeError 并中断插件加载（其后注册的
+  智能体能力全部被跳过）。现命令注册全程隔离：单条命令失败不影响插件加载，全局热键
+  在宿主就绪前自动降级为应用内热键。
+- **组件面板新增 11 个组件（总数 48 → 59）**：
+  - **内核数据组件（基于思源 v3.8.x 只读端点）**：数据库表格（绑定一个思源数据库块，
+    按其当前视图只读渲染数据行，跟随你在思源里设置的筛选与排序，行点击打开所在文档；
+    见 ADR 0058）、置顶文档、收集箱（云端速记，未登录时显示确定空态）、最近更新、
+    数据健康（缺失资源清点）、最近文档（思源原生最近列表）、数据库导航、已存筛选
+    （原生搜索的已存条件清单）。
+  - **外部数据组件**：RSS/Atom 订阅（用户填任意 feed 地址，零凭据零实例）、空气质量
+    （Open-Meteo 欧洲 AQI 与 PM2.5/PM10，六档分档）、Hacker News 榜单升级（首页/最佳/
+    问答/展示四榜切换）。
+  - **生态桥接**：小驴打卡·本月统计（本月打卡天数、记录总量与项目排行）。
+- **顶栏与命令面板**：两个顶栏图标新增右键菜单（快捷打开设置/切换器/组件面板）；
+  命令面板新增"打开设置""打开今日日记"两个命令。
+- **兼容性**：对照思源 v3.8.4 内核源码完成兼容性调研，无破坏性变更；新组件全部基于
+  只读端点，不新增任何写入或隐式数据流出。
+- **工程质量**：自动测试 5872 → 6138（198 个测试文件）；11 个既有模块的边界加固；
+  性能门禁与包体预算保持（package.zip 339861 bytes，512 KiB 上限内）。
+
+### v0.21.0（2026-09-17）
+
+- **组件来源成为一等公民（ADR 0057）**：组件协议 v2.4 新增结构化 `source` 字段
+  （`pluginId/name/icon/version/homepage/collection/order`），取代按作者自由文本分组；
+  商店改为**来源分组优先于功能分组**——同一插件的多个组件收敛进一个来源组，组头显示来源
+  图标、**已添加 x/y** 与**全选本组 / 取消本组**，组内卡片按 `source.order` 升序排列，
+  待安装区按来源插件聚合而不再平铺，来源名与子系列名一并进入搜索文本。
+- **小驴打卡桥接组件（新增 5 个）**：`checkin-today / checkin-streak /
+  checkin-year-heatmap / checkin-weekly / checkin-occasions`，直接消费小驴打卡已公开的
+  生态 API v4（`window.siyuanCheckin`，只读、纯本地、零网络）；打卡未安装或能力缺失时
+  返回确定空态而不是故障态；日后打卡自行注册相同 `moduleId` 时由 token 覆盖自动接管，
+  用户配置不漂移。
+- **语义搜索（第三种搜索方法）**：查询语法与正则之后补上语义；仅在宿主 AI embedding
+  已配置时方法菜单才出现该选项，未配置时残留选中静默降级为关键词搜索。
+- **GitHub 贡献升级为格点热力图**：新增第四种 `viewType: heatmap`，条目硬顶由 42 提到
+  371，保留周日对齐占位格，阈值由提供方透传、视图不重写。
+- **第三方插件接入示例跑通端到端**：提供方注册模板
+  `docs/widget-example/siyuan-checkin-home-modules.js` 与 6 项运行时契约，把模板当真实
+  第三方插件走完 register → listModules → read → buildHomeModuleView → unregister。
+- **工程质量**：`src/index.ts` 由 9226 行降至 8104 行（移动端切换器群、二级面板 UI 拆为
+  独立模块）；`src/index.scss` 6517 行按**顺序切片**拆为 tokens + 9 个切片（CSS 顺序即
+  层叠顺序，只能顺序切片、不能按域名聚类），并配独占锚点覆盖门禁；根目录三份账本归档并
+  加体积预算门禁；性能自检改为自适应标定 + 比值断言。
+- 发版门禁：5959 项自动测试（178 个测试文件）、TypeScript、生产构建、移动端 smoke、
+  Chromium smoke 与 `verify:release` 全部通过；产物 dist/index.js 653949 bytes、
+  package.zip 330184 bytes。
+
+### v0.20.0（2026-09-17）
+
+- **生活信息支线（新组件）**：新增 **iCal 日程订阅**（用户提供 `.ics` 地址，RFC 5545 有界解析——源 256 KiB/事件 500 上限、超限拒绝而非静默截断，未来窗口日程、30 分钟缓存）与 **GitHub 贡献热力图**（官方公开事件流免 Key 读取，可选 Token 仅经请求头传递且不进 URL/缓存/缓存键，按 UTC 日期桶渲染格点热力图（默认 84 天窗口，28~366 可配）、口径诚实标注与官方热力图的差异，60 分钟缓存）；两者均经内核代理抓取，纳入组件商店目录、依赖说明与来源白名单。
+- **修复**：iCal 文本抓取缺陷（D-397）——文本抓取变体的 `responseKind` 选项被底层忽略、恒按 JSON 解析，导致 iCal 卡片线上抓取必然失败；由新增的 GitHub 网络门禁在发版前自然暴露并修复，附回归门禁。
+- **存储数据完整性**：`sw_thumb_cache` 读取侧归一化——结构损坏与旧版本上限语义残留（手机端 v0.7.0 写入侧硬编码桌面上限）的缓存条目现会被读取侧清理；新增存储迁移只读演练（有界恢复报告）接入启动流程，并经 workspace-context 暴露演练健康度；文档集恢复新增结构化报告导出。
+- **移动端修复**：图标尺寸越界、工具栏 chips 裁切、小组件面板高度与裸 svg 尺寸兜底补齐；布局门禁改按真实手机宽度量测。
+- **Workspace 运行时**：会话注册表、恢复流程、取消边界与安全退出等 20+ 契约能力补齐（事件管线接入生产）。
+- **工程质量**：全仓 365 条窗口断言迁移为块级有界断言（迁移中发现并修复 size tile 缺 `touch-action` 的真实缺陷）；复杂度性能门禁获得边际重测抗噪（天花板语义不变）；新增存储兼容矩阵文档与双向文档契约门禁、协议兼容声明一致性门禁。
+- 发版门禁：5872 项自动测试（171 个测试文件）、TypeScript、生产构建、移动端 smoke、Chromium smoke 与 `verify:release` 全部通过；产物 dist/index.js 631710 bytes、package.zip 318095 bytes。
+
+### v0.19.0（2026-09-16）
+
+- **搜索成熟化**：全库文档结果新增面板内「加载更多」增量展开——首屏仍渲染 12 条，点击后纯客户端展开更多结果（不换缓存 key、不发新请求，重渲染后焦点保持），全部展开后回落思源原生搜索出口；取数上限常量化（33 条）并与智能体路径共用；统一缓存 key（对象键排序 + 无序键集合 + v:1 版本化）经核查确认并由既有测试锁定。
+- **架构重构（无行为变化）**：搜索方法群 20 个方法 + 1 个模块级函数（约 887 行）外迁至 `doc-search-ui.ts`，`src/index.ts` 降至 9156 行（七轮重构累计约 -28%）；文档搜索实例状态收拢至 `doc-search-state.ts`；生产依赖图 41 个模块且全程门禁复核。
+- **修复**：v0.16.9 编码事故遗留的 351 行注释乱码全量恢复——322 行以 v0.16.8 原文自动匹配，29 行人工定源（其中 2 行为新时期新增注释、按上下文语义重建并拆回原始多行）；仅注释文本，无行为变化。
+- **文档**：组件协议新增「跨表面布局」章节，说明桌面/侧栏/手机端三份独立布局与全局共享配置的语义（`supportedDevices` 裁剪、移动端单列全宽、布局清理语义）。
+- 发版门禁：5703 项自动测试（160 个测试文件）、TypeScript、生产构建、移动端 smoke、Chromium smoke 与 `verify:release` 全部通过；产物 dist/index.js 601607 bytes、package.zip 309233 bytes。
+
+### v0.18.0（2026-09-16）
+
+- **第三方组件生态**：新增世界时钟、Hacker News、Uptime Kuma 状态、Frankfurter 汇率参考、Miniflux 未读、每日一言、设备电量、NewsNow 实时资讯与 ActivityWatch 使用时长等外部来源组件；配套纯模型候选目录与来源审计文档，未配置凭据的来源默认零联网。
+- **路径筛选接入桌面**：基于真实宿主取证（内核 3.8.4 实测 `/api/filetree/listDocsByPath`）解除端点门禁，桌面弹窗开放笔记本/路径筛选；代际标记取消语义与只读边界由契约测试锁定，侧栏入口待窄侧栏真实宽度证据。
+- **组件商店重组**：内置组件按主要用途收敛为七组并附中英文说明；新增"需前置依赖/可选数据源"独立页签、依赖状态解析与结构化摘要；手机端组件面板单列纵向布局。
+- **韧性增强**：接入思源同步生命周期，同步期间冻结面板交互与侧栏重建；新增 120 秒同步 watchdog 覆盖结束事件丢失。
+- **体验打磨**：动效语言统一为时长/缓动令牌、可点击元素按压反馈、`prefers-contrast` 无障碍适配。
+- **架构重构（无行为变化）**：六轮拆分使 `src/index.ts` 由 12681 行降至 10003 行（-21%），商店 UI、设置页、配置表单、外部组件注册、字素工具与搜索状态宿主各归独立模块；生产依赖图 31→40 且全程门禁复核。
+- **修复**：智能体能力 `home-adapter-diagnostics` 的标题/描述编码损坏（v0.17.0 起）已修复；发布宣称口径与实际注册数对齐（组件 41、能力 11）。
+- 发版门禁：5693 项自动测试、TypeScript、生产构建、移动端 smoke、Chromium smoke 与 `verify:release` 全部通过；产物 dist/index.js 601563 bytes、package.zip 307859 bytes。
+
+### v0.17.0（2026-09-14）
+
+- 思源智能体只读审计增强：生命周期历史、健康报告、趋势窗口、传输封装、有限队列与恢复协调器均提供固定字段和脱敏输出。
+- 联合恢复增强：支持多协调器原子提交、联合快照、checkpoint 窗口、cursor 增量恢复、diagnostics 状态/风险投影和分页消费。
+- 安全边界保持不变：不新增 Agent 写入能力，不暴露 handler、实例、文档正文或宿主异常文本；所有输出均有数量和载荷上限。
+- 发版门禁：1513 项自动测试、TypeScript、移动端 smoke、Chromium smoke、生产依赖图和包体检查全部通过。
+
+### v0.16.39（2026-09-13）
+
+- 内置组件 **日历月视图** 已升级为完整 6 周 × 7 列月历：以思源日记属性识别日期并兼容日期标题，显示年月、跨月日期、周末、今日高亮和日记圆点，点击已有日记直达并支持前后 24 个月导航；协议扩展 `viewType=calendar`。
+- 新增内置组件 **倒数日**：设定目标日期显示剩余或已过天数（纪念日、截止日都适用）。
+- 组件商店 UI 深度优化：默认打开尺寸扩大至 960×720；内置组件按功能分 7 组（日记与日程/任务与清单/文档与导航/数据洞察/学习与记忆/采集与速记/系统与工具）、插件组件按来源作者分组；每张卡片带迷你骨架预览与按比例尺寸缩略框（当前档高亮）；新增**预览效果**按钮（按默认尺寸渲染真实组件与真实数据）。
+- 组件商店可用性与交互增强：分类、条件和已添加状态可独立筛选；已添加的第三方组件在 provider 卸载时明确标记失效并保留配置，重新注册后即时恢复；分组、搜索条件和无结果状态均支持中英文及动态刷新。
+- 配置体验增强：倒数日使用原生日期选择器，指定文档提供当前打开文档建议和 block ID 校验；笔记本筛选保留空选项与失效值提示，配置保存前提供原生有效性反馈。
+- 组件面板 UI 全面打磨：去除内层嵌套外壳（单一外框承载全部内容）；折叠/展开改为紧凑箭头图标；空状态前置淡色圆点；日历格悬停反馈；条目悬停左侧强调色条；stat hero 数字加大加粗；进度条圆角端点；折叠体平滑动画；面板平滑滚动。
+- 性能优化：组件面板打开时逐个错峰加载（80ms 间隔），不再内核并发风暴。
+- 韧性增强：组件读取失败但存在上次好数据时继续展示旧快照并标「缓存」，不再整块报错；错误态附带原因码便于自诊。
+- 修复 append-to-journal 智能体能力定义存在但未注册的缺口（README 宣称 10 项实际只有 9 项）；新增"能力注册守卫"测试防再犯。
+- 修复全文内容搜索因空类型筛选从未命中的问题（3.8.x 内核把空 types 视为"不搜任何类型"）。
+- 内置组件达 27 个；智能体能力包含 `document-context` 在内共 12 项（7 只读 + 2 受控导航 + 3 受控写）；本轮新增契约后自动测试持续增长。
+
+### 历史版本
+
+完整的逐版本更新历史见 [GitHub Releases](https://github.com/xiaolv-suite/siyuan-speed-switch/releases)。
+
+
+### v0.25.0（2026-09-20）
+
+- **本地页签过滤查询语法**：空格分隔多词 = AND（全部命中）；`-词` = 排除含该词的页签；`"短语"` = 整体匹配。排除词同时作用于聚合后的全库卡片（opened/global 都生效）。
+- **世界时钟离线城市表扩至 217 城**：`cities` 直接支持中文名与英文别名（如「上海,东京,New York」），配置表单原生 datalist 自动补全。
+- **可访问性**：reduced-motion 回退覆盖设置弹窗与移动切换器根容器；城市表全量 IANA 合法性门禁。

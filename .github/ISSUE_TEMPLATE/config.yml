@@ -1,0 +1,20 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 常见问题与自助排障 / FAQ & Troubleshooting
+    url: https://github.com/xiaolv-suite/siyuan-speed-switch/blob/main/docs/faq-and-troubleshooting.md
+    about: 遇到打不开、搜不到、组件不可用或未保存时先看这里 / Read FAQ first
+  - name: 使用说明（上手与功能指南）
+    url: https://github.com/xiaolv-suite/siyuan-speed-switch#readme
+    about: 快速上手、设置说明、常见问题与查询语法
+  - name: 功能需求 / Feature request
+    url: https://github.com/xiaolv-suite/siyuan-speed-switch/issues/new?template=feature_request.yml
+    about: 想要新功能或改进时点这里
+  - name: 发布与版本 / Releases
+    url: https://github.com/xiaolv-suite/siyuan-speed-switch/releases
+    about: 先确认当前稳定版、下载包和版本变更
+  - name: 支持范围 / Support matrix
+    url: https://github.com/xiaolv-suite/siyuan-speed-switch/blob/dev/thispc-1002/README.md#环境要求与兼容边界
+    about: 先查看当前公开 README 中的桌面、侧栏、移动端和宿主版本边界；完整矩阵同步后再切换到矩阵文件
+  - name: 安全问题 / Security
+    url: https://github.com/xiaolv-suite/siyuan-speed-switch/security
+    about: 查看私密漏洞报告能力；不要在公开 issue 中粘贴 Token、正文或敏感路径
