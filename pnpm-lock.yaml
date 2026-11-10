@@ -198,8 +198,8 @@ importers:
         specifier: ^1.105.0
         version: 1.105.0
       sass-loader:
-        specifier: ^17.0.0
-        version: 17.0.1(sass@1.105.0)(webpack@5.111.1)
+        specifier: ^17.1.0
+        version: 17.1.0(sass@1.105.0)(webpack@5.111.1)
       siyuan:
         specifier: 1.2.9
         version: 1.2.9
@@ -1096,8 +1096,8 @@ packages:
     engines: {node: '>= 0.4'}
     hasBin: true
 
-  sass-loader@17.0.1:
-    resolution: {integrity: sha512-pgJMwCuLjVTSIWsv/2luVRXKlCeaViUGcgSe8dx95zMG4hUwqIMFmjbhq29ypFLflJU0GyiJZeLM9iI1n3KYAA==}
+  sass-loader@17.1.0:
+    resolution: {integrity: sha512-EZ/u/bLkAErTKvIq/f81Bz6tgL/5Brt8hWOABdTsVdO+nX0PWx2rQhR6fyxVME+MhnQrrwecMDlm2G1y07hhpQ==}
     engines: {node: '>= 22.11.0'}
     peerDependencies:
       '@rspack/core': 0.x || ^1.0.0 || ^2.0.0-0
@@ -2079,7 +2079,7 @@ snapshots:
       path-parse: 1.0.7
       supports-preserve-symlinks-flag: 1.0.0
 
-  sass-loader@17.0.1(sass@1.105.0)(webpack@5.111.1):
+  sass-loader@17.1.0(sass@1.105.0)(webpack@5.111.1):
     optionalDependencies:
       sass: 1.105.0
       webpack: 5.111.1(esbuild@0.28.2)(postcss@8.5.26)(webpack-cli@7.2.3)
