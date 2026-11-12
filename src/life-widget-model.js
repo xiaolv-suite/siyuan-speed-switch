@@ -1,0 +1,1263 @@
+"use strict";
+
+// 单向依赖网络模块仅取 ECB 货币白名单常量（network 模块无副作用、无反向依赖）。
+const {rssItemKey} = require("./rss-model");
+const {FRANKFURTER_CURRENCIES} = require("./life-widget-network.js");
+
+const TEMPERATURE_UNITS = Object.freeze(["°C", "°F"]);
+const BANGUMI_DAY_RANGES = Object.freeze(["今天", "明天", "本周"]);
+const EXTERNAL_FEED_PROVIDERS = Object.freeze(["dailyhot", "newsnow"]);
+const DAILYHOT_ROUTES = Object.freeze(["weibo", "zhihu", "bilibili", "baidu", "douyin", "douban-movie", "ithome", "36kr", "sspai", "v2ex"]);
+const ACTIVITYWATCH_DEFAULT_ENDPOINT = "http://127.0.0.1:5600";
+
+function boundedText(value, max = 128) {
+    return typeof value === "string"
+        ? value.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max)
+        : "";
+}
+
+function isValidIsoDate(value) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) return false;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    const daysByMonth = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    return month >= 1 && month <= 12 && day >= 1 && day <= daysByMonth[month - 1];
+}
+
+function normalizeWeatherConfig(value) {
+    const source = value && typeof value === "object" ? value : {};
+    const city = boundedText(source.city, 64);
+    const temperatureUnit = TEMPERATURE_UNITS.includes(source.temperatureUnit) ? source.temperatureUnit : "°C";
+    const requestedDays = Math.trunc(Number(source.forecastDays));
+    const forecastDays = Number.isFinite(requestedDays) ? Math.min(5, Math.max(2, requestedDays)) : 4;
+    return {
+        city,
+        temperatureUnit,
+        forecastDays,
+        showApparent: source.showApparent !== "否" && source.showApparent !== false,
+        showWind: source.showWind === "是" || source.showWind === true,
+    };
+}
+
+function normalizeWeatherLocale(value) {
+    const locale = boundedText(value, 32).replace(/_/g, "-");
+    return /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(locale) ? locale : "zh-CN";
+}
+
+function buildWeatherGeocodingUrl(config, locale = "zh-CN") {
+    const normalized = normalizeWeatherConfig(config);
+    if (normalized.city.length < 2) return "";
+    const language = normalizeWeatherLocale(locale).split("-")[0].toLowerCase();
+    return `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(normalized.city)}&count=1&language=${encodeURIComponent(language)}&format=json`;
+}
+
+function normalizeWeatherLocation(payload) {
+    const source = payload && typeof payload === "object" && Array.isArray(payload.results) ? payload.results[0] : null;
+    if (!source || typeof source !== "object") return null;
+    const latitude = Number(source.latitude);
+    const longitude = Number(source.longitude);
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90
+        || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) return null;
+    const parts = [source.name, source.admin1, source.country].map((item) => boundedText(item, 48)).filter(Boolean);
+    const label = [...new Set(parts)].join(" · ").slice(0, 96);
+    return {latitude, longitude, label: label || `${latitude.toFixed(2)}, ${longitude.toFixed(2)}`};
+}
+
+function buildWeatherForecastUrl(location, config) {
+    const latitude = Number(location?.latitude);
+    const longitude = Number(location?.longitude);
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90
+        || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) return "";
+    const normalized = normalizeWeatherConfig(config);
+    const unit = normalized.temperatureUnit === "°F" ? "&temperature_unit=fahrenheit" : "";
+    return "https://api.open-meteo.com/v1/forecast"
+        + `?latitude=${latitude.toFixed(4)}&longitude=${longitude.toFixed(4)}`
+        + "&current=temperature_2m,apparent_temperature,is_day,weather_code,wind_speed_10m"
+        + "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
+        + `&timezone=auto&forecast_days=${normalized.forecastDays}${unit}`;
+}
+
+function weatherCondition(code) {
+    const value = Math.trunc(Number(code));
+    if (value === 0) return "clear";
+    if (value >= 1 && value <= 3) return "cloudy";
+    if (value === 45 || value === 48) return "fog";
+    if ((value >= 51 && value <= 67) || (value >= 80 && value <= 82)) return "rain";
+    if ((value >= 71 && value <= 77) || value === 85 || value === 86) return "snow";
+    if (value >= 95) return "storm";
+    return "cloudy";
+}
+
+function weatherIcon(condition, isDay = true) {
+    if (condition === "clear") return isDay ? "☀️" : "🌙";
+    if (condition === "fog") return "🌫️";
+    if (condition === "rain") return "🌧️";
+    if (condition === "snow") return "🌨️";
+    if (condition === "storm") return "⛈️";
+    return isDay ? "⛅" : "☁️";
+}
+
+function finiteNumber(value, min, max, fallback = 0) {
+    if (value === null || value === undefined || (typeof value === "string" && value.trim() === "")) return fallback;
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.min(max, Math.max(min, number)) : fallback;
+}
+
+function normalizeWeatherPayload(payload, maxDays = 5) {
+    const source = payload && typeof payload === "object" ? payload : {};
+    const current = source.current && typeof source.current === "object" ? source.current : {};
+    const daily = source.daily && typeof source.daily === "object" ? source.daily : {};
+    const times = Array.isArray(daily.time) ? daily.time : [];
+    const limit = Math.min(5, Math.max(1, Math.trunc(Number(maxDays)) || 5), times.length);
+    const days = [];
+    for (let index = 0; index < limit; index += 1) {
+        const date = boundedText(times[index], 10);
+        if (!isValidIsoDate(date)) continue;
+        days.push({
+            date,
+            code: Math.trunc(finiteNumber(daily.weather_code?.[index], 0, 99, 3)),
+            high: finiteNumber(daily.temperature_2m_max?.[index], -100, 100, null),
+            low: finiteNumber(daily.temperature_2m_min?.[index], -100, 100, null),
+            precipitation: finiteNumber(daily.precipitation_probability_max?.[index], 0, 100, null),
+        });
+    }
+    const hasCurrentTemperature = current.temperature_2m !== null && current.temperature_2m !== undefined
+        && !(typeof current.temperature_2m === "string" && current.temperature_2m.trim() === "")
+        && Number.isFinite(Number(current.temperature_2m));
+    if (days.length === 0 || !hasCurrentTemperature) return null;
+    return {
+        temperature: finiteNumber(current.temperature_2m, -100, 100),
+        apparent: finiteNumber(current.apparent_temperature, -100, 100, finiteNumber(current.temperature_2m, -100, 100)),
+        wind: finiteNumber(current.wind_speed_10m, 0, 500, null),
+        code: Math.trunc(finiteNumber(current.weather_code, 0, 99, 3)),
+        isDay: Number(current.is_day) !== 0,
+        days,
+    };
+}
+
+function formatWeekday(isoDate, locale, todayLabel, referenceTime = Date.now()) {
+    const date = new Date(`${isoDate}T12:00:00`);
+    if (!Number.isFinite(date.getTime())) return isoDate;
+    const now = new Date(Number.isFinite(referenceTime) ? referenceTime : Date.now());
+    if (date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate()) return todayLabel;
+    try {
+        return new Intl.DateTimeFormat(normalizeWeatherLocale(locale), {weekday: "short"}).format(date);
+    } catch (_) {
+        return isoDate.slice(5);
+    }
+}
+
+function buildWeatherSnapshot(location, payload, config, labels = {}, now = Date.now()) {
+    const normalizedConfig = normalizeWeatherConfig(config);
+    const weather = normalizeWeatherPayload(payload, normalizedConfig.forecastDays);
+    if (!location || !weather) return null;
+    const names = {
+        clear: boundedText(labels.clear, 24) || "晴",
+        cloudy: boundedText(labels.cloudy, 24) || "多云",
+        fog: boundedText(labels.fog, 24) || "雾",
+        rain: boundedText(labels.rain, 24) || "雨",
+        snow: boundedText(labels.snow, 24) || "雪",
+        storm: boundedText(labels.storm, 24) || "雷暴",
+    };
+    const currentCondition = weatherCondition(weather.code);
+    const degree = normalizedConfig.temperatureUnit;
+    // T-6438：体感/风速为可关闭的辅助指标；默认输出与旧版逐字节一致（体感开、风关）
+    const statDetails = [];
+    if (normalizedConfig.showApparent) {
+        if (weather.apparent !== null) statDetails.push(`${(boundedText(labels.feelsLike, 16) || "体感")} ${Math.round(weather.apparent)}°`);
+    }
+    if (normalizedConfig.showWind) {
+        if (weather.wind !== null) statDetails.push(`${(boundedText(labels.wind, 16) || "风")} ${Math.round(weather.wind)} km/h`);
+    }
+    const items = weather.days.map((day) => {
+        const condition = weatherCondition(day.code);
+        const weekday = formatWeekday(day.date, labels.locale, boundedText(labels.today, 16) || "今天", now);
+        return {
+            label: `${weekday} ${weatherIcon(condition, true)} ${day.low === null ? "—" : `${Math.round(day.low)}°`} / ${day.high === null ? "—" : `${Math.round(day.high)}°`}`,
+            value: "",
+            secondary: `${names[condition]}${day.precipitation === null ? "" : ` · ${(boundedText(labels.rainChance, 16) || "降水")} ${day.precipitation}%`}`,
+        };
+    });
+    items.push({label: "Open-Meteo · CC BY 4.0", value: "", href: "https://open-meteo.com/"});
+    return {
+        title: boundedText(location.label, 96),
+        stat: {
+            value: `${Math.round(weather.temperature)}°`,
+            label: `${weatherIcon(currentCondition, weather.isDay)} ${names[currentCondition]}${statDetails.length ? ` · ${statDetails.join(" · ")}` : ""}`,
+        },
+        items,
+        updatedAt: Number.isFinite(now) ? now : Date.now(),
+        unit: degree,
+    };
+}
+
+function normalizeHolidayPayload(payload, expectedYear) {
+    const year = Math.trunc(Number(payload?.year));
+    if (!Number.isFinite(year) || year !== Math.trunc(Number(expectedYear)) || !Array.isArray(payload?.days)) return [];
+    const seen = new Set();
+    return payload.days.slice(0, 96).reduce((items, day) => {
+        const date = boundedText(day?.date, 10);
+        const name = boundedText(day?.name, 32);
+        if (!isValidIsoDate(date) || !name || typeof day?.isOffDay !== "boolean" || seen.has(date)) return items;
+        seen.add(date);
+        items.push({date, name, isOffDay: day.isOffDay});
+        return items;
+    }, []);
+}
+
+function mergeHolidayPayloads(entries) {
+    const merged = new Map();
+    (Array.isArray(entries) ? entries : []).forEach((entry) => {
+        const year = Math.trunc(Number(entry?.year));
+        normalizeHolidayPayload(entry, year).forEach((day) => merged.set(day.date, day));
+    });
+    return merged;
+}
+
+function holidayPresentation(entry, labels = {}) {
+    if (!entry || typeof entry !== "object") return null;
+    const name = boundedText(entry.name, 24);
+    if (!name || typeof entry.isOffDay !== "boolean") return null;
+    return {
+        kind: entry.isOffDay ? "off" : "work",
+        label: `${name}${entry.isOffDay ? "" : ` · ${boundedText(labels.work, 8) || "班"}`}`.slice(0, 32),
+    };
+}
+
+function normalizeBangumiConfig(value) {
+    const source = value && typeof value === "object" ? value : {};
+    const dayRange = BANGUMI_DAY_RANGES.includes(source.dayRange) ? source.dayRange : "今天";
+    const requestedLimit = Math.trunc(Number(source.limit));
+    const limit = Number.isFinite(requestedLimit) ? Math.min(12, Math.max(2, requestedLimit)) : 6;
+    return {
+        dayRange,
+        limit,
+        showCovers: source.showCovers !== "否" && source.showCovers !== false,
+        showDates: source.showDates === "是" || source.showDates === true,
+        showScore: source.showScore !== "否" && source.showScore !== false,
+    };
+}
+
+function bangumiDateLabel(refDate, weekday, today, index, dayRange, dayNames) {
+    const delta = dayRange === "本周" ? index : (weekday - today + 7) % 7;
+    const stamp = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate() + delta);
+    const date = `${String(stamp.getMonth() + 1).padStart(2, "0")}/${String(stamp.getDate()).padStart(2, "0")}`;
+    return `${dayNames[weekday - 1]} ${date}`;
+}
+
+function bangumiWeekdayId(value = Date.now()) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (!Number.isFinite(date.getTime())) return 1;
+    return date.getDay() === 0 ? 7 : date.getDay();
+}
+
+function normalizeBangumiCover(value) {
+    const raw = boundedText(value, 512);
+    if (!raw) return "";
+    try {
+        const url = new URL(raw);
+        if (url.hostname !== "lain.bgm.tv" || !url.pathname.startsWith("/pic/cover/")
+            || (url.protocol !== "https:" && url.protocol !== "http:") || url.username || url.password || url.hash) return "";
+        // 官方日历当前仍返回 http 图片地址；固定官方主机后升级为 HTTPS，避免
+        // WebView 混合内容阻断，同时不放宽到任意外部图片地址。
+        url.protocol = "https:";
+        return url.href;
+    } catch (_) {
+        return "";
+    }
+}
+
+function normalizeBangumiCalendar(payload) {
+    if (!Array.isArray(payload)) return [];
+    const seenDays = new Set();
+    return payload.slice(0, 7).reduce((days, rawDay) => {
+        const weekday = Math.trunc(Number(rawDay?.weekday?.id));
+        if (weekday < 1 || weekday > 7 || seenDays.has(weekday) || !Array.isArray(rawDay?.items)) return days;
+        seenDays.add(weekday);
+        const seenSubjects = new Set();
+        const items = rawDay.items.slice(0, 48).reduce((subjects, rawSubject) => {
+            const id = Math.trunc(Number(rawSubject?.id));
+            const title = boundedText(rawSubject?.name_cn, 96) || boundedText(rawSubject?.name, 96);
+            if (!Number.isSafeInteger(id) || id <= 0 || !title || seenSubjects.has(id)) return subjects;
+            seenSubjects.add(id);
+            const score = Number(rawSubject?.rating?.score);
+            const rank = Math.trunc(Number(rawSubject?.rank));
+            subjects.push({
+                id,
+                title,
+                originalTitle: boundedText(rawSubject?.name, 96),
+                image: normalizeBangumiCover(rawSubject?.images?.large || rawSubject?.images?.common || rawSubject?.images?.medium),
+                score: Number.isFinite(score) && score >= 0 && score <= 10 ? Math.round(score * 10) / 10 : null,
+                rank: Number.isFinite(rank) && rank > 0 ? Math.min(999999, rank) : null,
+            });
+            return subjects;
+        }, []);
+        days.push({weekday, label: boundedText(rawDay?.weekday?.cn, 16), items});
+        return days;
+    }, []).sort((a, b) => a.weekday - b.weekday);
+}
+
+function buildBangumiSnapshot(payload, config, labels = {}, now = Date.now()) {
+    const calendar = normalizeBangumiCalendar(payload);
+    if (calendar.length === 0) return null;
+    const normalized = normalizeBangumiConfig(config);
+    const today = bangumiWeekdayId(now);
+    const tomorrow = today === 7 ? 1 : today + 1;
+    const requestedDays = normalized.dayRange === "明天"
+        ? [tomorrow]
+        : normalized.dayRange === "本周"
+            ? Array.from({length: 7}, (_, index) => ((today - 1 + index) % 7) + 1)
+            : [today];
+    const byDay = new Map(calendar.map((day) => [day.weekday, day]));
+    const dayNames = Array.isArray(labels.weekdays) && labels.weekdays.length >= 7
+        ? labels.weekdays.map((item) => boundedText(item, 16))
+        : ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+    const refTime = now instanceof Date && Number.isFinite(now.getTime()) ? now : new Date(Number.isFinite(now) ? now : Date.now());
+    const selected = [];
+    requestedDays.forEach((weekday, index) => {
+        const day = byDay.get(weekday);
+        day?.items.forEach((subject) => {
+            if (selected.length >= normalized.limit) return;
+            const score = normalized.showScore && Number.isFinite(subject.score) && subject.score > 0 ? `★ ${subject.score.toFixed(1)}` : "";
+            const dayLabel = normalized.showDates
+                ? bangumiDateLabel(refTime, weekday, today, index, normalized.dayRange, dayNames)
+                : normalized.dayRange === "本周" ? dayNames[weekday - 1] : "";
+            selected.push({
+                label: subject.title,
+                value: "",
+                secondary: [dayLabel, score].filter(Boolean).join(" · "),
+                href: `https://bgm.tv/subject/${subject.id}`,
+                ...(normalized.showCovers && subject.image ? {image: subject.image} : {}),
+            });
+        });
+    });
+    const rangeLabel = normalized.dayRange === "明天"
+        ? (boundedText(labels.tomorrow, 24) || "明天")
+        : normalized.dayRange === "本周"
+            ? (boundedText(labels.week, 24) || "本周")
+            : (boundedText(labels.today, 24) || "今天");
+    selected.push({label: boundedText(labels.source, 48) || "数据来源：Bangumi", value: "", href: "https://bgm.tv/calendar"});
+    return {
+        title: `${rangeLabel} · ${Math.max(0, selected.length - 1)} ${boundedText(labels.entries, 16) || "部"}`,
+        items: selected,
+        updatedAt: Number.isFinite(Number(now)) ? Number(now) : Date.now(),
+    };
+}
+
+function normalizeFeedConfig(value) {
+    const source = value && typeof value === "object" ? value : {};
+    const requestedLimit = Math.trunc(Number(source.limit));
+    return {
+        endpoint: boundedText(source.endpoint, 512),
+        // T-6686 基址+路由选择器：apiBase 非空且 route 命中白名单时按 `基址/路由`
+        // 组合接口地址（覆盖 endpoint 字段）；路由不在白名单一律视为未配置。
+        apiBase: boundedText(source.apiBase, 256),
+        route: DAILYHOT_ROUTES.includes(source.route) ? source.route : "",
+        limit: Number.isFinite(requestedLimit) ? Math.min(12, Math.max(3, requestedLimit)) : 8,
+        showHot: source.showHot !== "否" && source.showHot !== false,
+        // T-6442：时间与排名均为可关闭的显示项；默认输出与旧版一致（时间在有数据时出现，排名保留）
+        showTime: source.showTime !== "否" && source.showTime !== false,
+        showRank: source.showRank !== "否" && source.showRank !== false,
+    };
+}
+
+// 条目时间统一本地时区短戳；无可靠发布时间（<=0 或不可解析）整条省略，不伪造时间
+function formatFeedStamp(timestamp) {
+    const value = Number(timestamp);
+    if (!Number.isFinite(value) || value <= 0) return "";
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return "";
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function isLocalFeedHost(hostname) {
+    const host = String(hostname || "").toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1";
+}
+
+function normalizeConfiguredFeedUrl(value, provider) {
+    const kind = EXTERNAL_FEED_PROVIDERS.includes(provider) ? provider : "";
+    const raw = boundedText(value, 512);
+    if (!kind || !raw) return "";
+    try {
+        const url = new URL(raw);
+        if ((url.protocol !== "https:" && !(url.protocol === "http:" && isLocalFeedHost(url.hostname)))
+            || url.username || url.password || url.hash) return "";
+        if (kind === "dailyhot") {
+            const match = url.pathname.match(/^\/(?:api\/)?([a-z0-9-]{2,32})\/?$/);
+            if (!match || !DAILYHOT_ROUTES.includes(match[1]) || url.search) return "";
+        } else {
+            if (url.pathname.replace(/\/$/, "") !== "/api/s") return "";
+            const entries = [...url.searchParams.entries()];
+            if (entries.length !== 1 || entries[0][0] !== "id" || !/^[a-z0-9-]{2,48}$/.test(entries[0][1])) return "";
+        }
+        return url.href;
+    } catch (_) {
+        return "";
+    }
+}
+
+function normalizeExternalItemHref(value) {
+    const raw = boundedText(value, 512);
+    if (!raw) return "";
+    try {
+        const url = new URL(raw);
+        return ["https:", "http:"].includes(url.protocol) && !url.username && !url.password ? url.href : "";
+    } catch (_) {
+        return "";
+    }
+}
+
+function normalizeFeedTimestamp(value, fallback = 0) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && numeric > 0) return numeric < 100000000000 ? numeric * 1000 : numeric;
+    const parsed = typeof value === "string" ? Date.parse(value) : NaN;
+    return Number.isFinite(parsed) ? parsed : (Number.isFinite(Number(fallback)) ? Number(fallback) : 0);
+}
+
+function normalizeExternalFeedPayload(payload, provider, limit = 8) {
+    if (!EXTERNAL_FEED_PROVIDERS.includes(provider) || !payload || typeof payload !== "object") return null;
+    const requested = Math.min(12, Math.max(3, Math.trunc(Number(limit)) || 8));
+    const rawItems = Array.isArray(payload.data) ? payload.data : (Array.isArray(payload.items) ? payload.items : []);
+    const seen = new Set();
+    // T-6971 批次⑥规格：同标题跨源去重（同一事件多源报道只保留首条）；
+    // `title:` 前缀避免标题与 URL/ID 键空间互撞。
+    const items = rawItems.slice(0, 48).reduce((result, raw, index) => {
+        const title = boundedText(raw?.title || raw?.name, 160);
+        const href = normalizeExternalItemHref(raw?.url || raw?.mobileUrl || raw?.link);
+        const key = href || boundedText(raw?.id, 96) || title;
+        if (!title || !key || seen.has(key) || seen.has(`title:${title}`) || result.length >= requested) return result;
+        seen.add(key);
+        seen.add(`title:${title}`);
+        const hot = typeof raw?.hot === "string" || Number.isFinite(Number(raw?.hot)) ? boundedText(String(raw.hot), 32) : "";
+        const publishedAt = normalizeFeedTimestamp(raw?.pubDate || raw?.timestamp || raw?.date, 0);
+        // T-6971 批次⑥规格：排名按过滤后位置连续（不跳号）；上游原始名次经去重后
+        // 会呈现 1/3/7 的断裂观感，HN 构建器早已采用同口径。
+        result.push({title, href, hot, publishedAt, rank: result.length + 1});
+        return result;
+    }, []);
+    const updatedAt = normalizeFeedTimestamp(payload.updateTime || payload.updatedTime, 0);
+    return {
+        title: boundedText(payload.title || payload.name || payload.id, 64),
+        items,
+        updatedAt,
+        upstreamCached: payload.fromCache === true || payload.from === "cache" || payload.status === "cache",
+    };
+}
+
+// T-6971 批次⑥列表流家族规格：条目上限首屏 ≤5，L 档 ≤8（来源行不计入，恒保留）。
+// 尺寸感知接口（协议 v2.3）传入当前型号；配置 limit 是用户意愿上限，档位 cap 是版面硬上界。
+const LISTFLOW_TIER_ITEM_CAPS = {large: 8};
+const LISTFLOW_DEFAULT_ITEM_CAP = 5;
+
+function capListflowRows(items, size) {
+    if (!Array.isArray(items) || items.length === 0) return Array.isArray(items) ? items.slice() : [];
+    const rows = items.slice();
+    const sourceRow = rows.length >= 2 ? rows.pop() : null;
+    const cap = LISTFLOW_TIER_ITEM_CAPS[String(size || "")] || LISTFLOW_DEFAULT_ITEM_CAP;
+    return [...rows.slice(0, cap), ...(sourceRow ? [sourceRow] : [])];
+}
+
+function buildExternalFeedSnapshot(envelope, config, provider, labels = {}) {
+    const normalizedConfig = normalizeFeedConfig(config);
+    const feed = normalizeExternalFeedPayload(envelope?.payload, provider, normalizedConfig.limit);
+    if (!feed) return null;
+    const sourceName = provider === "newsnow" ? "NewsNow" : "DailyHotApi";
+    const health = ["fresh", "cached", "stale"].includes(envelope?.status) ? envelope.status : "fresh";
+    const items = feed.items.map((item) => {
+        const details = [];
+        const stamp = normalizedConfig.showTime ? formatFeedStamp(item.publishedAt) : "";
+        if (stamp) details.push(stamp);
+        if (normalizedConfig.showHot && item.hot) details.push(`${boundedText(labels.hot, 16) || "热度"} ${item.hot}`);
+        return {
+            label: item.title,
+            value: "",
+            href: item.href,
+            rank: normalizedConfig.showRank ? item.rank : undefined,
+            secondary: details.join(" · "),
+        };
+    });
+    items.push({
+        label: `${boundedText(labels.source, 32) || "数据来源"}：${sourceName}`,
+        value: "",
+        href: provider === "newsnow" ? "https://github.com/ourongxing/newsnow" : "https://github.com/imsyy/DailyHotApi",
+    });
+    return {
+        title: feed.title || sourceName,
+        items,
+        emptyHint: items.length === 1 ? (boundedText(labels.empty, 96) || "当前来源暂无内容") : "",
+        updatedAt: feed.updatedAt || normalizeFeedTimestamp(envelope?.fetchedAt, Date.now()),
+        sourceHealth: health === "fresh" && feed.upstreamCached ? "cached" : health,
+    };
+}
+
+// iCal 订阅快照：解析 ics 文本 → 未来窗口内的日程条目（有界）。
+const {parseIcsEvents, upcomingIcalEvents, normalizeIcalSubscriptionConfig} = require("./ical-model.js");
+const {normalizeGithubContribConfig, parseGithubEvents, buildContributionGrid, githubUtcDateKeyFromMs} = require("./github-model.js");
+
+// 热力图格点上限：窗口最长 366 天 → 至多 53 周 × 7 = 371 格（有界，防止条目无限增长）。
+const GITHUB_GRID_MAX_CELLS = 371;
+
+function buildIcalSnapshot(icsText, config, labels = {}, now = Date.now(), status = "fresh") {
+    const normalized = normalizeIcalSubscriptionConfig(config);
+    const parsed = parseIcsEvents(icsText);
+    if (!parsed.ok) return null;
+    const upcoming = upcomingIcalEvents(parsed.events, now, {windowDays: normalized.windowDays, maxEvents: normalized.maxEvents});
+    const pad = (n) => String(n).padStart(2, "0");
+    const allDayText = boundedText(labels.allDay, 16) || "全天";
+    const ongoingText = boundedText(labels.ongoing, 16) || "进行中";
+    const current = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+    const items = upcoming.map((event) => {
+        const d = new Date(event.start);
+        // T-6447：全天事件不显示 00:00 时间；已开始且未结束的日程标注“进行中”
+        const stamp = event.allDay
+            ? `${d.getMonth() + 1}-${pad(d.getDate())} ${allDayText}`
+            : `${d.getMonth() + 1}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        const ongoing = event.start <= current && Number.isFinite(event.end) && event.end > current;
+        return {
+            label: `${stamp}${ongoing ? ` · ${ongoingText}` : ""} ${event.summary}`,
+            value: event.location || "",
+            href: "",
+        };
+    });
+    return {
+        title: normalized.title,
+        items,
+        emptyHint: items.length === 0 ? (boundedText(labels.empty, 96) || "窗口内暂无日程") : "",
+        updatedAt: now,
+        sourceHealth: ["fresh", "cached", "stale"].includes(status) ? status : "fresh",
+    };
+}
+
+// RSS/Atom 订阅快照：解析 feed 文本 → 最新文章列表（有界）。
+// 解析失败/空 feed 返回 null，由 adapter 归一为 emptyHint + 重试提示；
+// 标题回退链：用户配置标题 → feed 自带标题 → 通用名。
+const {normalizeRssSubscriptionConfig, parseRssFeed, latestRssItems} = require("./rss-model.js");
+
+function buildRssSnapshot(feedText, config, labels = {}, now = Date.now(), status = "fresh", context = {}) {
+    const normalized = normalizeRssSubscriptionConfig(config);
+    const parsed = parseRssFeed(feedText);
+    if (!parsed.ok) return null;
+    const latestAll = latestRssItems(parsed.items, {maxItems: normalized.maxItems});
+    // T-6685 只看未读：seenLookup 判已读；展示后经 onSeen 回传展示键（宿主落盘）
+    const identities = latestAll.map(rssItemKey);
+    const seenLookup = typeof context.seenLookup === "function" ? context.seenLookup : null;
+    const isSeen = (index) => seenLookup ? seenLookup(identities[index]) === true : false;
+    // T-6971 批次⑥规格：未读计数 chip = 窗口内未标记已读的条目数
+    const unreadCount = identities.reduce((sum, _key, index) => sum + (isSeen(index) ? 0 : 1), 0);
+    const latest = [];
+    const visibleKeys = [];
+    latestAll.forEach((item, index) => {
+        const read = isSeen(index);
+        if (normalized.hideRead && read) return;
+        latest.push({item, read});
+        visibleKeys.push(identities[index]);
+    });
+    const pad = (n) => String(n).padStart(2, "0");
+    // T-6971 批次⑥规格：来源名清洗截断 ≤20 字（行 meta 展示宽度有界）
+    const feedLabel = normalized.showFeedTitle && parsed.feedTitle && parsed.feedTitle !== normalized.title ? boundedText(parsed.feedTitle, 20) : "";
+    const readLabel = () => boundedText(labels.read, 8) || "已读";
+    const items = latest.map(({item, read}, index) => {
+        const stamp = normalized.showDate && item.timestamp > 0
+            ? (() => {
+                const d = new Date(item.timestamp);
+                return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+            })()
+            : "";
+        return {
+            label: item.title,
+            value: "",
+            // T-6971 批次⑥规格：来源·日期·已读标注走 secondary（工作台行 meta 可见）
+            secondary: [feedLabel, stamp, read ? readLabel() : ""].filter(Boolean).join(" · "),
+            href: /^https?:\/\//i.test(item.link) ? item.link : undefined,
+            rank: normalized.showRank ? index + 1 : undefined,
+        };
+    });
+    if (typeof context.onSeen === "function" && visibleKeys.length) context.onSeen(visibleKeys);
+    items.push({label: `${boundedText(labels.source, 32) || "数据来源"}：RSS/Atom`, value: ""});
+    return {
+        title: normalized.title || parsed.feedTitle || boundedText(labels.title, 96) || "RSS 订阅",
+        stat: {value: String(unreadCount), label: boundedText(labels.unread, 24) || "未读"},
+        items,
+        emptyHint: "",
+        updatedAt: now,
+        sourceHealth: ["fresh", "cached", "stale"].includes(status) ? status : "fresh",
+    };
+}
+
+// 空气质量快照（T-6308）：地理编码复用天气链路，分档词由 adapter 经 i18n 传入
+// （labels.bands = 六档词数组），视图不重写阈值；缺测的 PM 条目直接省略。
+const {normalizeAirQualityConfig, buildAirQualityUrl, normalizeAirQualityPayload, europeanAqiBand, AQI_BANDS_COUNT} = require("./air-quality-model.js");
+
+function buildAirQualitySnapshot(location, payload, config, labels = {}, now = Date.now(), status = "fresh") {
+    const normalized = normalizeAirQualityConfig(config);
+    const current = normalizeAirQualityPayload(payload);
+    if (!current) return null;
+    const bands = Array.isArray(labels.bands) ? labels.bands : [];
+    const bandWord = (index) => boundedText(bands[index], 24) || "";
+    const band = europeanAqiBand(current.aqi);
+    const city = boundedText(location?.name, 48) || normalized.city;
+    const items = [{
+        label: boundedText(labels.aqi, 24) || "欧洲 AQI",
+        value: `${current.aqi}${bandWord(band) ? ` · ${bandWord(band)}` : ""}`,
+        rank: 1,
+    }];
+    if (current.pm25 !== null) items.push({label: "PM2.5", value: `${current.pm25} µg/m³`, rank: items.length + 1});
+    if (current.pm10 !== null) items.push({label: "PM10", value: `${current.pm10} µg/m³`, rank: items.length + 1});
+    // T-6439：更多污染物默认关闭（保持卡片最小密度）；缺测照旧整条省略
+    if (normalized.showPollutants) {
+        const extras = [["O₃", current.ozone], ["NO₂", current.no2], ["SO₂", current.so2]];
+        extras.forEach(([label, concentration]) => {
+            if (concentration !== null) items.push({label, value: `${concentration} µg/m³`, rank: items.length + 1});
+        });
+    }
+    items.push({label: `${boundedText(labels.source, 32) || "数据来源"}：Open-Meteo Air Quality`, value: ""});
+    return {
+        title: city,
+        items,
+        emptyHint: "",
+        updatedAt: now,
+        sourceHealth: ["fresh", "cached", "stale"].includes(status) ? status : "fresh",
+        aqi: current.aqi,
+        band,
+        bandsCount: AQI_BANDS_COUNT,
+    };
+}
+
+// T-6307：榜单选择——目录层用中文标签，模型层归一为白名单 token；未知值回退首页，
+// 既有实例（无 board 配置）行为不变。
+const HACKER_NEWS_BOARD_LABELS = Object.freeze({"首页": "front_page", "最佳": "best", "问答": "ask_hn", "展示": "show_hn"});
+const HACKER_NEWS_BOARD_TOKENS = Object.freeze(["front_page", "best", "ask_hn", "show_hn"]);
+
+function normalizeHackerNewsConfig(value) {
+    const source = value && typeof value === "object" ? value : {};
+    const requestedLimit = Math.trunc(Number(source.limit));
+    const rawBoard = typeof source.board === "string" ? source.board.trim() : "";
+    const board = HACKER_NEWS_BOARD_TOKENS.includes(rawBoard)
+        ? rawBoard
+        : (HACKER_NEWS_BOARD_LABELS[rawBoard] || "front_page");
+    return {
+        limit: Number.isFinite(requestedLimit) ? Math.min(12, Math.max(3, requestedLimit)) : 8,
+        showMeta: source.showMeta !== "否" && source.showMeta !== false,
+        // T-6443：HN 榜单默认不显示时间（得分/评论已足够），需要时按本地短戳追加
+        showTime: source.showTime === "是" || source.showTime === true,
+        board,
+    };
+}
+
+// GitHub 贡献快照：公开事件流 → UTC 日期桶 → 周汇总列表（最近至多 6 周，最新在前）。
+// 口径与 github-model.js 头注释一致（Push 按提交数加权、star 不计）；解析失败或
+// 空数据返回 null，由 adapter 归一为 emptyHint + 重试提示。
+function buildGithubContribSnapshot(eventsText, config, labels = {}, now = Date.now(), status = "fresh") {
+    const normalized = normalizeGithubContribConfig(config);
+    if (!normalized.ok) return null;
+    const parsed = parseGithubEvents(eventsText);
+    if (!parsed.ok) return null;
+    const grid = buildContributionGrid(parsed.daily, {windowDays: normalized.windowDays}, now);
+    // 布局：config.layout === "grid" → 格点热力图（视图层按 viewType=heatmap 渲染）；
+    // 其余（含缺省）保持周汇总列表，既有契约不受影响。
+    if (config && config.layout === "grid") {
+        const cells = grid.cells.slice(0, GITHUB_GRID_MAX_CELLS).map((cell) => ({
+            label: cell.date,
+            count: cell.count,
+            level: cell.level,
+            ...(cell.level === -1 ? {outside: true} : {}),
+        }));
+        const baseTitle = boundedText(labels.title, 96) || "GitHub 贡献";
+        // T-6448：格点日期桶是 UTC 日期键，今日计数须用同一 UTC 口径，不混用本地日期
+        const todayKey = githubUtcDateKeyFromMs(Number.isFinite(Number(now)) ? Number(now) : Date.now());
+        const todayCell = grid.cells.find((cell) => cell.date === todayKey);
+        const statLabel = boundedText(labels.stat, 96) || "窗口内贡献";
+        const todayLabel = boundedText(labels.today, 16) || "今日";
+        return {
+            title: normalized.username ? `${baseTitle} · ${normalized.username}` : baseTitle,
+            items: cells,
+            emptyHint: "",
+            stat: {value: String(grid.total), label: `${statLabel} · ${todayLabel} ${todayCell ? todayCell.count : 0}`},
+            updatedAt: now,
+            sourceHealth: ["fresh", "cached", "stale"].includes(status) ? status : "fresh",
+        };
+    }
+    const weeks = [];
+    for (let i = 0; i + 7 <= grid.cells.length; i += 7) {
+        const row = grid.cells.slice(i, i + 7).filter((cell) => cell.level !== -1);
+        if (!row.length) continue;
+        weeks.push({start: row[0].date, end: row[row.length - 1].date, count: row.reduce((sum, cell) => sum + cell.count, 0)});
+    }
+    const pad = (n) => String(n).padStart(2, "0");
+    const fmt = (key) => `${Number(key.slice(5, 7))}/${Number(key.slice(8, 10))}`;
+    const items = weeks.slice(-6).reverse().map((week) => ({
+        label: `${fmt(week.start)}–${fmt(week.end)}`,
+        value: String(week.count),
+        href: "",
+    }));
+    if (items.length) {
+        items.push({label: `github.com/${normalized.username}`, value: "", href: `https://github.com/${normalized.username}`});
+    }
+    return {
+        title: boundedText(labels.title, 96) || "GitHub 贡献",
+        items,
+        emptyHint: items.length === 0 ? (boundedText(labels.empty, 96) || "窗口内暂无贡献") : "",
+        updatedAt: now,
+        sourceHealth: ["fresh", "cached", "stale"].includes(status) ? status : "fresh",
+    };
+}
+
+// Hacker News 首页快照：Algolia hits → 有界排序列表。标题/链接/得分全部
+// 经 boundedText 清洗；无外链的文本帖回退到 HN 讨论页；条目去重且数量有界。
+// T-6971 批次⑥规格：评论数不上屏（保持行轻），meta 只保留得分与可选时间。
+function buildHackerNewsSnapshot(envelope, config, labels = {}) {
+    const normalizedConfig = normalizeHackerNewsConfig(config);
+    const hits = Array.isArray(envelope?.payload?.hits) ? envelope.payload.hits : [];
+    if (!hits.length) return null;
+    const seen = new Set();
+    const items = hits.slice(0, 24).reduce((result, hit, index) => {
+        if (result.length >= normalizedConfig.limit) return result;
+        if (!hit || typeof hit !== "object") return result;
+        const title = boundedText(hit.title, 160);
+        if (!title || seen.has(hit.objectID) || seen.has(title)) return result;
+        const discussionHref = normalizeExternalItemHref(
+            Number.isFinite(Number(hit.objectID)) ? `https://news.ycombinator.com/item?id=${Number(hit.objectID)}` : "");
+        const href = normalizeExternalItemHref(hit.url) || discussionHref;
+        if (!href) return result;
+        seen.add(hit.objectID);
+        seen.add(title);
+        const points = Math.max(0, Math.trunc(Number(hit.points)) || 0);
+        const parts = [];
+        if (normalizedConfig.showMeta) parts.push(`${boundedText(labels.points, 16) || "分"} ${points}`);
+        const stamp = normalizedConfig.showTime ? formatFeedStamp(normalizeFeedTimestamp(hit.created_at_i, 0)) : "";
+        if (stamp) parts.push(stamp);
+        result.push({label: title, value: "", href, rank: result.length + 1, secondary: parts.join(" · "), publishedAt: normalizeFeedTimestamp(hit.created_at_i, 0)});
+        return result;
+    }, []);
+    items.push({
+        label: `${boundedText(labels.source, 32) || "数据来源"}：Hacker News`,
+        value: "",
+        href: "https://news.ycombinator.com/",
+    });
+    const health = ["fresh", "cached", "stale"].includes(envelope?.status) ? envelope.status : "fresh";
+    const newest = items.reduce((latest, item) => Math.max(latest, Number(item.publishedAt) || 0), 0);
+    const baseTitle = boundedText(labels.title, 64) || "Hacker News";
+    return {
+        title: normalizedConfig.board && normalizedConfig.board !== "front_page" ? `${baseTitle} · ${normalizedConfig.board}` : baseTitle,
+        items,
+        emptyHint: items.length === 1 ? (boundedText(labels.empty, 96) || "当前来源暂无内容") : "",
+        updatedAt: newest || normalizeFeedTimestamp(envelope?.fetchedAt, Date.now()),
+        sourceHealth: health,
+    };
+}
+
+// Uptime Kuma 服务状态：公开状态页 JSON → 有界监控项列表。
+// 只消费 id/name/type/status/ping/uptime 等公开字段，不读取任何告警配置。
+function normalizeUptimeKumaConfig(value) {
+    const source = value && typeof value === "object" ? value : {};
+    const rawOrigin = boundedText(source.endpoint, 256);
+    const rawSlug = boundedText(source.slug, 64).toLowerCase();
+    let origin = "";
+    try {
+        const url = new URL(rawOrigin);
+        const local = ["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname.toLowerCase());
+        if ((url.protocol === "https:" || (url.protocol === "http:" && local))
+            && !url.username && !url.password && (url.pathname === "/" || url.pathname === "")
+            && !url.search && !url.hash) {
+            origin = `${url.protocol}//${url.host}`;
+        }
+    } catch (_) { /* 留空触发配置提示 */ }
+    const slug = /^[a-z0-9][a-z0-9-]{1,63}$/.test(rawSlug) ? rawSlug : "";
+    // T-6449：延迟/在线率显示开关（默认与旧版一致）
+    return {origin, slug, showPing: source.showPing !== "否" && source.showPing !== false, showUptime: source.showUptime !== "否" && source.showUptime !== false};
+}
+
+function normalizeUptimeKumaStatus(payload) {
+    if (!payload || typeof payload !== "object") return null;
+    const groups = Array.isArray(payload.publicGroupList) ? payload.publicGroupList : [];
+    const monitors = groups.slice(0, 8).reduce((result, group) => {
+        const list = group && Array.isArray(group.monitorList) ? group.monitorList : [];
+        list.forEach((monitor) => {
+            if (result.length >= 24) return;
+            const id = Number(monitor?.id);
+            const name = boundedText(monitor?.name, 96);
+            if (!Number.isFinite(id) || !name) return;
+            result.push({id, name});
+        });
+        return result;
+    }, []);
+    const title = payload.config && typeof payload.config === "object" ? boundedText(payload.config.title, 64) : "";
+    const incident = payload.incident && typeof payload.incident === "object"
+        ? boundedText(payload.incident.title, 96) : "";
+    return {title, incident, monitors};
+}
+
+function normalizeUptimeKumaHeartbeat(payload) {
+    if (!payload || typeof payload !== "object") return null;
+    const beats = payload.heartbeatList && typeof payload.heartbeatList === "object" ? payload.heartbeatList : {};
+    const uptimes = payload.uptimeList && typeof payload.uptimeList === "object" ? payload.uptimeList : {};
+    const latest = {};
+    Object.keys(beats).slice(0, 32).forEach((key) => {
+        const list = Array.isArray(beats[key]) ? beats[key] : [];
+        const last = list.length > 0 ? list[list.length - 1] : null;
+        if (!last || typeof last !== "object") return;
+        const rawPing = last.ping;
+        // Number(null)===0：缺测 ping 必须显式判空（T-6308 同型缺陷，2026-09-19 由新契约抓出）
+        const ping = rawPing === null || rawPing === undefined || rawPing === ""
+            ? null
+            : Number(rawPing);
+        latest[key] = {
+            up: Number(last.status) === 1,
+            // T-6449：status 3 = 计划维护，不是故障——单独标记，不再与异常混同
+            maintenance: Number(last.status) === 3,
+            ping: Number.isFinite(ping) && ping >= 0 ? Math.min(600000, Math.trunc(ping)) : null,
+        };
+    });
+    const uptime = {};
+    Object.keys(uptimes).slice(0, 32).forEach((key) => {
+        const value = Number(uptimes[key]);
+        if (Number.isFinite(value) && value >= 0 && value <= 1) uptime[key] = value;
+    });
+    return {latest, uptime};
+}
+
+function buildUptimeKumaSnapshot(statusEnvelope, heartbeatEnvelope, config, labels = {}) {
+    const status = normalizeUptimeKumaStatus(statusEnvelope?.payload);
+    const heartbeat = normalizeUptimeKumaHeartbeat(heartbeatEnvelope?.payload);
+    if (!status || !status.monitors.length) return null;
+    const normalized = normalizeUptimeKumaConfig(config);
+    const upText = boundedText(labels.up, 16) || "正常";
+    const downText = boundedText(labels.down, 16) || "异常";
+    const maintenanceText = boundedText(labels.maintenance, 16) || "维护中";
+    const items = [];
+    if (status.incident) {
+        items.push({label: `${boundedText(labels.incident, 16) || "事件"}：${status.incident}`, value: "", rank: 1});
+    }
+    let upCount = 0;
+    status.monitors.forEach((monitor) => {
+        const beat = heartbeat?.latest[String(monitor.id)];
+        // T-6449：status 3（计划维护）不再计为异常；缺失心跳仍按异常呈现
+        const state = beat ? (beat.maintenance ? maintenanceText : beat.up ? upText : downText) : downText;
+        if (beat && beat.up && !beat.maintenance) upCount += 1;
+        const details = [];
+        if (normalized.showPing && beat && beat.ping !== null) details.push(`${beat.ping}ms`);
+        const uptime24 = heartbeat?.uptime[`${monitor.id}_24`];
+        if (normalized.showUptime && Number.isFinite(uptime24)) details.push(`${(uptime24 * 100).toFixed(2)}%`);
+        items.push({
+            label: monitor.name,
+            value: details.length ? `${state} · ${details.join(" · ")}` : state,
+            rank: items.length + 1,
+        });
+    });
+    items.push({
+        label: `${boundedText(labels.source, 32) || "数据来源"}：Uptime Kuma`,
+        value: "",
+    });
+    const healthOf = (envelope) => ["fresh", "cached", "stale"].includes(envelope?.status) ? envelope.status : "fresh";
+    const health = healthOf(statusEnvelope) === "stale" || healthOf(heartbeatEnvelope) === "stale" ? "stale"
+        : (healthOf(statusEnvelope) === "fresh" && healthOf(heartbeatEnvelope) === "fresh") ? "fresh" : "cached";
+    return {
+        title: status.title || boundedText(labels.title, 64) || "服务状态",
+        stat: {value: `${upCount}/${status.monitors.length}`, label: boundedText(labels.stat, 24) || "在线服务"},
+        items,
+        updatedAt: Number.isFinite(Number(heartbeatEnvelope?.fetchedAt)) ? Number(heartbeatEnvelope.fetchedAt) : Date.now(),
+        sourceHealth: health,
+    };
+}
+
+function buildUptimeKumaPageUrl(config, heartbeat = false) {
+    const normalized = normalizeUptimeKumaConfig(config);
+    if (!normalized.origin || !normalized.slug) return "";
+    return `${normalized.origin}/api/status-page/${heartbeat ? "heartbeat/" : ""}${normalized.slug}`;
+}
+
+// Frankfurter 汇率：ECB 日频参考价，货币代码受白名单约束（见 life-widget-network）。
+function normalizeFrankfurterConfig(value) {
+    const source = value && typeof value === "object" ? value : {};
+    const rawBase = boundedText(source.base, 8).toUpperCase();
+    const rawQuotes = Array.isArray(source.quotes) ? source.quotes.map(String).join(",")
+        : (typeof source.quotes === "string" ? source.quotes : "");
+    // base/quotes 都在配置层就过滤到 ECB 白名单：避免用户拼错的货币代码
+    // 生成注定被网络白名单拦截的请求，导致卡片静默失效。
+    const base = FRANKFURTER_CURRENCIES.includes(rawBase) ? rawBase : "CNY";
+    const quotes = [...new Set(rawQuotes.split(/[,，;；\s]+/)
+        .map((code) => code.toUpperCase().slice(0, 3))
+        .filter((code) => /^[A-Z]{3}$/.test(code) && FRANKFURTER_CURRENCIES.includes(code)))]
+        .filter((code) => code !== base)
+        .slice(0, 6);
+    // T-6450：反向汇率默认关；牌价日期默认随来源行显示
+    return {base, quotes, showInverse: source.showInverse === "是" || source.showInverse === true, showDate: source.showDate !== "否" && source.showDate !== false};
+}
+
+function buildFrankfurterRequestUrl(config) {
+    const normalized = normalizeFrankfurterConfig(config);
+    if (!normalized.quotes.length) return "";
+    return `https://api.frankfurter.dev/v2/rates?base=${normalized.base}&quotes=${normalized.quotes.join(",")}`;
+}
+
+function buildFrankfurterSnapshot(envelope, config, labels = {}) {
+    const normalized = normalizeFrankfurterConfig(config);
+    const rows = Array.isArray(envelope?.payload) ? envelope.payload : [];
+    if (!rows.length) return null;
+    const byQuote = new Map();
+    rows.forEach((row) => {
+        if (!row || typeof row !== "object") return;
+        const quote = boundedText(row.quote, 8).toUpperCase();
+        const rate = Number(row.rate);
+        const date = boundedText(row.date, 16);
+        if (!/^[A-Z]{3}$/.test(quote) || !Number.isFinite(rate) || rate <= 0 || rate > 1000000 || byQuote.has(quote)) return;
+        byQuote.set(quote, {rate, date});
+    });
+    const items = normalized.quotes.reduce((result, quote) => {
+        const hit = byQuote.get(quote);
+        if (hit) result.push({label: `${normalized.base} → ${quote}`, value: String(hit.rate), rank: result.length + 1});
+        return result;
+    }, []);
+    // T-6450：反向汇率 = 1/牌价（最多 4 位小数，去尾零）；纯换算，不引入额外数据源
+    if (normalized.showInverse) {
+        normalized.quotes.forEach((quote) => {
+            const hit = byQuote.get(quote);
+            if (!hit || hit.rate <= 0) return;
+            const inverse = String(Number((1 / hit.rate).toFixed(4)));
+            if (!/^\d+(\.\d+)?$/.test(inverse) || inverse === "0") return;
+            items.push({label: `${quote} → ${normalized.base}`, value: inverse, rank: items.length + 1});
+        });
+    }
+    if (!items.length) return null;
+    const dates = [...new Set([...byQuote.values()].map((hit) => hit.date).filter(Boolean))];
+    items.push({
+        label: `${boundedText(labels.source, 32) || "数据来源"}：Frankfurter（ECB）${normalized.showDate && dates[0] ? ` · ${dates[0]}` : ""}`,
+        value: "",
+    });
+    const health = ["fresh", "cached", "stale"].includes(envelope?.status) ? envelope.status : "fresh";
+    return {
+        title: `${boundedText(labels.title, 48) || "参考汇率"} · ${normalized.base}`,
+        stat: {value: items[0].value, label: items[0].label},
+        items,
+        // 无匹配货币时在 items.length 检查处直接返回 null，由调用方显示重试提示；
+        // 到达这里说明至少有一条汇率，来源行恒在，emptyHint 恒为空。
+        emptyHint: "",
+        updatedAt: Number.isFinite(Number(envelope?.fetchedAt)) ? Number(envelope.fetchedAt) : Date.now(),
+        sourceHealth: health,
+    };
+}
+
+// Miniflux 未读：用户自建 Miniflux 实例的未读文章列表。
+// 配置 = 实例 origin + API Token + 条目上限；Token 只进请求头，绝不进 URL。
+const MINIFLUX_MAX_ENTRIES = 50;
+const MINIFLUX_DEFAULT_LIMIT = 20;
+
+function normalizeMinifluxToken(value) {
+    const token = typeof value === "string" ? value.trim() : "";
+    if (!token || token.length > 128 || /[\r\n\u0000-\u001f\u007f]/.test(token)) return "";
+    return token;
+}
+
+function normalizeMinifluxConfig(value) {
+    const source = value && typeof value === "object" ? value : {};
+    const rawOrigin = boundedText(source.endpoint, 256);
+    let origin = "";
+    try {
+        const url = new URL(rawOrigin);
+        const local = ["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname.toLowerCase());
+        if ((url.protocol === "https:" || (url.protocol === "http:" && local))
+            && !url.username && !url.password && (url.pathname === "/" || url.pathname === "")
+            && !url.search && !url.hash) {
+            origin = `${url.protocol}//${url.host}`;
+        }
+    } catch (_) { /* 留空触发配置提示 */ }
+    const rawCategoryId = typeof source.categoryId === "string" ? source.categoryId.trim() : "";
+    const categoryId = /^\d{1,12}$/.test(rawCategoryId) ? rawCategoryId : "";
+    return {
+        origin,
+        token: normalizeMinifluxToken(source.token),
+        categoryId,
+        limit: Number.isFinite(Math.trunc(Number(source.limit)))
+            ? Math.min(MINIFLUX_MAX_ENTRIES, Math.max(1, Math.trunc(Number(source.limit))))
+            : MINIFLUX_DEFAULT_LIMIT,
+        // T-6446：服务端排序（在 limit 截断前生效，客户端排序截断窗口会失真）；
+        // 旧实例（无 sortBy）采用“最新优先”的显式口径。显示开关默认与旧版一致。
+        sortBy: source.sortBy === "最旧优先" ? "oldest" : "newest",
+        showFeed: source.showFeed !== "否" && source.showFeed !== false,
+        showDate: source.showDate !== "否" && source.showDate !== false,
+        showRank: source.showRank === "是" || source.showRank === true,
+    };
+}
+
+function buildMinifluxRequestUrl(config) {
+    const normalized = normalizeMinifluxConfig(config);
+    if (!normalized.origin) return "";
+    const direction = normalized.sortBy === "oldest" ? "asc" : "desc";
+    // T-6466：可选分类筛选（category_id 为 1-12 位纯数字，来自用户实例的分类列表）
+    const categoryScope = normalized.categoryId ? `&category_id=${normalized.categoryId}` : "";
+    return `${normalized.origin}/v1/entries?status=unread&limit=${normalized.limit}&order=published_at&direction=${direction}${categoryScope}`;
+}
+
+// 条目 URL 信任边界：Miniflux 是用户自己的阅读器实例、条目来自用户订阅的源，
+// 信任级别高于公开 API（HN 因此拒绝一切非 HTTPS），但仍拒绝 javascript:/data: 等
+// 危险 scheme；http 站点允许（自建源常见形态）。
+function normalizeMinifluxEntryUrl(value) {
+    const url = boundedText(value, 512);
+    if (!/^https?:\/\//i.test(url)) return "";
+    return url;
+}
+
+function normalizeMinifluxEntries(payload) {
+    if (!payload || typeof payload !== "object" || !Array.isArray(payload.entries)) return null;
+    const total = Number(payload.total);
+    const entries = [];
+    for (const raw of payload.entries) {
+        if (!raw || typeof raw !== "object" || entries.length >= MINIFLUX_MAX_ENTRIES) break;
+        const id = raw.id !== undefined && raw.id !== null ? String(raw.id).slice(0, 64) : "";
+        const title = boundedText(raw.title, 96);
+        const url = normalizeMinifluxEntryUrl(raw.url);
+        if (!id || !title) continue;
+        entries.push({
+            id,
+            title,
+            url,
+            // T-6971 批次⑥规格：来源名清洗截断 ≤20 字（行 meta 展示宽度有界）
+            feed: boundedText(raw.feed?.title, 20),
+            published: boundedText(typeof raw.published_at === "string" ? raw.published_at.slice(0, 10) : "", 10),
+        });
+    }
+    return {total: Number.isFinite(total) && total >= 0 ? total : entries.length, entries};
+}
+
+function buildMinifluxSnapshot(envelope, config, labels = {}) {
+    const parsed = normalizeMinifluxEntries(envelope?.payload);
+    if (!parsed || !parsed.entries.length) return null;
+    const normalized = normalizeMinifluxConfig(config);
+    const items = parsed.entries.map((entry, index) => {
+        const meta = [
+            normalized.showFeed ? entry.feed : "",
+            normalized.showDate ? entry.published : "",
+        ].filter(Boolean).join(" · ");
+        // T-6971 批次⑥规格：来源·时间走 secondary（工作台行 meta 可见），
+        // value 仅为时钟族行内数值保留。
+        return {label: entry.title, value: "", href: entry.url || undefined, rank: normalized.showRank ? index + 1 : undefined, secondary: meta};
+    });
+    items.push({
+        label: `${boundedText(labels.source, 32) || "数据来源"}：Miniflux`,
+        value: "",
+    });
+    const health = ["fresh", "cached", "stale"].includes(envelope?.status) ? envelope.status : "fresh";
+    return {
+        title: boundedText(labels.title, 48) || "未读文章",
+        stat: {value: String(parsed.total), label: boundedText(labels.unread, 24) || "未读"},
+        items,
+        emptyHint: "",
+        updatedAt: Number.isFinite(Number(envelope?.fetchedAt)) ? Number(envelope.fetchedAt) : Date.now(),
+        sourceHealth: health,
+    };
+}
+
+function normalizeActivityWatchEndpoint(value) {
+    const raw = boundedText(value, 256) || ACTIVITYWATCH_DEFAULT_ENDPOINT;
+    try {
+        const url = new URL(raw);
+        if (!["http:", "https:"].includes(url.protocol) || !isLocalFeedHost(url.hostname)
+            || url.username || url.password || url.search || url.hash) return "";
+        if (url.pathname !== "/" && url.pathname !== "") return "";
+        const port = url.port ? Number(url.port) : (url.protocol === "https:" ? 443 : 80);
+        if (!Number.isInteger(port) || port < 1 || port > 65535) return "";
+        return `${url.protocol}//${url.host}`;
+    } catch (_) {
+        return "";
+    }
+}
+
+function normalizeActivityWatchConfig(value) {
+    const source = value && typeof value === "object" ? value : {};
+    const requestedHours = Math.trunc(Number(source.hours));
+    const requestedLimit = Math.trunc(Number(source.limit));
+    // T-6689 桶选择：显式桶 ID 剔除引号/反斜杠/控制字符（会破坏查询脚本字面量）
+    const rawBucket = typeof source.bucketId === "string" ? source.bucketId.trim() : "";
+    const bucketId = rawBucket && !["\"", "\\", ";"].some((ch) => rawBucket.includes(ch)) ? rawBucket.slice(0, 128) : "";
+    return {
+        endpoint: normalizeActivityWatchEndpoint(source.endpoint),
+        hours: Number.isFinite(requestedHours) ? Math.min(168, Math.max(1, requestedHours)) : 24,
+        limit: Number.isFinite(requestedLimit) ? Math.min(10, Math.max(3, requestedLimit)) : 6,
+        // T-6451：时长占比默认关；排名（按时长序）默认开、与旧版一致
+        showPercent: source.showPercent === "是" || source.showPercent === true,
+        showRank: source.showRank !== "否" && source.showRank !== false,
+        bucketId,
+    };
+}
+
+function buildActivityWatchRequest(config, now = Date.now()) {
+    const normalized = normalizeActivityWatchConfig(config);
+    const end = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+    if (!normalized.endpoint) return null;
+    const start = end - normalized.hours * 60 * 60 * 1000;
+    // T-6689 桶选择：显式桶 ID 走 query_bucket（用户从列桶清单选定）；
+    // 留空保持 find_bucket 自动选取首个 watcher 桶的旧行为。
+    const eventsLine = normalized.bucketId
+        ? `events = flood(query_bucket("${normalized.bucketId}"));`
+        : 'events = flood(query_bucket(find_bucket("aw-watcher-window_")));';
+    const query = [
+        eventsLine,
+        'duration = sum_durations(events);',
+        'app_events = sort_by_duration(merge_events_by_keys(events, ["app"]));',
+        `app_events = limit_events(app_events, ${normalized.limit});`,
+        'RETURN = {"app_events": app_events, "duration": duration};',
+    ];
+    return {
+        url: `${normalized.endpoint}/api/0/query/`,
+        body: {timeperiods: [`${new Date(start).toISOString()}/${new Date(end).toISOString()}`], query},
+        config: normalized,
+        cacheKey: `${normalized.endpoint}:${normalized.hours}:${normalized.limit}:${normalized.bucketId}`,
+    };
+}
+
+// T-6689 列桶请求：GET /api/0/buckets（仅本地端点，网络层白名单放行该路径）
+function buildActivityWatchBucketsUrl(config, now = Date.now()) {
+    const normalized = normalizeActivityWatchConfig(config);
+    if (!normalized.endpoint) return "";
+    return `${normalized.endpoint}/api/0/buckets`;
+}
+
+// 桶清单归一化：只保留 aw-watcher-window 类型的桶，按 id 升序、有界 50 条，
+// 供配置表单下拉选择；形状异常一律空数组（视图显示自动模式即可）。
+function normalizeActivityWatchBuckets(payload) {
+    const source = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+    const buckets = [];
+    for (const [id, bucket] of Object.entries(source)) {
+        if (buckets.length >= 50) break;
+        const type = typeof bucket?.type === "string" ? bucket.type : "";
+        if (!id || !type.includes("aw-watcher-window")) continue;
+        const hostname = typeof bucket?.hostname === "string" ? bucket.hostname.slice(0, 64) : "";
+        buckets.push({id: id.slice(0, 128), hostname, label: hostname ? `${id} · ${hostname}` : id});
+    }
+    return buckets.sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
+}
+
+function normalizeActivityWatchPayload(payload, limit = 6) {
+    const result = Array.isArray(payload) ? payload[0] : null;
+    if (!result || typeof result !== "object" || !Array.isArray(result.app_events)) return null;
+    const requested = Math.min(10, Math.max(3, Math.trunc(Number(limit)) || 6));
+    const seen = new Set();
+    const apps = result.app_events.slice(0, 32).reduce((items, event) => {
+        const app = boundedText(event?.data?.app, 80);
+        const seconds = finiteNumber(event?.duration, 0, 7 * 24 * 60 * 60, 0);
+        const key = app.toLocaleLowerCase();
+        if (!app || seconds <= 0 || seen.has(key) || items.length >= requested) return items;
+        seen.add(key);
+        items.push({app, seconds});
+        return items;
+    }, []);
+    const duration = finiteNumber(result.duration, 0, 7 * 24 * 60 * 60, apps.reduce((sum, item) => sum + item.seconds, 0));
+    return {apps, duration};
+}
+
+function formatActivityDuration(seconds) {
+    const minutes = Math.max(0, Math.round(finiteNumber(seconds, 0, 7 * 24 * 60 * 60) / 60));
+    if (minutes < 60) return `${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    const rest = minutes % 60;
+    return rest ? `${hours}h ${rest}m` : `${hours}h`;
+}
+
+function buildActivityWatchSnapshot(envelope, config, labels = {}) {
+    const normalized = normalizeActivityWatchConfig(config);
+    const activity = normalizeActivityWatchPayload(envelope?.payload, normalized.limit);
+    if (!activity) return null;
+    const health = ["fresh", "cached", "stale"].includes(envelope?.status) ? envelope.status : "fresh";
+    return {
+        title: (boundedText(labels.range, 48) || "近 {hours} 小时").replace("{hours}", String(normalized.hours)),
+        stat: {value: formatActivityDuration(activity.duration), label: boundedText(labels.total, 32) || "前台使用"},
+        items: activity.apps.map((item, index) => {
+            const parts = [formatActivityDuration(item.seconds)];
+            // 占比分母是本范围总时长（含未入榜应用），为 0 时不显示占比
+            if (normalized.showPercent && activity.duration > 0) {
+                parts.push(`${Math.min(100, Math.round((item.seconds / activity.duration) * 100))}%`);
+            }
+            return {
+                label: item.app,
+                value: "",
+                secondary: parts.join(" · "),
+                count: Math.max(1, Math.round(item.seconds / 60)),
+                rank: normalized.showRank ? index + 1 : undefined,
+            };
+        }),
+        emptyHint: activity.apps.length ? "" : (boundedText(labels.empty, 96) || "当前范围暂无使用记录"),
+        updatedAt: Number(envelope?.fetchedAt) || Date.now(),
+        sourceHealth: health,
+    };
+}
+
+module.exports = {
+    TEMPERATURE_UNITS,
+    BANGUMI_DAY_RANGES,
+    EXTERNAL_FEED_PROVIDERS,
+    DAILYHOT_ROUTES,
+    ACTIVITYWATCH_DEFAULT_ENDPOINT,
+    normalizeWeatherConfig,
+    normalizeWeatherLocale,
+    buildWeatherGeocodingUrl,
+    normalizeWeatherLocation,
+    buildWeatherForecastUrl,
+    weatherCondition,
+    weatherIcon,
+    normalizeWeatherPayload,
+    buildWeatherSnapshot,
+    normalizeHolidayPayload,
+    mergeHolidayPayloads,
+    holidayPresentation,
+    normalizeBangumiConfig,
+    bangumiWeekdayId,
+    normalizeBangumiCover,
+    normalizeBangumiCalendar,
+    buildBangumiSnapshot,
+    normalizeFeedConfig,
+    formatFeedStamp,
+    isLocalFeedHost,
+    normalizeConfiguredFeedUrl,
+    normalizeExternalItemHref,
+    normalizeFeedTimestamp,
+    normalizeExternalFeedPayload,
+    capListflowRows,
+    LISTFLOW_TIER_ITEM_CAPS,
+    LISTFLOW_DEFAULT_ITEM_CAP,
+    buildExternalFeedSnapshot,
+    normalizeHackerNewsConfig,
+    HACKER_NEWS_BOARD_LABELS,
+    HACKER_NEWS_BOARD_TOKENS,
+    buildHackerNewsSnapshot,
+    normalizeUptimeKumaConfig,
+    normalizeUptimeKumaStatus,
+    normalizeUptimeKumaHeartbeat,
+    buildUptimeKumaSnapshot,
+    buildUptimeKumaPageUrl,
+    normalizeFrankfurterConfig,
+    buildFrankfurterRequestUrl,
+    buildFrankfurterSnapshot,
+    normalizeMinifluxToken,
+    normalizeMinifluxConfig,
+    normalizeIcalSubscriptionConfig,
+    parseIcsEvents,
+    upcomingIcalEvents,
+    buildIcalSnapshot,
+    normalizeRssSubscriptionConfig,
+    parseRssFeed,
+    latestRssItems,
+    buildRssSnapshot,
+    normalizeAirQualityConfig,
+    buildAirQualityUrl,
+    normalizeAirQualityPayload,
+    europeanAqiBand,
+    AQI_BANDS_COUNT,
+    buildAirQualitySnapshot,
+    buildGithubContribSnapshot,
+    buildMinifluxRequestUrl,
+    normalizeMinifluxEntries,
+    buildMinifluxSnapshot,
+    normalizeActivityWatchEndpoint,
+    normalizeActivityWatchConfig,
+    buildActivityWatchRequest,
+    buildActivityWatchBucketsUrl,
+    normalizeActivityWatchBuckets,
+    normalizeActivityWatchPayload,
+    formatActivityDuration,
+    buildActivityWatchSnapshot,
+};

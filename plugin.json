@@ -1,0 +1,62 @@
+{
+  "name": "siyuan-speed-switch",
+  "author": "xiaolv-suite",
+  "url": "https://github.com/xiaolv-suite/siyuan-speed-switch",
+  "version": "0.48.89",
+  "minAppVersion": "3.8.4",
+  "settingsWindow": true,
+  "disabledInPublish": false,
+  "backends": [
+    "all"
+  ],
+  "frontends": [
+    "desktop",
+    "browser-desktop",
+    "desktop-window",
+    "mobile",
+    "browser-mobile"
+  ],
+  "displayName": {
+    "default": "Lv Speed Switch",
+    "zh-CN": "小驴雷切"
+  },
+  "description": {
+    "default": "A local-first SiYuan navigation and work-context platform with a switcher, widget workbench, desktop snippet lab, and floating-ball actions.",
+    "zh-CN": "本地优先的思源导航与工作上下文平台，连接切换器、工作台、桌面片段实验室和悬浮球。"
+  },
+  "readme": {
+    "default": "README.md",
+    "zh-CN": "README.md",
+    "en-US": "README.en-US.md"
+  },
+  "icon": "icon.png",
+  "preview": "preview.png",
+  "funding": {
+    "custom": []
+  },
+  "publish": {
+    "resources": [
+      "docs/agent-document-context-m2.md",
+      "docs/architecture.svg",
+      "docs/component-store-guide.md",
+      "docs/interface-map.svg",
+      "dist/snippet-studio.js"
+    ]
+  },
+  "keywords": [
+    "小驴",
+    "小驴雷切",
+    "xiaolv",
+    "lv",
+    "页签切换",
+    "tab switch",
+    "标签页",
+    "快捷入口",
+    "speed switch",
+    "lv speed switch",
+    "工作台",
+    "workbench",
+    "代码片段",
+    "snippet studio"
+  ]
+}

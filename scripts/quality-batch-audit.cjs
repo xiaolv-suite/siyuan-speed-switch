@@ -1,0 +1,86 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const {RAW_BUNDLE_BUDGET_BYTES, RAW_BUNDLE_BUDGET_ADR} = require('./release-readiness-metrics.cjs');
+const root = path.resolve(__dirname, '..');
+const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+const exists = (file) => fs.existsSync(path.join(root, file));
+const srcFiles = fs.readdirSync(path.join(root, 'src')).filter((name) => /\.(?:ts|js)$/.test(name));
+const testFiles = fs.readdirSync(path.join(root, 'tests')).filter((name) => name.endsWith('.test.cjs'));
+const hostTestFiles = fs.readdirSync(path.join(root, 'tests', 'host')).filter((name) => name.endsWith('.test.cjs'));
+const ts = require('typescript');
+// These locales are flat JSON dictionaries. Inspect source properties before
+// JSON.parse discards duplicate names; Object.keys(parsed) cannot detect them.
+const sourceKeys = (file) => {
+    const expression = ts.parseJsonText(file, read(file)).statements[0]?.expression;
+    return expression && ts.isObjectLiteralExpression(expression)
+        ? expression.properties.map((property) => property.name?.text).filter((name) => typeof name === 'string') : [];
+};
+const checks = [];
+const add = (name, ok) => checks.push({name, ok: Boolean(ok)});
+const allSrc = srcFiles.map((name) => read(`src/${name}`)).join('\n');
+const zh = JSON.parse(read('src/i18n/zh-CN.json'));
+const en = JSON.parse(read('src/i18n/en.json'));
+const zhKeys = Object.keys(zh).sort();
+const enKeys = Object.keys(en).sort();
+
+add('i18n key sets are equal', JSON.stringify(zhKeys) === JSON.stringify(enKeys));
+add('i18n Chinese values are strings', Object.values(zh).every((value) => typeof value === 'string'));
+add('i18n English values are strings', Object.values(en).every((value) => typeof value === 'string'));
+add('truncation key exists in both locales', 'homeConfigOptionsTruncated' in zh && 'homeConfigOptionsTruncated' in en);
+add('truncation copy is non-empty', zh.homeConfigOptionsTruncated.length > 0 && en.homeConfigOptionsTruncated.length > 0);
+add('i18n JSON has no duplicate keys', ['src/i18n/zh-CN.json', 'src/i18n/en.json'].every((file) => {
+    const names = sourceKeys(file);
+    return names.length >= 100 && names.length === new Set(names).size;
+}));
+add('i18n files are UTF-8 readable', read('src/i18n/zh-CN.json').includes('homeConfigOptionsTruncated') && read('src/i18n/en.json').includes('homeConfigOptionsTruncated'));
+add('source has no console.log', !/console\.log\s*\(/.test(allSrc));
+add('source has no debugger', !/\bdebugger\b/.test(allSrc));
+add('source has no window.alert', !/window\.alert\s*\(/.test(allSrc));
+add('source has no dialog destroy override', !/dialog\.destroy\s*=/.test(allSrc));
+add('source has no interval polling', !/setInterval\s*\(/.test(allSrc));
+add('source uses destroyCallback', allSrc.includes('destroyCallback'));
+add('source uses normalized SQL', allSrc.includes('normalizeSqlResult'));
+add('source uses bounded SQL limit', /LIMIT 200/.test(allSrc));
+add('source has global shortcut guard', allSrc.includes('isGlobalShortcutHostReady'));
+add('source has network backoff', allSrc.includes('backoff'));
+add('source has data change hook', allSrc.includes('onDataChanged'));
+add('source has persistent key registry', allSrc.includes('PERSISTENT_KEYS'));
+add('source has read-only Agent audit', allSrc.includes('registerReadOnlyAgentCapabilities'));
+add('source has workspace context', allSrc.includes('workspace-context'));
+add('source has document context', allSrc.includes('document-context'));
+add('source has widget snapshot', allSrc.includes('home-widget-snapshot'));
+add('source has bounded fetch timeout', allSrc.includes('timeoutMs'));
+add('source has path filter model', allSrc.includes('path-filter'));
+add('source has i18n injection', allSrc.includes('this.i18n'));
+add('source has no absolute Windows paths', !/(?:^|[^A-Za-z])[A-Za-z]:\\/.test(allSrc));
+add('source has no token literals', !/api[_-]?token\s*[:=]\s*['"][^'"]+['"]/i.test(allSrc));
+add('source files are non-empty', srcFiles.every((name) => read(`src/${name}`).trim().length > 0));
+add('top-level test files exist', testFiles.length > 0);
+add('host test files exist', hostTestFiles.length > 0);
+add('test runner exists', exists('tests/run-tests.cjs'));
+add('test runner discovers tests', read('tests/run-tests.cjs').includes('readdirSync'));
+add('i18n test exists', exists('tests/i18n.test.cjs'));
+add('SQL lifecycle test exists', exists('tests/sql-and-dialog-lifecycle.test.cjs'));
+add('release quality test exists', exists('tests/host/release-quality.test.cjs'));
+add('package uses pnpm', exists('pnpm-lock.yaml') && exists('pnpm-workspace.yaml'));
+add('typescript config exists', exists('tsconfig.json'));
+add('webpack config exists', exists('webpack.config.js'));
+add('license exists', exists('LICENSE'));
+add('plugin icon exists', exists('icon.png'));
+add('plugin preview exists', exists('preview.png'));
+add('widget protocol ADR references exist', exists('docs/adr/0057-widget-source-and-store-grouping.md'));
+add('schema ADR references exist', exists('docs/adr/0034-quick-action-schema-version.md'));
+add('release readiness references current raw-line ADR', read('docs/release-readiness.md').split(/\r?\n/).some((line) =>
+    line.startsWith('<!-- Current artifact snapshot:') && line.includes('raw self-discipline line ' + RAW_BUNDLE_BUDGET_BYTES / 1024 + ' KiB (ADR ' + RAW_BUNDLE_BUDGET_ADR + ',')));
+add('roadmap has current version', read('ROADMAP.md').includes('v' + JSON.parse(read('package.json')).version));
+add('current engineering blocker status is explicit and clear', read('BLOCKERS.md').split(/\r?\n/)
+    .filter((line) => line.startsWith('<!-- Current engineering blockers:')).join('\n') === '<!-- Current engineering blockers: none -->');
+add('active dev plan records current task', read(JSON.parse(read('docs/current-status-index.json')).activePlan)
+    .includes(JSON.parse(read('docs/current-status-index.json')).currentTask));
+add('quality audit is local-only', !/https?:\/\//.test(read('scripts/quality-batch-audit.cjs')));
+add('quality audit has exactly fifty checks', (read('scripts/quality-batch-audit.cjs').match(/add\('/g) || []).length === 50);
+
+const failed = checks.filter((item) => !item.ok);
+for (const item of checks) console.log(`${item.ok ? 'PASS' : 'FAIL'} ${item.name}`);
+console.log(`quality-batch-audit: ${checks.length - failed.length}/${checks.length} passed`);
+process.exitCode = failed.length ? 1 : 0;

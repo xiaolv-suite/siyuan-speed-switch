@@ -1,0 +1,409 @@
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const {execFileSync} = require('node:child_process');
+const {pathToFileURL} = require('node:url');
+
+const repo = path.resolve(__dirname, '..');
+const pluginCssPath = path.join(repo, 'dist', 'index.css');
+const baseCssPath = process.env.SIYUAN_BASE_CSS || path.join(__dirname, 'fixtures', 'siyuan-mobile-base.css');
+const themeCssPaths = (process.env.SIYUAN_THEME_CSS || '').split(path.delimiter).filter(Boolean);
+const screenshotPath = process.env.SMOKE_SCREENSHOT ? path.resolve(process.env.SMOKE_SCREENSHOT) : '';
+// 浏览器解析统一收口到 support/browser.cjs：本机 Edge 会触发 0x1A 蓝屏，自动化只走 Chrome
+const {resolveBrowserExecutable} = require('./support/browser.cjs');
+const browserPaths = [resolveBrowserExecutable()];
+const cssPaths = [baseCssPath, pluginCssPath, ...themeCssPaths];
+
+for (const cssPath of cssPaths) {
+    if (!fs.existsSync(cssPath)) {
+        console.error(`CSS file not found: ${cssPath}`);
+        process.exit(1);
+    }
+}
+
+const baseTmpE2eDir = path.join(repo, '.tmp', 'e2e', 'chromium-style-smoke');
+const tempDir = path.join(baseTmpE2eDir, 'work');
+try { fs.rmSync(baseTmpE2eDir, {recursive: true, force: true}); } catch (_) {}
+fs.mkdirSync(tempDir, {recursive: true});
+const profileDir = path.join(tempDir, 'profile');
+const htmlPath = path.join(tempDir, 'index.html');
+const links = cssPaths.map((cssPath) => `<link rel="stylesheet" href="${pathToFileURL(cssPath).href}">`).join('\n');
+const calendarCells = Array.from({length: 42}, (_, index) => `<span class="sw__home-calendar-cell${index < 2 || index > 32 ? ' is-outside' : ''}${index === 10 ? ' is-today has-journal' : ''}${index === 15 ? ' is-holiday' : ''}"><span class="sw__home-calendar-primary">${(index % 31) + 1}</span>${index === 10 ? '<span class="sw__home-calendar-marker"></span>' : ''}${index === 15 ? '<span class="sw__home-calendar-secondary">国庆节</span>' : ''}</span>`).join('');
+const buildHtml = (dark) => `<!doctype html>
+<html class="neo-mobile${dark ? " neo-mode-dark" : ""}" data-theme-mode="${dark ? "dark" : "light"}">
+<head>
+<meta charset="utf-8">
+${links}
+<style>
+.b3-tooltips{width:100%;height:88px;min-width:100%;padding:20px;line-height:4}
+.smoke-layout{display:grid;gap:24px;padding:16px;max-width:358px}
+</style>
+</head>
+<body class="neo-mobile${dark ? " neo-mode-dark" : ""}">
+<div class="smoke-layout">
+<div class="speed-switch sw__body sw__mobile">
+  <div class="sw__grid sw__mobile-grid">
+    <div class="sw__card sw__mobile-card">
+      <div class="sw__thumb"></div>
+      <div class="sw__meta"><span class="sw__icon">A</span><span class="sw__title">Test doc</span></div>
+      <div class="sw__actions">
+        <button type="button" class="sw__pin" aria-label="Pin"><svg viewBox="0 0 24 24"><path d="M12 2v20" stroke="currentColor"/></svg></button>
+        <button type="button" class="sw__fav-btn" aria-label="Favorite"><svg viewBox="0 0 24 24"><path d="M12 2l3 7h7l-6 5 2 8-6-4-6 4 2-8-6-5h7z" fill="none" stroke="currentColor"/></svg></button>
+        <button type="button" class="sw__close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor"/></svg></button>
+      </div>
+    </div>
+  </div>
+  <div class="sw__doc-results sw__group">
+    <div class="sw__window-label">Workspace documents · 1</div>
+    <div class="sw__doc-grid">
+      <button type="button" class="sw__doc-item">
+        <span class="sw__doc-icon"><svg><use href="#iconFile"></use></svg></span>
+        <span class="sw__doc-copy">
+          <span class="sw__doc-title">A long document title that can wrap across lines</span>
+          <span class="sw__doc-path">/Notebook/Projects/A long document title</span>
+        </span>
+      </button>
+    </div>
+  </div>
+</div>
+<div class="b3-dialog"><div class="b3-dialog__container"><div class="b3-dialog__body"><div class="sw-settings__item">
+  <div class="sw-settings__item-main"><div class="sw-settings__item-title">Setting</div></div>
+  <div class="sw-settings__item-action"><label class="b3-switch sw-switch"><input type="checkbox"><span></span></label></div>
+</div></div>
+<div class="speed-switch sw-platform-shell" id="platform-primitives">
+  <span class="sw-platform-status" data-state="ready">Kernel ready</span>
+  <span class="sw-platform-status" data-state="stale">Cached · 3 min</span>
+  <span class="sw-platform-status" data-state="error">Sync failed</span>
+  <span class="sw-platform-kbd">Tab</span>
+  <div class="sw-platform-seg" role="radiogroup" aria-label="View"><button type="button" class="sw-platform-seg__item is-active" aria-checked="true">Grid</button><button type="button" class="sw-platform-seg__item" aria-checked="false">List</button></div>
+</div>
+<div class="sw-home"><section class="sw-home__cell" data-size="large" data-module-id="journal-calendar"><div class="sw-home__cell-body">
+  <section class="sw__home-module" data-module-id="journal-calendar">
+    <div class="sw__home-module-context">日历上下文</div>
+    <div class="sw__home-module-body">
+      <div class="sw__home-calendar-nav"><button>‹</button><strong class="sw__home-calendar-period">2026年9月</strong><button>今天</button><button>›</button></div>
+      <div class="sw__home-calendar"><span class="sw__home-calendar-head">一</span><span class="sw__home-calendar-head">二</span><span class="sw__home-calendar-head">三</span><span class="sw__home-calendar-head">四</span><span class="sw__home-calendar-head">五</span><span class="sw__home-calendar-head">六</span><span class="sw__home-calendar-head">日</span>${calendarCells}</div>
+    </div>
+  </section>
+</div></section></div>
+<div class="sw-home"><section class="sw-home__cell" data-size="large" data-module-id="external-weather-open-meteo"><div class="sw-home__cell-body">
+  <section class="sw__home-module" data-module-id="external-weather-open-meteo">
+    <div class="sw__home-module-header"><strong class="sw__home-module-title">近期天气</strong></div>
+    <div class="sw__home-module-context">北京 · 中国</div>
+    <div class="sw__home-module-body"><div class="sw__home-stat"><strong class="sw__home-stat-value">21°</strong><span class="sw__home-stat-label">⛅ 多云</span></div>
+      <ul class="sw__home-module-list">${Array.from({length: 4}, (_, index) => `<li class="sw__home-module-item"><span class="sw__home-module-item-action"><span class="sw__home-module-item-label">周${index + 1} 18° / 27°</span><span class="sw__home-module-item-secondary">降水 10%</span></span></li>`).join('')}</ul>
+    </div>
+  </section>
+</div></section></div>
+<div class="sw-home"><section class="sw-home__cell" data-size="large" data-module-id="external-anime-bangumi"><div class="sw-home__cell-body">
+  <section class="sw__home-module" data-module-id="external-anime-bangumi">
+    <div class="sw__home-module-header"><strong class="sw__home-module-title">每日放送</strong></div>
+    <div class="sw__home-module-body"><ul class="sw__home-media-grid">
+      ${Array.from({length: 4}, (_, index) => `<li class="sw__home-media-item has-cover"><button class="sw__home-media-action"><img class="sw__home-media-cover"><span class="sw__home-media-copy"><strong class="sw__home-media-title">番剧 ${index + 1}</strong><small class="sw__home-media-secondary">★ 8.${index}</small></span></button></li>`).join('')}
+      <li class="sw__home-media-item is-source"><button class="sw__home-media-action"><strong class="sw__home-media-title">数据来源：Bangumi</strong></button></li>
+    </ul></div>
+  </section>
+</div></section></div>
+<div class="sw-home"><section class="sw-home__cell" data-size="large" data-module-id="external-hot-news-dailyhot"><div class="sw-home__cell-body">
+  <section class="sw__home-module" data-module-id="external-hot-news-dailyhot">
+    <div class="sw__home-module-header"><strong class="sw__home-module-title">热搜事件</strong><span class="sw__home-source-health is-stale">过期缓存</span></div>
+    <div class="sw__home-module-body"><ul class="sw__home-module-list">
+      ${Array.from({length: 4}, (_, index) => `<li class="sw__home-module-item"><button class="sw__home-module-item-action"><span class="sw__home-module-item-rank">${index + 1}</span><span class="sw__home-module-item-label">热搜事件 ${index + 1}</span><small class="sw__home-module-item-secondary">热度 ${1000 - index}</small></button></li>`).join('')}
+    </ul></div>
+  </section>
+</div></section></div>
+</div>
+<script>
+window.addEventListener('load', () => {
+  const measure = (selector) => {
+    const element = document.querySelector(selector);
+    const style = getComputedStyle(element);
+    return {tag: element.tagName, width: style.width, height: style.height, minHeight: style.minHeight, position: style.position, display: style.display, visibility: style.visibility, opacity: style.opacity};
+  };
+  const result = {
+    pin: measure('.sw__pin'),
+    favorite: measure('.sw__fav-btn'),
+    close: measure('.sw__close'),
+    settingSwitch: measure('.sw-switch'),
+    docGrid: measure('.sw__doc-grid'),
+    docItem: measure('.sw__doc-item'),
+    docTitleClamp: getComputedStyle(document.querySelector('.sw__doc-title')).webkitLineClamp,
+    calendarGrid: measure('.sw__home-calendar'),
+    calendarColumns: getComputedStyle(document.querySelector('.sw__home-calendar')).gridTemplateColumns.split(' ').filter(Boolean).length,
+    calendarCells: document.querySelectorAll('.sw__home-calendar-cell').length,
+    calendarPeriod: document.querySelector('.sw__home-calendar-period').textContent,
+    calendarTodayRadius: getComputedStyle(document.querySelector('.is-today .sw__home-calendar-primary')).borderRadius,
+    calendarMarkerWidth: getComputedStyle(document.querySelector('.sw__home-calendar-marker')).width,
+    calendarHolidayColor: getComputedStyle(document.querySelector('.is-holiday .sw__home-calendar-primary')).color,
+    weatherBackground: getComputedStyle(document.querySelector('[data-module-id="external-weather-open-meteo"].sw-home__cell')).backgroundImage,
+    weatherGrid: measure('[data-module-id="external-weather-open-meteo"] .sw__home-module-list'),
+    weatherColumnsValue: getComputedStyle(document.querySelector('[data-module-id="external-weather-open-meteo"] .sw__home-module-list')).gridTemplateColumns,
+    weatherTemperature: getComputedStyle(document.querySelector('[data-module-id="external-weather-open-meteo"] .sw__home-stat-value')).fontSize,
+    mediaBackground: getComputedStyle(document.querySelector('[data-module-id="external-anime-bangumi"].sw-home__cell')).backgroundImage,
+    mediaGrid: measure('.sw__home-media-grid'),
+    mediaColumnsValue: getComputedStyle(document.querySelector('.sw__home-media-grid')).gridTemplateColumns,
+    mediaCover: measure('.sw__home-media-cover'),
+    mediaCoverRadius: getComputedStyle(document.querySelector('.sw__home-media-cover')).borderRadius,
+    mediaSourceColumn: getComputedStyle(document.querySelector('.sw__home-media-item.is-source')).gridColumn,
+    feedBackground: getComputedStyle(document.querySelector('[data-module-id="external-hot-news-dailyhot"].sw-home__cell')).backgroundImage,
+    feedAction: measure('[data-module-id="external-hot-news-dailyhot"] .sw__home-module-item-action'),
+    feedColumns: getComputedStyle(document.querySelector('[data-module-id="external-hot-news-dailyhot"] .sw__home-module-item-action')).gridTemplateColumns,
+    feedRank: measure('[data-module-id="external-hot-news-dailyhot"] .sw__home-module-item-rank'),
+    feedHealthRadius: getComputedStyle(document.querySelector('[data-module-id="external-hot-news-dailyhot"] .sw__home-source-health')).borderRadius,
+    contrast: (() => {
+      const parseColor = (value) => {
+        if (typeof value !== "string") return null;
+        // T-6871：Chromium 对 color-mix() 的计算值返回 color(srgb r g b / a)（0~1 通道），
+        // 旧解析只认 rgb()/rgba()，导致平台徽标采样恒 0。两种格式都必须支持。
+        // 注意：本脚本文本位于模板字面量内，正则反斜杠必须写成 \\ 才能落到页面。
+        const srgb = value.match(/^color\\(srgb\\s+([\\d.]+)\\s+([\\d.]+)\\s+([\\d.]+)(?:\\s*\\/\\s*([\\d.]+))?\\)$/);
+        if (srgb) {
+          const rgb = [Number(srgb[1]), Number(srgb[2]), Number(srgb[3])].map((v) => Math.round(v * 255));
+          return {r: rgb[0], g: rgb[1], b: rgb[2], a: srgb[4] !== undefined ? Number(srgb[4]) : 1};
+        }
+        const open = value.indexOf("(");
+        const close = value.indexOf(")");
+        if (open < 0 || close < open) return null;
+        const parts = value.slice(open + 1, close).split(/[,\s]+/).filter(Boolean).map(Number);
+        if (!parts.length || parts.some((part) => !Number.isFinite(part))) return null;
+        return {r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1};
+      };
+      const luminance = (color) => {
+        const channel = (value) => {
+          const v = value / 255;
+          return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+        };
+        return 0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b);
+      };
+      const effectiveBackground = (element) => {
+        let node = element;
+        // 注意：documentElement 自身可能就是不透明背景的载体（夹具 :root 令牌），
+        // 必须包含在检查内，否则暗色主题下全部回落白色、比值恒为 ~1。
+        while (node) {
+          const bg = parseColor(getComputedStyle(node).backgroundColor);
+          if (bg && bg.a > 0.9) return bg;
+          node = node.parentElement;
+        }
+        return {r: 255, g: 255, b: 255, a: 1};
+      };
+      const blend = (foreground, background, alpha) => ({
+        r: Math.round(foreground.r * alpha + background.r * (1 - alpha)),
+        g: Math.round(foreground.g * alpha + background.g * (1 - alpha)),
+        b: Math.round(foreground.b * alpha + background.b * (1 - alpha)),
+        a: 1,
+      });
+      const contrastRatio = (foreground, background) => {
+        const l1 = luminance(foreground);
+        const l2 = luminance(background);
+        return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+      };
+      const contrastOf = (element) => {
+        const fg = parseColor(getComputedStyle(element).color);
+        if (!fg) return 0;
+        const bg = effectiveBackground(element);
+        return Math.round(contrastRatio(fg, bg) * 100) / 100;
+      };
+      const weatherSurfaceSamples = (card) => {
+        const gradient = getComputedStyle(card).backgroundImage;
+        const glow = gradient.match(/radial-gradient\\([^,]+,\\s*(rgba?\\([^)]*\\))/);
+        const glowColor = glow ? parseColor(glow[1]) : null;
+        const linear = gradient.match(/linear-gradient\\([^,]+,\\s*(rgba?\\([^)]*\\)),\\s*(rgba?\\([^)]*\\))\\)/);
+        const endpoints = linear ? [parseColor(linear[1]), parseColor(linear[2])] : [];
+        const glowOpacity = glowColor ? glowColor.a : 0;
+        if (endpoints.length !== 2 || endpoints.some((endpoint) => !endpoint)) return null;
+        return {endpoints, glowColor: glowColor || {r: 255, g: 255, b: 255, a: 1}, glowOpacity};
+      };
+      const weatherContextContrast = () => {
+        const context = document.querySelector('[data-module-id="external-weather-open-meteo"] .sw__home-module-context');
+        const card = document.querySelector('[data-module-id="external-weather-open-meteo"].sw-home__cell');
+        const surfaceSamples = card && weatherSurfaceSamples(card);
+        if (!context || !surfaceSamples) return 0;
+        const foreground = parseColor(getComputedStyle(context).color);
+        const surface = parseColor(getComputedStyle(context).backgroundColor);
+        const opacity = Number(getComputedStyle(context).opacity);
+        if (!foreground || !surface || !Number.isFinite(opacity)) return 0;
+        const baseBg = effectiveBackground(card);
+        return Math.round(Math.min(...surfaceSamples.endpoints.map((endpoint) => {
+          const endpointOnBase = blend(endpoint, baseBg, endpoint.a !== undefined ? endpoint.a : 1);
+          const highlight = blend(surfaceSamples.glowColor, endpointOnBase, surfaceSamples.glowOpacity);
+          const background = blend(surface, highlight, surface.a);
+          const compositedText = blend(foreground, background, opacity * foreground.a);
+          return contrastRatio(compositedText, background);
+        })) * 100) / 100;
+      };
+      const weatherStatContrast = () => {
+        const card = document.querySelector('[data-module-id="external-weather-open-meteo"].sw-home__cell');
+        const value = card?.querySelector('.sw__home-stat-value');
+        const surfaceSamples = card && weatherSurfaceSamples(card);
+        if (!card || !value || !surfaceSamples) return 0;
+        const foreground = parseColor(getComputedStyle(value).color);
+        const fontSize = Number.parseFloat(getComputedStyle(value).fontSize);
+        if (!foreground || !Number.isFinite(fontSize) || fontSize < 24) return 0;
+        const baseBg = effectiveBackground(card);
+        return Math.round(Math.min(...surfaceSamples.endpoints.map((endpoint) => {
+          const endpointOnBase = blend(endpoint, baseBg, endpoint.a !== undefined ? endpoint.a : 1);
+          const background = blend(surfaceSamples.glowColor, endpointOnBase, surfaceSamples.glowOpacity);
+          return contrastRatio(foreground, background);
+        })) * 100) / 100;
+      };
+      const samples = {
+        // T-6690 注：moduleTitle 采番剧卡；天气渐变端点由专用采样覆盖。
+        moduleTitle: '[data-module-id="external-anime-bangumi"] .sw__home-module-title',
+        itemLabel: '[data-module-id="external-hot-news-dailyhot"] .sw__home-module-item-label',
+        docTitle: '.sw__doc-title',
+        settingsTitle: '.sw-settings__item-title',
+        mediaSecondary: '.sw__home-media-secondary',
+        windowLabel: '.sw__window-label',
+        // T-6697b 扩充面：日历节假日文本、来源健康徽章、文档路径辅助文本、时钟周期
+        calendarHoliday: '.is-holiday .sw__home-calendar-primary',
+        sourceHealthStale: '.sw__home-source-health.is-stale',
+        docPath: '.sw__doc-path',
+        calendarPeriod: '.sw__home-calendar-period',
+        // T-6701 第三波：模块上下文、日历星期头、媒体标题
+        moduleContext: '[data-module-id="journal-calendar"] .sw__home-module-context',
+        calendarHead: '.sw__home-calendar-head',
+        mediaTitle: '[data-module-id="external-anime-bangumi"] .sw__home-media-title',
+        // T-6871/RZ-1：平台原语（六态徽标、kbd 芯片、分段控件激活项）
+        platformStatusReady: '.sw-platform-status[data-state="ready"]',
+        platformStatusStale: '.sw-platform-status[data-state="stale"]',
+        platformStatusError: '.sw-platform-status[data-state="error"]',
+        platformKbd: '.sw-platform-kbd',
+        platformSegActive: '.sw-platform-seg__item.is-active',
+      };
+      const ratios = {};
+      for (const [name, selector] of Object.entries(samples)) {
+        const element = document.querySelector(selector);
+        ratios[name] = element ? contrastOf(element) : 0;
+      }
+      ratios.weatherContext = weatherContextContrast();
+      ratios.weatherStatValue = weatherStatContrast();
+      return ratios;
+    })(),
+  };
+  document.body.dataset.result = btoa(unescape(encodeURIComponent(JSON.stringify(result))));
+});
+</script>
+</body>
+</html>`;
+
+const passes = [
+    {name: "dark", html: buildHtml(true)},
+    {name: "light", html: buildHtml(false)},
+];
+let contrastAllOk = true;
+let structuralAllOk = true;
+
+(async () => {
+try {
+    const {chromium} = require("@playwright/test");
+    const browser = await chromium.launch({
+        executablePath: resolveBrowserExecutable(),
+        headless: true,
+        args: ["--no-sandbox", "--disable-dev-shm-usage", "--allow-file-access-from-files", "--disable-gpu"],
+    });
+    try {
+        for (const pass of passes) {
+            fs.writeFileSync(htmlPath, pass.html, 'utf8');
+            const page = await browser.newPage({viewport: {width: 390, height: 844}});
+            let rawResult;
+            try {
+                await page.goto(pathToFileURL(htmlPath).href, {waitUntil: "domcontentloaded"});
+                await page.waitForFunction(() => Boolean(document.body.dataset.result), undefined, {timeout: 20000});
+                rawResult = await page.evaluate(() => document.body.dataset.result);
+                if (screenshotPath) {
+                    await page.screenshot({path: screenshotPath});
+                }
+            } finally {
+                await page.close();
+            }
+            const result = JSON.parse(Buffer.from(rawResult, 'base64').toString('utf8'));
+    const actionOk = ['pin', 'favorite', 'close'].every((key) => {
+        const item = result[key];
+        return item.tag === 'BUTTON' && item.width === '28px' && item.height === '28px'
+            && item.position === 'absolute' && item.display === 'flex'
+            && item.visibility === 'visible' && item.opacity !== '0';
+    });
+    const switchOk = result.settingSwitch.width === '42px'
+        && result.settingSwitch.height === '24px'
+        && result.settingSwitch.position === 'relative';
+    const docCardsOk = result.docGrid.display === 'grid'
+        && result.docItem.tag === 'BUTTON'
+        && result.docItem.display === 'grid'
+        && result.docItem.minHeight === '84px'
+        && result.docTitleClamp === '2';
+    const calendarOk = result.calendarGrid.display === 'grid'
+        && result.calendarColumns === 7
+        && result.calendarCells === 42
+        && result.calendarPeriod === '2026年9月'
+        && result.calendarTodayRadius === '50%'
+        && result.calendarMarkerWidth === '4px'
+        && result.calendarHolidayColor !== '';
+    const weatherCols = result.weatherColumnsValue.split(' ').filter(Boolean).length;
+    const weatherOk = result.weatherBackground.includes('gradient')
+        && result.weatherGrid.display === 'grid'
+        && (weatherCols === 2 || weatherCols === 4)
+        && parseFloat(result.weatherTemperature) >= 34;
+    const coverRatio = parseFloat(result.mediaCover.width) / parseFloat(result.mediaCover.height);
+    const mediaOk = result.mediaBackground.includes('gradient')
+        && result.mediaGrid.display === 'grid'
+        && result.mediaColumnsValue.split(' ').filter(Boolean).length === 2
+        && Math.abs(coverRatio - 0.75) < 0.03
+        && result.mediaCoverRadius === '12px'
+        && result.mediaSourceColumn === '1 / -1';
+    const feedOk = result.feedBackground.includes('gradient')
+        && result.feedAction.display === 'grid'
+        && result.feedColumns.split(' ').filter(Boolean).length === 2
+        && result.feedRank.width === '22px'
+        && result.feedRank.height === '22px'
+        && parseFloat(result.feedHealthRadius) > 8;
+        // T-6697/B2 对比度采样（WCAG AA）：普通文本 >=4.5:1，大字号/徽章/辅助文本 >=3:1。
+        // 夹具令牌集见 tests/fixtures/siyuan-mobile-base.css（T-6696）。
+        const contrastEntries = Object.entries(result.contrast || {});
+        for (const [name, ratio] of contrastEntries) {
+            console.log("[" + pass.name + "] contrast " + name + ": " + ratio);
+        }
+        // T-6697b：普通文本一组 ≥4.5；节假日日历/过期徽章按次要与大字号线 ≥3 归入聚合
+        const normalTextOk = ["moduleTitle", "itemLabel", "docTitle", "settingsTitle", "calendarPeriod", "docPath", "mediaSecondary", "windowLabel", "calendarHead", "mediaTitle", "weatherContext"].every((name) => (result.contrast[name] || 0) >= 4.5);
+        const largeTextOk = (result.contrast.weatherStatValue || 0) >= 3;
+        const badgeTextOk = ["calendarHoliday", "sourceHealthStale"].every((name) => (result.contrast[name] || 0) >= 3);
+        // T-6871/RZ-1：平台原语——六态徽标沿用徽章线 ≥3（与 sourceHealthStale 同约定）；
+        // kbd 芯片与分段激活项是常规小字，须达普通文本线 ≥4.5。
+        const platformBadgeOk = ["platformStatusReady", "platformStatusStale", "platformStatusError"].every((name) => (result.contrast[name] || 0) >= 3);
+        const platformTextOk = ["platformKbd", "platformSegActive"].every((name) => (result.contrast[name] || 0) >= 4.5);
+        console.log("[" + pass.name + "] " + (normalTextOk && largeTextOk && badgeTextOk && platformBadgeOk && platformTextOk ? "PASS" : "FAIL") + " contrast ratios meet WCAG AA on the sampled surfaces");
+        if (!(normalTextOk && largeTextOk && badgeTextOk && platformBadgeOk && platformTextOk)) contrastAllOk = false;
+        console.log(JSON.stringify(result, null, 2));
+        console.log("[" + pass.name + "] " + (actionOk ? 'PASS' : 'FAIL') + " Chromium mobile card actions");
+        console.log("[" + pass.name + "] " + (switchOk ? 'PASS' : 'FAIL') + " Chromium settings switch");
+        console.log("[" + pass.name + "] " + (docCardsOk ? 'PASS' : 'FAIL') + " Chromium document search cards");
+        console.log("[" + pass.name + "] " + (calendarOk ? 'PASS' : 'FAIL') + " Chromium six-week calendar widget");
+        console.log("[" + pass.name + "] " + (weatherOk ? 'PASS' : 'FAIL') + " Chromium responsive weather widget");
+        console.log("[" + pass.name + "] " + (mediaOk ? 'PASS' : 'FAIL') + " Chromium responsive media widget");
+        console.log("[" + pass.name + "] " + (feedOk ? 'PASS' : 'FAIL') + " Chromium ranked feed widget");
+        structuralAllOk = structuralAllOk && actionOk && switchOk && docCardsOk && calendarOk && weatherOk && mediaOk && feedOk;
+    }
+    process.exitCode = contrastAllOk && structuralAllOk ? 0 : 1;
+    } finally {
+        await browser.close();
+    }
+} catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+} finally {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+            fs.rmSync(baseTmpE2eDir, {recursive: true, force: true});
+            break;
+        } catch (error) {
+            if (attempt === 2) {
+                console.warn(`smoke temp dir left behind: ${baseTmpE2eDir} (${error.message})`);
+            } else {
+                Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+            }
+        }
+    }
+}
+})().catch((error) => {
+    console.error(error);
+    process.exit(1);
+});

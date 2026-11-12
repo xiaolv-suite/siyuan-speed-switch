@@ -1,0 +1,283 @@
+<!-- [ARCHIVED PROTOTYPE · 2026-10-31] 状态：过期归档。说明与现行替代基线见 docs/design/archive/README.md 及 docs/unified-backlog-and-audit-2026-10-31.md -->
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A 批次原型 v2：时钟/时间家族（iPad 组件质感）</title>
+<style>
+:root {
+    --bg: #f2f2f7;
+    --card-bg: rgba(255,255,255,0.72);
+    --card-bg-dark: rgba(30,30,32,0.82);
+    --card-border: rgba(255,255,255,0.5);
+    --card-shadow: 0 2px 12px rgba(0,0,0,0.08), 0 0.5px 2px rgba(0,0,0,0.06);
+    --card-shadow-hover: 0 4px 20px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.06);
+    --primary: #007AFF;
+    --on-primary: #ffffff;
+    --text-main: #1c1c1e;
+    --text-secondary: #8e8e93;
+    --text-tertiary: #aeaeb2;
+    --separator: rgba(60,60,67,0.12);
+    --fill-quaternary: rgba(118,118,128,0.08);
+    --radius-lg: 22px;
+    --radius-md: 14px;
+    --radius-sm: 8px;
+    --font: -apple-system, 'SF Pro Display', 'PingFang SC', system-ui, sans-serif;
+    /* dark mode vars */
+    --dark-bg: #000000;
+    --dark-card-bg: rgba(28,28,30,0.81);
+    --dark-card-border: rgba(255,255,255,0.12);
+    --dark-card-shadow: 0 2px 16px rgba(0,0,0,0.4);
+    --dark-text-main: #ffffff;
+    --dark-text-secondary: rgba(235,235,245,0.6);
+    --dark-text-tertiary: rgba(235,235,245,0.3);
+    --dark-separator: rgba(84,84,88,0.65);
+    --dark-fill: rgba(118,118,128,0.24);
+    --dark-primary: #0A84FF;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: var(--font);
+    background: linear-gradient(145deg, #e8e8ed 0%, #d6d6db 50%, #c8c8cd 100%);
+    color: var(--text-main);
+    padding: 24px;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+}
+h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; margin-bottom: 2px; }
+.sub { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; }
+h2 { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin: 24px 0 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+.theme-btn { position: fixed; top: 16px; right: 16px; z-index: 99; padding: 8px 16px; border-radius: 20px; border: none; background: rgba(0,0,0,0.06); color: var(--text-main); cursor: pointer; font-size: 13px; font-weight: 500; backdrop-filter: blur(10px); }
+.theme-btn:hover { background: rgba(0,0,0,0.1); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 8px; }
+.grid1 { display: grid; grid-template-columns: 1fr; gap: 16px; margin-bottom: 8px; }
+
+/* ===== 基础卡片（iPad 组件容器） ===== */
+.widget {
+    border-radius: var(--radius-lg);
+    padding: 18px;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+.widget:hover { transform: scale(1.005); box-shadow: var(--card-shadow-hover); }
+.widget-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 10px; opacity: 0.5; }
+
+/* 浅色材质 */
+.w-light {
+    background: var(--card-bg);
+    border: 0.5px solid var(--card-border);
+    box-shadow: var(--card-shadow);
+    color: var(--text-main);
+}
+
+/* 暗色舞台材质（dark 材质档） */
+.w-dark {
+    background: linear-gradient(145deg, #1c1c1e 0%, #2c2c2e 100%);
+    border: 0.5px solid rgba(255,255,255,0.1);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.35), inset 0 0.5px 0 rgba(255,255,255,0.06);
+    color: #ffffff;
+}
+.w-dark .widget-label { color: rgba(255,255,255,0.45); }
+.w-dark .secondary { color: rgba(255,255,255,0.55); }
+
+/* 主色渐变材质（accent 材质档） */
+.w-accent {
+    background: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
+    box-shadow: 0 4px 20px rgba(0,122,255,0.3), inset 0 0.5px 0 rgba(255,255,255,0.2);
+    color: #ffffff;
+}
+.w-accent .widget-label { color: rgba(255,255,255,0.6); }
+.w-accent .secondary { color: rgba(255,255,255,0.75); }
+
+/* 内容驱动语义渐变（vibrant 材质档） */
+.w-vibrant {
+    background: linear-gradient(135deg, #FF9500 0%, #FF6B35 100%);
+    box-shadow: 0 4px 20px rgba(255,149,0,0.3), inset 0 0.5px 0 rgba(255,255,255,0.25);
+    color: #ffffff;
+}
+
+/* ===== 时间与日期 ===== */
+.lt-time-row { display: flex; align-items: baseline; gap: 2px; }
+.lt-hm { font-size: 48px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -1.5px; line-height: 1; }
+.lt-sec { font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums; opacity: 0.6; }
+.lt-ampm { font-size: 14px; font-weight: 500; opacity: 0.5; margin-left: 4px; }
+.lt-date { font-size: 14px; margin-top: 6px; opacity: 0.65; }
+.lt-tz { font-size: 11px; margin-top: 3px; opacity: 0.4; }
+.lt-progress { margin-top: 12px; }
+.lt-bar { height: 3px; border-radius: 1.5px; overflow: hidden; }
+.w-light .lt-bar, .w-dark .lt-bar { background: rgba(128,128,128,0.2); }
+.w-accent .lt-bar { background: rgba(255,255,255,0.2); }
+.lt-fill { height: 100%; border-radius: 1.5px; }
+.w-light .lt-fill, .w-dark .lt-fill { background: var(--primary); }
+.w-accent .lt-fill { background: rgba(255,255,255,0.8); }
+.lt-pct { font-size: 10px; margin-top: 4px; text-align: right; opacity: 0.5; font-variant-numeric: tabular-nums; }
+
+/* ===== 世界时钟 ===== */
+.wc-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+.wc-row + .wc-row { border-top: 0.5px solid var(--separator); }
+.w-dark .wc-row + .wc-row { border-top-color: rgba(255,255,255,0.06); }
+.wc-dn { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
+.wc-dn.is-day { background: linear-gradient(135deg, #FFD54F, #FFA726); box-shadow: 0 1px 4px rgba(255,167,38,0.3); }
+.wc-dn.is-night { background: linear-gradient(135deg, #37474F, #1a237e); box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+.wc-city { font-size: 14px; font-weight: 600; flex: 1; min-width: 0; }
+.wc-offset { font-size: 11px; opacity: 0.45; font-variant-numeric: tabular-nums; }
+.wc-time { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.5px; }
+
+/* ===== 年度进度（环形） ===== */
+.yp-flex { display: flex; align-items: center; gap: 16px; }
+.yp-svg-wrap { position: relative; width: 80px; height: 80px; flex-shrink: 0; }
+.yp-svg { width: 80px; height: 80px; }
+.yp-ring-bg { fill: none; stroke-width: 7; }
+.yp-ring-fg { fill: none; stroke-width: 7; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; transition: stroke-dashoffset 0.5s ease; }
+.yp-pct { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.yp-stat-col { flex: 1; }
+.yp-stat-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 13px; }
+.yp-stat-row .val { font-weight: 600; font-variant-numeric: tabular-nums; }
+.yp-stat-row .lbl { opacity: 0.55; }
+
+/* ===== 倒数日 ===== */
+.cd-number { font-size: 44px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -1.5px; line-height: 1; }
+.cd-target { font-size: 13px; margin-top: 6px; opacity: 0.6; }
+.cd-bar { height: 5px; border-radius: 2.5px; overflow: hidden; margin-top: 10px; }
+.w-accent .cd-bar { background: rgba(255,255,255,0.2); }
+.cd-bar-fill { height: 100%; border-radius: 2.5px; background: rgba(255,255,255,0.85); }
+.cd-milestone { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.w-accent .cd-milestone { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.85); }
+.cd-milestone-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* ===== 分割线 ===== */
+hr { border: none; border-top: 1px solid var(--separator); margin: 20px 0; }
+</style>
+</head>
+<body>
+<h1>A 批次原型 v2</h1>
+<p class="sub">时钟/时间家族 · iPad 组件质感 · 明暗双主题</p>
+<button class="theme-btn" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">☀ / 🌙</button>
+
+<h2>时间与日期 · Dark 舞台材质 · M 档</h2>
+<div class="grid2">
+    <div class="widget w-dark">
+        <div class="widget-label">时间与日期</div>
+        <div class="lt-time-row">
+            <span class="lt-hm">14:23</span><span class="lt-sec">45</span><span class="lt-ampm">PM</span>
+        </div>
+        <div class="lt-date">9月30日 星期三</div>
+        <div class="lt-tz">UTC+8 · Asia/Shanghai</div>
+        <div class="lt-progress">
+            <div class="lt-bar"><div class="lt-fill" style="width:60%"></div></div>
+            <div class="lt-pct">60%</div>
+        </div>
+    </div>
+    <div class="widget w-dark">
+        <div class="widget-label">时间与日期 · 秒隐藏</div>
+        <div class="lt-time-row"><span class="lt-hm">14:23</span><span class="lt-ampm">PM</span></div>
+        <div class="lt-date">9月30日 星期三</div>
+        <div class="lt-progress">
+            <div class="lt-bar"><div class="lt-fill" style="width:60%"></div></div>
+            <div class="lt-pct">60%</div>
+        </div>
+    </div>
+</div>
+
+<h2>世界时钟 · Dark 舞台材质 · L 档</h2>
+<div class="grid1">
+    <div class="widget w-dark">
+        <div class="widget-label">世界时钟</div>
+        <div class="wc-row">
+            <span class="wc-dn is-day">☀</span><span class="wc-city">东京</span><span class="wc-offset">UTC+9</span><span class="wc-time">15:23</span>
+        </div>
+        <div class="wc-row">
+            <span class="wc-dn is-day">☀</span><span class="wc-city">伦敦</span><span class="wc-offset">UTC+1</span><span class="wc-time">07:23</span>
+        </div>
+        <div class="wc-row">
+            <span class="wc-dn is-night">🌙</span><span class="wc-city">纽约</span><span class="wc-offset">UTC−4</span><span class="wc-time">02:23</span>
+        </div>
+        <div class="wc-row">
+            <span class="wc-dn is-night">🌙</span><span class="wc-city">悉尼</span><span class="wc-offset">UTC+11</span><span class="wc-time">16:23</span>
+        </div>
+    </div>
+</div>
+
+<h2>年度进度 · Light 亮卡片 · M 档（SVG 环形）</h2>
+<div class="grid2">
+    <div class="widget w-light">
+        <div class="widget-label">2026 年度进度</div>
+        <div class="yp-flex">
+            <div class="yp-svg-wrap">
+                <svg class="yp-svg" viewBox="0 0 80 80">
+                    <circle class="yp-ring-bg" cx="40" cy="40" r="34" style="stroke:var(--fill-quaternary)"/>
+                    <circle class="yp-ring-fg" cx="40" cy="40" r="34" style="stroke:var(--primary)" stroke-dasharray="213.6" stroke-dashoffset="61.9"/>
+                </svg>
+                <span class="yp-pct">71%</span>
+            </div>
+            <div class="yp-stat-col">
+                <div class="yp-stat-row"><span class="lbl">已过</span><span class="val">273 天</span></div>
+                <div class="yp-stat-row"><span class="lbl">剩余</span><span class="val">93 天</span></div>
+                <div class="yp-stat-row"><span class="lbl">总天数</span><span class="val">366 天</span></div>
+            </div>
+        </div>
+    </div>
+    <div class="widget w-light">
+        <div class="widget-label">本月进度</div>
+        <div class="yp-flex">
+            <div class="yp-svg-wrap">
+                <svg class="yp-svg" viewBox="0 0 80 80">
+                    <circle class="yp-ring-bg" cx="40" cy="40" r="34" style="stroke:var(--fill-quaternary)"/>
+                    <circle class="yp-ring-fg" cx="40" cy="40" r="34" style="stroke:#FF9500" stroke-dasharray="213.6" stroke-dashoffset="106.8"/>
+                </svg>
+                <span class="yp-pct">50%</span>
+            </div>
+            <div class="yp-stat-col">
+                <div class="yp-stat-row"><span class="lbl">已过</span><span class="val">15 天</span></div>
+                <div class="yp-stat-row"><span class="lbl">剩余</span><span class="val">15 天</span></div>
+                <div class="yp-stat-row"><span class="lbl">总天数</span><span class="val">30 天</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h2>倒数日 · Accent 渐变材质 · S 档</h2>
+<div class="grid2">
+    <div class="widget w-accent">
+        <div class="widget-label">距离目标日</div>
+        <div class="cd-number">127<span style="font-size:16px;font-weight:400;margin-left:4px;">天</span></div>
+        <div class="cd-target">2027-02-04</div>
+        <div class="cd-bar"><div class="cd-bar-fill" style="width:65%"></div></div>
+        <div class="cd-milestone"><span class="cd-milestone-dot"></span>100 天里程碑已过</div>
+    </div>
+    <div class="widget w-accent">
+        <div class="widget-label">距离目标日</div>
+        <div class="cd-number">3<span style="font-size:16px;font-weight:400;margin-left:4px;">天</span></div>
+        <div class="cd-target">2026-10-03</div>
+        <div class="cd-bar"><div class="cd-bar-fill" style="width:92%"></div></div>
+        <div class="cd-milestone"><span class="cd-milestone-dot"></span>即将到来</div>
+    </div>
+</div>
+
+<h2>倒数日 · Vibrant 暖色材质 · S 档</h2>
+<div class="grid2">
+    <div class="widget w-vibrant">
+        <div class="widget-label">距离目标日</div>
+        <div class="cd-number">89<span style="font-size:16px;font-weight:400;margin-left:4px;">天</span></div>
+        <div class="cd-target">2026-12-28</div>
+        <div class="cd-bar"><div class="cd-bar-fill" style="width:75%"></div></div>
+        <div class="cd-milestone"><span class="cd-milestone-dot"></span>50 天里程碑已过</div>
+    </div>
+    <div class="widget w-vibrant">
+        <div class="widget-label">距离目标日</div>
+        <div class="cd-number">365<span style="font-size:16px;font-weight:400;margin-left:4px;">天</span></div>
+        <div class="cd-target">2027-09-30</div>
+        <div class="cd-bar"><div class="cd-bar-fill" style="width:0%"></div></div>
+        <div class="cd-milestone"><span class="cd-milestone-dot"></span>刚刚创建</div>
+    </div>
+</div>
+
+<hr>
+<p style="font-size:11px;color:var(--text-tertiary);">iPad 组件质感 · 玻璃态卡片 + 渐变材质 + 景深阴影 + tabular-nums · 明暗可切换（右上角）</p>
+
+</body>
+</html>

@@ -1,0 +1,454 @@
+"use strict";
+
+const {buildHomeModuleView, renderHomeModuleView, formatUpdatedAt} = require("./home-view.js");
+const {DEFAULT_MODULES, DEVICES} = require("./home-model.js");
+
+const HOME_CLOCK_MODULE_IDS = new Set(["external-local-time", "external-world-clock", "external-quote-daily"]);
+const CLOCK_PATCH_FIELDS = ["label", "href", "command", "secondary", "done", "weekend", "outside", "holiday", "count", "level", "rank"];
+
+function sameClockStatShape(previous, next) {
+    const previousVisible = Boolean(previous && previous.value);
+    const nextVisible = Boolean(next && next.value);
+    if (previousVisible !== nextVisible) return false;
+    if (!previousVisible) return true;
+    if (previous.label !== next.label || previous.emphasis !== next.emphasis) return false;
+    const previousProgress = Number.isFinite(previous.progress);
+    const nextProgress = Number.isFinite(next.progress);
+    if (previousProgress !== nextProgress) return false;
+    const previousArc = previous.arc && typeof previous.arc === "object";
+    const nextArc = next.arc && typeof next.arc === "object";
+    if (previousArc !== nextArc) return false;
+    if (previousArc && previous.arc.max !== next.arc.max) return false;
+    return true;
+}
+
+function sameClockRowShape(previous, next) {
+    if (!previous || !next) return false;
+    if (Boolean(previous.value) !== Boolean(next.value)) return false;
+    return CLOCK_PATCH_FIELDS.every((field) => previous[field] === next[field]);
+}
+
+function clockPatchLabels(labels = {}) {
+    return {
+        cached: labels.cached || "缓存",
+        updated: labels.updated || "更新",
+        staleRefreshFailed: labels.staleRefreshFailed || "旧内容（缓存）· 刷新失败",
+        sourceFresh: labels.sourceFresh || "实时",
+        sourceCached: labels.sourceCached || "缓存源",
+        sourceStale: labels.sourceStale || "过期缓存",
+    };
+}
+
+function buildClockPatchPlan(root, previous, next) {
+    if (!root || !previous || !next || !HOME_CLOCK_MODULE_IDS.has(next.moduleId)) return null;
+    if (previous.moduleId !== next.moduleId || previous.status !== "ready" || next.status !== "ready") return null;
+    if (previous.viewType || next.viewType || previous.collapsed !== next.collapsed) return null;
+    if (previous.stale !== next.stale) return null;
+    if (!sameClockStatShape(previous.stat, next.stat)) return null;
+    const hasDayProgress = next.moduleId === "external-local-time" && next.dayProgress >= 0;
+    if (hasDayProgress !== (previous.moduleId === "external-local-time" && previous.dayProgress >= 0)) return null;
+    const dayProgress = hasDayProgress ? root.querySelector(".sw__home-day-progress") : null;
+    const dayProgressBar = dayProgress?.querySelector(".sw__home-day-progress-bar");
+    if (hasDayProgress && (!dayProgress || !dayProgressBar)) return null;
+    const previousItems = Array.isArray(previous.items) ? previous.items : [];
+    const nextItems = Array.isArray(next.items) ? next.items : [];
+    if (previousItems.length !== nextItems.length) return null;
+    if (root.dataset.moduleId !== next.moduleId || root.dataset.status !== "ready") return null;
+    const rows = Array.from(root.querySelectorAll("[data-sw-row]"));
+    if (rows.length !== nextItems.length) return null;
+    for (let index = 0; index < nextItems.length; index += 1) {
+        const row = rows[index];
+        const label = row.querySelector(".sw__home-module-item-label");
+        const value = row.querySelector("[data-sw-row-value]");
+        const rendersValue = Boolean(nextItems[index].label && nextItems[index].value);
+        if (!label || !sameClockRowShape(previousItems[index], nextItems[index])
+            || label.textContent !== (previousItems[index].label || previousItems[index].value || previousItems[index].href || "")
+            || Boolean(value) !== rendersValue) return null;
+    }
+    const previousMeta = Boolean(previous.cached || formatUpdatedAt(previous.updatedAt));
+    const nextMeta = Boolean(next.cached || formatUpdatedAt(next.updatedAt));
+    if (previousMeta !== nextMeta) return null;
+    if (previousMeta && !root.querySelector(".sw__home-module-meta")) return null;
+    const previousHealth = Boolean(previous.sourceHealth);
+    const nextHealth = Boolean(next.sourceHealth);
+    if (previousHealth !== nextHealth) return null;
+    if (previousHealth && !root.querySelector(".sw__home-source-health")) return null;
+    return {rows, nextItems, hasStat: Boolean(next.stat && next.stat.value), hasMeta: nextMeta, hasHealth: nextHealth, dayProgress, dayProgressBar};
+}
+
+function patchClockView(root, previous, next, labels) {
+    const plan = buildClockPatchPlan(root, previous, next);
+    if (!plan) return false;
+    const patchLabels = clockPatchLabels(labels);
+    if (plan.hasStat) {
+        const statValue = root.querySelector(".sw__home-stat-value");
+        if (statValue) statValue.textContent = next.stat.value;
+    }
+    if (plan.dayProgress) {
+        plan.dayProgress.setAttribute("aria-valuenow", String(next.dayProgress));
+        plan.dayProgress.setAttribute("aria-label", `Day progress ${next.dayProgress}%`);
+        plan.dayProgressBar.style.width = `${next.dayProgress}%`;
+    }
+    plan.rows.forEach((row, index) => {
+        const item = plan.nextItems[index];
+        const button = row.querySelector(".sw__home-module-item-action");
+        const value = row.querySelector("[data-sw-row-value]");
+        if (button) {
+            button.dataset.value = item.value || "";
+            button.setAttribute("aria-label", [item.label || item.value || item.href || "", item.label && item.value ? item.value : "", item.secondary].filter(Boolean).join(" · "));
+        }
+        if (value) value.textContent = item.value;
+    });
+    if (plan.hasMeta) {
+        const meta = root.querySelector(".sw__home-module-meta");
+        const updatedAt = formatUpdatedAt(next.updatedAt);
+        const metaText = [next.stale ? patchLabels.staleRefreshFailed : next.cached ? patchLabels.cached : "", updatedAt].filter(Boolean).join(" · ");
+        meta.textContent = metaText;
+        meta.setAttribute("title", `${patchLabels.updated} ${metaText}`);
+        const title = root.querySelector(".sw__home-module-title");
+        if (title) title.title = `${title.textContent} · ${meta.title}`;
+    }
+    if (plan.hasHealth) {
+        const health = root.querySelector(".sw__home-source-health");
+        health.classList.remove("is-fresh", "is-cached", "is-stale");
+        health.classList.add(`is-${next.sourceHealth}`);
+        health.dataset.health = next.sourceHealth;
+        health.textContent = next.sourceHealth === "fresh" ? patchLabels.sourceFresh : next.sourceHealth === "cached" ? patchLabels.sourceCached : patchLabels.sourceStale;
+        health.setAttribute("aria-label", health.textContent);
+        health.setAttribute("title", health.textContent);
+    }
+    root.dataset.status = next.status;
+    root.setAttribute("aria-busy", next.ariaBusy === true ? "true" : "false");
+    return true;
+}
+
+function createHomeModuleController(options = {}) {
+    const documentRef = options.document;
+    const container = options.container;
+    const module = options.module && typeof options.module === "object" ? options.module : null;
+    const read = typeof options.read === "function" ? options.read : null;
+    if (!documentRef || !container || !module?.moduleId || !read) return null;
+    let generation = 0;
+    let disposed = false;
+    let activeController = null;
+    let pendingFocusKey = null;
+    let pendingScrollTop = null;
+    // 秒开（D-382）：宿主若提供了上一次的好快照，首帧直接以"缓存"态渲染内容，
+    // 随后的 refresh 走既有的 retained + 更新中指示器路径，不再闪 loading 骨架。
+    const initialSnapshot = options.initialSnapshot && typeof options.initialSnapshot === "object"
+        && Array.isArray(options.initialSnapshot.items) && options.initialSnapshot.items.length > 0
+        ? options.initialSnapshot : null;
+    let currentView = initialSnapshot
+        ? buildHomeModuleView(module, {ok: true, cached: true, snapshot: initialSnapshot}, {collapsed: options.collapsed === true})
+        : buildHomeModuleView(module, {loading: true}, {collapsed: options.collapsed === true});
+
+    function toggle() {
+        if (disposed) return currentView;
+        const nextView = {...currentView, collapsed: currentView?.collapsed !== true};
+        const element = render(nextView);
+        if (element && typeof options.onToggle === "function") options.onToggle(nextView);
+        return nextView;
+    }
+
+    function render(view) {
+        if (disposed || !view) return null;
+        const existing = container.firstElementChild;
+        if (patchClockView(existing, currentView, view, options.labels)) {
+            currentView = view;
+            pendingFocusKey = null;
+            pendingScrollTop = null;
+            return existing;
+        }
+        const active = documentRef.activeElement;
+        if (Number.isFinite(container.scrollTop) && container.scrollTop > 0) {
+            pendingScrollTop = container.scrollTop;
+        }
+        const containsActive = typeof container.contains === "function" && container.contains(active);
+        if (active && containsActive && active.dataset?.focusKey) {
+            pendingFocusKey = active.dataset.focusKey;
+        }
+        const element = renderHomeModuleView(documentRef, view, {
+            labels: options.labels,
+            calendarWeekdays: options.calendarWeekdays,
+            onItem: options.onItem,
+            onCalendarNavigate: options.onCalendarNavigate,
+            onCalendarJump: options.onCalendarJump,
+            onCalendarPeriod: options.onCalendarPeriod,
+            calendarPeriodOptions: options.calendarPeriodOptions,
+            onToggleItem: options.onToggleItem,
+            onConfig: options.onConfig,
+            onToggle: () => toggle(),
+            onRetry: () => refresh(undefined, {force: true}),
+        });
+        if (!element) return null;
+        while (container.firstChild) container.removeChild(container.firstChild);
+        container.appendChild(element);
+        if (pendingScrollTop !== null) {
+            try { container.scrollTop = pendingScrollTop; } catch (_) { /* minimal host container */ }
+            pendingScrollTop = null;
+        }
+        if (pendingFocusKey) {
+            let focusTarget = Array.from(element.querySelectorAll("[data-focus-key]"))
+                .find((candidate) => candidate.dataset.focusKey === pendingFocusKey && candidate.disabled !== true);
+            // Retry is rendered only in the error view, so the same key cannot
+            // survive a successful replacement. Move focus into the recovered
+            // content instead of leaving keyboard users on document.body.
+            if (!focusTarget && (pendingFocusKey === "retry" || pendingFocusKey === "config-hint") && view.status === "ready") {
+                focusTarget = element.querySelector(
+                    ".sw__home-module-item-action:not([disabled]), "
+                    + ".sw__home-media-action:not([disabled]), "
+                    + ".sw__home-tag-tree-action:not([disabled])",
+                );
+                if (!focusTarget) {
+                    element.tabIndex = -1;
+                    focusTarget = element;
+                }
+            }
+            if (focusTarget && typeof focusTarget.focus === "function") {
+                try {
+                    focusTarget.focus({preventScroll: true});
+                } catch (_) {
+                    focusTarget.focus();
+                }
+                pendingFocusKey = null;
+            }
+            // Keep the key through the transient loading view, but do not
+            // let a removed item leak into a later unrelated refresh.
+            if (view.status !== "loading") pendingFocusKey = null;
+        }
+        currentView = view;
+        return element;
+    }
+
+    function setRefreshing(active) {
+        const element = container.firstElementChild;
+        if (!element || !element.classList?.contains("sw__home-module")) return false;
+        element.classList.toggle("is-refreshing", active === true);
+        element.setAttribute("aria-busy", active === true ? "true" : "false");
+        const header = element.querySelector(".sw__home-module-header");
+        if (!header) return false;
+        let indicator = header.querySelector(".sw__home-module-refreshing");
+        if (active === true && !indicator) {
+            indicator = documentRef.createElement("span");
+            indicator.className = "sw__home-module-refreshing";
+            indicator.setAttribute("role", "status");
+            indicator.setAttribute("aria-live", "polite");
+            indicator.textContent = options.labels?.refreshing || "更新中…";
+            header.appendChild(indicator);
+        } else if (active !== true) {
+            indicator?.remove();
+        }
+        return true;
+    }
+
+    async function refresh(config = options.config || {}, readOptions = {}) {
+        if (disposed) return {ok: false, reason: "disposed", view: currentView};
+        const token = ++generation;
+        if (activeController) activeController.abort();
+        const externalSignal = readOptions && typeof readOptions.signal === "object" ? readOptions.signal : null;
+        if (externalSignal?.aborted) {
+            activeController = null;
+            return {ok: false, reason: "aborted", view: currentView};
+        }
+        activeController = typeof AbortController === "function" ? new AbortController() : null;
+        const requestController = activeController;
+        let externalAbortHandler = null;
+        if (requestController && typeof externalSignal?.addEventListener === "function") {
+            externalAbortHandler = () => requestController.abort();
+            externalSignal.addEventListener("abort", externalAbortHandler, {once: true});
+        }
+        const retained = currentView?.status === "ready" && setRefreshing(true);
+        if (!retained) render(buildHomeModuleView(module, {loading: true}, {collapsed: currentView?.collapsed === true}));
+        try {
+            if (requestController?.signal.aborted) return {ok: false, reason: "aborted", view: currentView};
+            const result = await read(config, {...readOptions, signal: requestController?.signal || externalSignal});
+            if (disposed || token !== generation) return {ok: false, reason: "stale", view: currentView};
+            if (result?.reason === "stale") return {ok: false, reason: "stale", view: currentView};
+            // 读取失败但上一次的好数据还在（如同步高峰期超时）：继续展示陈旧快照并
+            // 标注"缓存"，不清成错误页——数据陈旧可见比整块报错更有用
+            const stale = result?.ok === false
+                && result?.snapshot && Array.isArray(result.snapshot.items) && result.snapshot.items.length > 0;
+            const view = buildHomeModuleView(
+                module,
+                stale ? {ok: true, cached: true, stale: true, reason: result?.reason || "failed", snapshot: result.snapshot} : result,
+                {collapsed: currentView?.collapsed === true},
+            );
+            render(view);
+            return {ok: result?.ok !== false, reason: result?.reason || "", view};
+        } catch (error) {
+            if (disposed || token !== generation) return {ok: false, reason: "stale", view: currentView};
+            if (error?.message === "aborted") return {ok: false, reason: "aborted", view: currentView};
+            const view = buildHomeModuleView(module, {ok: false, reason: error?.message || "failed"}, {collapsed: currentView?.collapsed === true});
+            render(view);
+            return {ok: false, reason: "failed", view};
+        } finally {
+            if (externalSignal && externalAbortHandler && typeof externalSignal.removeEventListener === "function") {
+                externalSignal.removeEventListener("abort", externalAbortHandler);
+            }
+            if (token === generation) activeController = null;
+            if (token === generation) setRefreshing(false);
+        }
+    }
+
+    function mount() {
+        if (disposed) return null;
+        return render(currentView);
+    }
+
+    function showError(reason = "failed") {
+        if (disposed) return currentView;
+        generation += 1;
+        activeController?.abort();
+        activeController = null;
+        const view = buildHomeModuleView(module, {ok: false, reason}, {collapsed: currentView?.collapsed === true});
+        render(view);
+        return view;
+    }
+
+    function dispose() {
+        if (disposed) return;
+        disposed = true;
+        generation += 1;
+        activeController?.abort();
+        activeController = null;
+        while (container.firstChild) container.removeChild(container.firstChild);
+    }
+
+    return {mount, refresh, toggle, showError, dispose, getView: () => currentView};
+}
+
+async function refreshHomeModules(entries, options = {}) {
+    const queue = Array.isArray(entries) ? entries.filter((entry) => typeof entry?.refresh === "function") : [];
+    if (queue.length === 0) return [];
+    const signal = options && typeof options.signal === "object" ? options.signal : null;
+    const requested = Math.trunc(Number(options.concurrency));
+    const concurrency = Math.min(4, Math.max(1, Number.isFinite(requested) && requested > 0 ? requested : 2));
+    const results = new Array(queue.length);
+    let nextIndex = 0;
+    async function worker() {
+        while (nextIndex < queue.length) {
+            const index = nextIndex++;
+            if (signal?.aborted) {
+                results[index] = {ok: false, reason: "aborted"};
+                continue;
+            }
+            try {
+                results[index] = await queue[index].refresh(undefined, {force: true, signal});
+            } catch (_) {
+                results[index] = {ok: false, reason: "failed"};
+            }
+        }
+    }
+    await Promise.all(Array.from({length: Math.min(concurrency, queue.length)}, worker));
+    return results;
+}
+
+function countHomeRefreshFailures(results) {
+    if (!Array.isArray(results)) return 0;
+    return Math.min(64, results.reduce((count, result) => count + (result?.ok === false && !["aborted", "disposed", "stale"].includes(result?.reason) ? 1 : 0), 0));
+}
+
+function summarizeHomeRefreshFailures(results) {
+    const summary = {timeout: 0, failed: 0, other: 0};
+    if (!Array.isArray(results)) return summary;
+    results.forEach((result) => {
+        if (result?.ok !== false || ["aborted", "disposed", "stale"].includes(result?.reason)) return;
+        if (result.reason === "timeout") summary.timeout = Math.min(64, summary.timeout + 1);
+        else if (result.reason === "failed" || !result.reason) summary.failed = Math.min(64, summary.failed + 1);
+        else summary.other = Math.min(64, summary.other + 1);
+    });
+    return summary;
+}
+
+function selectHomeRefreshRetryEntries(entries, results) {
+    if (!Array.isArray(entries) || !Array.isArray(results)) return [];
+    return entries.filter((_, index) => {
+        const result = results[index];
+        return result?.ok === false && !["aborted", "disposed", "stale"].includes(result.reason);
+    });
+}
+
+// T-6954：健康详情与脱敏诊断。诊断白名单只有组件标识/类型、状态、错误分类和
+// 时间——错误 reason 必须命中白名单才原样展示，否则一律折叠为 "failed"，
+// 原始异常文本、响应正文、笔记标题、URL 参数与凭据永远不会进入摘要。
+const HOME_HEALTH_REASON_WHITELIST = ["timeout", "failed", "aborted", "disposed", "stale", "offline", "unavailable", "empty"];
+// 只认可编译内置目录，不把提供方自定义 ID 当作可导出的安全文本。
+const HOME_DIAGNOSTIC_MODULE_IDS = new Set(DEFAULT_MODULES.map((entry) => entry.moduleId));
+
+function classifyHomeHealthReason(reason) {
+    const value = typeof reason === "string" ? reason.trim().toLowerCase() : "";
+    return HOME_HEALTH_REASON_WHITELIST.includes(value) ? value : "failed";
+}
+
+// 输入为纯数据行（由调用方从控制器与单元 DOM 归一），按 失败/加载中/正常 分组。
+function buildHomeHealthReport(entries) {
+    const report = {failed: [], stale: [], loading: [], ok: []};
+    if (!Array.isArray(entries)) return report;
+    entries.forEach((entry) => {
+        if (!entry || !entry.instanceId) return;
+        const health = entry.health === "ok" || entry.health === "failed" || entry.health === "stale" || entry.health === "loading" ? entry.health : "loading";
+        const row = {
+            instanceId: String(entry.instanceId),
+            moduleId: String(entry.moduleId || ""),
+            title: String(entry.title || entry.moduleId || ""),
+            health,
+            cached: entry.cached === true,
+            reasonClass: health === "failed" || health === "stale"
+                ? classifyHomeHealthReason(entry.reason || (health === "stale" ? "stale" : "")) : "",
+            lastAttemptAt: Number.isFinite(entry.lastAttemptAt) ? entry.lastAttemptAt : null,
+            lastOkAt: Number.isFinite(entry.lastOkAt) ? entry.lastOkAt : null,
+        };
+        report[health].push(row);
+    });
+    return report;
+}
+
+function formatHealthTime(value, unknownLabel) {
+    if (!Number.isFinite(value) || value <= 0) return unknownLabel || "未知";
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return unknownLabel || "未知";
+    const pad2 = (n) => String(n).padStart(2, "0");
+    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+
+// 脱敏摘要不导出标题、实例 ID 或任意提供方 ID；上下文只接受有界版本与固定枚举。
+// 即使调用方绕过 report，状态和 reasonClass 也必须重新归一化。
+function buildHomeDiagnosticSummary(row, labels, context = {}) {
+    row = row || {};
+    context = context || {};
+    const l = labels || {};
+    const unknown = l.unknown || "未知";
+    const version = (value) => typeof value === "string" && value.length <= 40 && value === value.trim()
+        && /^(0|[1-9]\d{0,5})\.(0|[1-9]\d{0,5})\.(0|[1-9]\d{0,5})(?:-(?:alpha|beta|rc)(?:\.?(0|[1-9]\d{0,5}))?)?$/.test(value) ? value : unknown;
+    const moduleId = HOME_DIAGNOSTIC_MODULE_IDS.has(row.moduleId) ? row.moduleId
+        : typeof row.moduleId === "string" && row.moduleId ? "external-widget" : "unknown";
+    const health = ["failed", "stale", "loading", "ok"].includes(row.health) ? row.health : "loading";
+    const statusLabel = health === "failed" ? (l.failed || "失败")
+        : health === "stale" ? (l.stale || "旧内容")
+            : health === "loading" ? (l.loading || "加载中") : (l.ok || "正常");
+    const reasonClass = health === "failed" || health === "stale"
+        ? classifyHomeHealthReason(row.reasonClass || row.reason || (health === "stale" ? "stale" : "")) : "";
+    const lines = [
+        `${l.head || "组件诊断"}: ${moduleId}`,
+        `Plugin: ${version(context.pluginVersion)}`,
+        `SiYuan: ${version(context.hostVersion)}`,
+        `Device: ${DEVICES.includes(context.device) ? context.device : unknown}`,
+        `Surface: ${context.surface === "workbench" ? "workbench" : unknown}`,
+        `${l.status || "状态"}: ${statusLabel}${reasonClass ? ` (${reasonClass})` : ""}`,
+        `${l.cached || "缓存"}: ${row.cached === true ? (l.cachedShown || "旧内容可见") : (l.noCache || "无")}`,
+        `${l.lastAttempt || "最近尝试"}: ${formatHealthTime(row.lastAttemptAt, unknown)}`,
+        `${l.lastOk || "最近成功"}: ${formatHealthTime(row.lastOkAt, unknown)}`,
+    ];
+    return lines.join("\n");
+}
+
+// T-7485: 小组件网络与离线失败指数退避自适应算力保护
+function computeWidgetBackoffDelay(failureCount, baseMs = 15000, maxMs = 300000) {
+    const count = Number.isFinite(failureCount) && failureCount > 0 ? Math.trunc(failureCount) : 0;
+    if (count === 0) return 0;
+    const exp = Math.min(count, 6);
+    const delay = baseMs * Math.pow(2, exp - 1);
+    return Math.min(maxMs, Math.max(baseMs, Math.round(delay)));
+}
+
+module.exports = {createHomeModuleController, refreshHomeModules, countHomeRefreshFailures, summarizeHomeRefreshFailures, selectHomeRefreshRetryEntries, classifyHomeHealthReason, buildHomeHealthReport, formatHealthTime, buildHomeDiagnosticSummary, computeWidgetBackoffDelay};
