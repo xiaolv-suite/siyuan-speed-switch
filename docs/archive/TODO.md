@@ -1,0 +1,8175 @@
+# TODO
+
+
+## T-6276~T-6279 源码扫描门禁的机制级体检与剥注释覆盖（2026-09-16，已完成）
+
+**本组终态**：`dist/index.js` 614064 bytes（614133−69）、`dist/index.css` 145639 bytes（不变）、`package.zip` 313078 bytes（313129−50）——生产源码删掉两个"门禁驱动型"空转局部变量后产物略缩；测试 **5779 项（167 文件）**；`pnpm verify:release` 全链绿（5779/5779 + 三套 UI 门禁）。**注意 zip 的 1 字节漂移**：首次构建记到 313079，随后 README 双语计数（5776→5779 / 166→167）虽是**等长替换**却改变了 DEFLATE 压缩率 → 重建后为 313078；**归档包含两个 README 与 4 份 docs（architecture.svg / interface-map.svg / component-store-guide.md / agent-document-context-m2.md），改动它们都会挪动 zip 字节**，故产物快照必须在**最后一次构建之后**记录（本批快照门禁有 1 KiB 容差，差点静默放过）。
+
+**为什么做这一批**：D-392 固化了第八类失效模式「源码扫描未剥注释」，却只把规则用在当时被修的两处——**"写了规则只用在被修的那几处"本身就是这份清单反复警告的形态**（规则事实上从不触发）。本批把该规则第一次用于全仓普查，并把"覆盖度"本身做成门禁；普查过程中还捞出 3 处**活的假绿**与一类此前未被登记的近恒真断言形态。
+
+- [x] T-6276 全仓普查 + 四轮注入证明（两轮为对照）：普查得"读 `src/` 源码文本做断言"的测试文件 **59 个**（不含 JSON 读取），其中**未剥注释 57 个**；注入实验四轮——A1 把 `agentReadOnlyAuditHistory.record(buildAgentReadOnlyAuditSnapshot(` 改成语义不同的 `injectedNoop(...)`（真删除，对照组）、A2 把该调用**整体注释掉但文本仍在文件里**、B1 从 `.sw-home-store__card-head strong` 规则块删掉 `min-width: 0`（文件里另有 103 处）、B2 同时删掉 `min-width` 与 `max-width`。结果：**A2/B1/B2 三轮均 PASS（假绿证实），A1 FAIL（对照证明门禁确实在看这段文本）**；A1 因锚点在全仓出现 2 次而首轮跳过，改为唯一化锚点后重跑。B 类证明的是另一回事：断言 `/strong[\s\S]*?min-width: 0/` 的**窗口无界**，目标规则可以完整失去该声明而断言仍绿——**剥注释修不了它**（同文件他处的 `min-width: 0` 依然满足）。
+- [x] T-6277 中央助手与迁移：`tests/source-scan.cjs` 增补 `readSourceText(filePath)` = 读文件 + CRLF 归一 + `stripComments`，并在文件头写明**用法边界**（只用于源码；`docs/*.md` 里有裸 URL，按 JS 词法会被 `//` 截断，实测 `docs/external-widget-source-audit.md` 的表格行即为例）。迁移 18 个文件 **65 个读取点**（只迁 `path.join(..., 'src', ...)` 且末字面量非 `.json`；`docs/`、`package.json`、`README`、dist 路径一律不迁）。**踩坑一则**：`require("./source-scan")` 会 `MODULE_NOT_FOUND`——Node 的 CJS 扩展名探测只有 `.js`/`.json`/`.node`，**不含 `.cjs`**，本仓既有约定是写全 `require('./source-scan.cjs')`；17 个文件已修正 require，另 1 个压缩风格文件（`store-status-tone-contract`）因首行即整文件而漏加，单独补上。
+- [x] T-6277b 迁移暴露的 **3 处活假绿**（全部修掉，是"覆盖度门禁"之外真正的收获）：`tests/home-store-contract.test.cjs` 的三条断言，其被断言文本在 `src/home-store-ui.ts` 里**只存在于注释**——`git show HEAD:src/home-store-ui.ts` 逐条核实：`card.dataset.availability === availabilityFilter` 仅在第 387 行的行尾注释里、`card.dataset.added === "true"` 仅在第 390 行的"Legacy audit expression"注释里、`PREVIEW_KINDS` 仅在第 795 行的指针注释里。前两句还各配一个 `const x = ...; void x;` 空转局部变量——**这两个变量存在的唯一理由就是"培育"注释以过门禁**（`void` 即丢弃，TS 的未使用检查因此沉默）。修法：断言改为真实的委托调用（`matchesHomeStoreTokens(card.dataset, query, filter)`、`resolveHomeStoreFilter(activeTab?.dataset.tabKey || storeTab)`、`resolveHomeStorePreviewKind(moduleId, …)`），**并删掉那两个空转变量与两条"legacy"注释**（行为无风险：可用性/仅已添加两轴本就由 `home-store-model.js` 的 `matchesHomeStoreCard` 判定，见其第 570/572 行；UI 只是委托。该文件 `git show` 与 grep 双向确认无他处读者，SCSS 也不引用这两个 data 属性）。模型侧行为**双向**用例此前已存在（`home-store-model.test.cjs` 第 61/63/65 行的阴性用例），故本次无需新增测试。
+- [x] T-6277c 一处**刻意读原始文本**的合法例外（登记而不改）：`doc-search-pagination-contract.test.cjs` 的 `pagination cursors never enter search cache keys` 断言的是 `search-model.js` 里 JSDoc 声明的不变量（"The expansion * cursor never enters search cache keys"）——**注释就是被断言的客体**。故该文件同时持有 `searchModel`（剥注释）与 `searchModelRaw`（原始），只有这一条用后者，并在注释里写明理由。同理 `storage-key-audit` 的 `constants`（key 断言要求声明行带 `// 说明` 尾注释）与 `storage-migration`（断言 `index.ts` 里一句契约注释存在 + 自检"剥注释确实减少了长度"）。
+- [x] T-6278 覆盖率门禁 `tests/source-scan-coverage.test.cjs`（3 项）：把"仍有裸读的文件集合"**双向冻结**在 `SOURCE_SCAN_DEBT` 里（43 条：`css-window-scope` 38、`doc-comment-contract` 3、`json-data` 1、`smoke-harness` 1），断言实测集合与登记集合**恰好相等**（新增裸读 → `unexpected` 命中；债还清却忘删条目 → `stale` 命中），配"审计面 ≥35"非空自检（判据写坏时先失败，否则两集合皆空、断言恒真）。**理由标签必须取自固定词汇表、说明 ≥20 字、且不留死标签**（每个标签都要被用到）——这是清单"白名单值必须被断言"那一条的自我适用。第三项是**检出函数自身的非平凡自检**（`rawSourceReads` 对裸读返回 1、对 `readSourceText` 返回 0、对 `.json` 与 `docs/` 返回 0）。**⑥ 自指再现**：首版把本门禁自己判成裸读——它的自测夹具里就写着那句模式串，故按既有惯例把 `source-scan.cjs` 与自身一起排除。**负向验证 4 轮 + 灵敏性 1 轮**（均先确认注入生效、均 md5 字节级还原）：A 给已迁移文件注入新裸读 → `undetected-vs-registered` 精确 FAIL；B 删掉一条债条目 → 同项 FAIL（`stale`）；C 理由标签改成词汇表外的值 → `unknown reason tag` FAIL；D 把判据改成恒真 → `audit surface collapsed` FAIL；E 把 `matchesHomeStoreTokens(card.dataset, query, filter)` 改成语义不同的标识符 → `home-store-contract` FAIL（证明**替换后的断言在守护真代码**，而旧断言只守护注释）。
+- [x] T-6279 文档与快照同步：README 双语 5776→**5779** 项、166→**167** 文件；`docs/release-readiness.md` 产物快照 614133→**614064** / 313079、余量 172368 / 211209，并登记新的 3 项覆盖率门禁。**过程观察**：本批首次跑 `verify:release` 时出现 1 次 `# fail 1`（未捕获失败项名称，因用了 `| tail`），随后单跑 `pnpm test` 与重跑 `verify:release` 均全绿（5779/5779、三套 smoke 全 PASS）——与 D-392/D-393 记录的同一现象一致；**教训：总门禁输出一律重定向到日志文件再 grep，不要 `| tail`，否则唯一一次失败会连名字都留不下**。
+- [x] T-6280（**已完成**，2026-09-17 第二十三批收口，共 23 批，见 D-396）CSS 块级作用域断言助手与窗口断言迁移：全仓仍有用 `A[\s\S]*?B` 形式、"窗口无界"的断言（未剥注释的**粗计 365 条**、38 个文件；剥注释后**精计 350 条**，见下方"剩余"）。B1/B2 已证明这类断言与目标规则无关（从目标块删掉声明后仍绿）。**已完成**：① 助手 `tests/css-block-scan.cjs`（块解析 + SCSS 嵌套展开 + at-rule 透明 + 先剥注释）与 `tests/css-block-scan.test.cjs` 12 项自测；② `{topLevel: true}` 作用域——迁移中发现**新变体**：同名覆盖规则（`@media (max-width: 560px)`）会替基础规则满足断言，删掉基础声明也不失败，必须只认未被 at-rule 包裹的规则；③ `readSourceFile()` 读取入口（限定源码扩展名，防止变成绕开裸读登记的后门）；④ 样板 `store-width-contract.test.cjs` 迁完（15 条 → 10 条块级 + 5 条否定断言，10/10 判别力验证通过），对应债条目已删；⑤ 第二批 `store-font-weight-contract.test.cjs`（12 条 → 10 条块级 + 2 条逐规则，17/17），并兑现 5 条**名不副实**的断言；⑥ 第三批（机制）：`parseRules` 补**行号**（`startLine`/`endLine`，供注入工具定位，自测加"行号区间必须还原出该规则的声明"不变式）、判别力注入工具 `scripts/css-assertion-injector.cjs`、普查工具口径修正、`store-box-sizing-contract.test.cjs` 迁完（12 条 → 8 条块级 + 4 条逐规则/覆盖分支，12/12）；⑦ 第四批（机制 + 迁移）：`parseRules` 补 **at-rule 身份**（`atRules` 条件链，`{atRule: /…/}` 把断言钉在具体分支上，自测 +2 含"深度够但身份不对必须失败"）、注入工具支持跨行提取与 `{atRule}` 作用域（自查出 2 个自身 bug：跨行断言提取不到、`atRule` 误按子串匹配）、`store-line-height-contract.test.cjs` 迁完（14 条 → 10 条块级 + 2 条逐规则否定 + **删除 3 条纯冗余**的 `* rule closes`——`\}` 由文件后面任何一个 `}` 满足，块解析版 `is defined` 严格强于它；另兑现 2 条名不副实：`avoids px lock` 原来检查的是 `height:` 相邻、`uses unitless values` 原来只是"存在 1.35"；**全文件禁 px 会假红**——实测设置页/工具栏等 7 处存在合法像素行高，故按受管五块收窄，14/14）。⑧ 第五批（T-6282 收口 + 迁移）：T-6282 见独立条目；`store-hyphenation-contract.test.cjs` 迁完（14 条 → 11 条块级 + 2 条逐规则否定 + 删除 1 条纯冗余的 `styles close selectors`；另兑现 3 条名不副实——`keeps flexible widths`/`avoids nowrap`/`standard property` 旧断言都只是"存在 hyphens: auto"；顺带收紧 2 条文件级存在断言到块级；13/13 + 探针 11 次全过）；注入工具实录新陷阱并修复：**插入文本以 `-` 开头会被当成删除式探针**（`-webkit-hyphens: auto` 因此被静默跳过），现支持 `\-` 转义。⑨ 第六批 `store-font-metrics.test.cjs` 迁完（11 条 → 7 条块级 + 2 条逐规则否定 + 删除 2 条纯冗余的 `* rule closes`；兑现 2 条名不副实——`avoid fixed width`/`standard property` 旧断言都只是"存在 from-font"；收紧 1 条文件级断言到块级；**新形态：分组规则记账**——`source-chip` 与 `availability` 共用一条分组规则声明 `from-font`，两条断言各钉各的选择器，审计面自检按"选择器被承载"而非"规则条数"断言，避免分组导致条数错位；8/8 + 探针 5 次全过，其中 2 条旧窗口恰因目标声明是全文件**最后一处**出现而不漏检——"是否漏检取决于稀有度"再添实测样本）。⑩ 第七批 `store-typography-contract.test.cjs` 迁完（普查 11 条 + 1 条**普查扫不到的手写窗口**：首行用 `/\.sw-home-store__card-head\s*\{([\s\S]*?)
+\}\s*
+\s*\.sw__home-source-health/` 截块再做否定窗口，锚点是**下一个规则的类名**，中间插删规则即漂移——同族病；合计 12 条 → 9 条块级 + 2 条逐规则否定（声明 balance 的规则全文件恰 2 条）+ 删除 1 条纯冗余并删掉手写截块变量；收紧 1 条文件级断言到块级；9/9 + 探针 4 次（覆盖两条 balance 规则）全过）。⑧ 第八批 `store-numeric-typography.test.cjs` 迁完（13 条 → 8 条块级——`source-chip`/`availability` 分组规则同 `font-metrics` 口径 + 2 条逐规则否定 + 删除 3 条纯冗余的 `* rule closes`（含 1 条双窗口）+ 兑现 1 条名不副实（`keeps flexible width` 旧断言只是"存在 tabular-nums"）；8/8 + 探针 5 次全过）。**⑨ 门槛重校准（本批副产物，全量测试首次实抓）**：`source-scan-coverage` 的两处"审计面 ≥35"是 T-6278 按当时 43 条债钉的，债清到 34 条时**精确相等断言还没错、非空自检先误伤**（实测 4 失败里的 3 个），改为防塌缩下限 `>=3` 并负向验证（注入扫描失效 → `only 0 files matched` 精确 FAIL，md5 还原）；同轮性能基准门禁再现高负载假失败（3.07x vs 3），单独复跑 5/5 绿——D-395/D-396 的"先单独复跑再判定"再证一次。⑩ 第九批 `store-selection-contract.test.cjs` 迁完（11 条 → 6 条块级——`none` 侧由**两条分组规则**承载 5 个选择器：chip/availability 共用一条、sizes/toggle/clear-search 共用一条，审计面按选择器被承载记账 + 3 条逐规则否定（声明 `user-select: text` 的规则全文件 3 条）+ 删除 2 条纯冗余 + 兑现 1 条断言（`uses explicit values` 旧断言只是"存在 text|none"，改为受管规则内 user-select 声明必须显式 text/none）；6/6 + 探针 5 次全过，**共因最多的一批**——删一条分组声明最多连带 3 条断言，全部人工确认为预期）。⑪ 第十批 `store-text-wrap-pretty.test.cjs` 迁完（11 条 → 8 条块级 + 2 条逐规则否定（声明 pretty 的规则全文件恰 3 条）+ 删除 1 条纯冗余；**另删除 1 条假绿**：`description has pretty wrapping`（`span…pretty`）实测 card-head span 从未声明 pretty——它的换行契约是 line-clamp，旧断言靠"任一 span 文本 + 后方 pretty"退化为"存在 pretty"的重复，名字与现实不符、内容零信息；顺带收紧 3 条文件级断言到块级；9/9 + 探针 3 次全过）。⑫ 第十一批 `store-focus-navigation-contract.test.cjs` 迁完（CSS 侧 10 条 → 9 条块级 + 1 条正则尾部锚定（`&[aria-current="page"]` 的展开选择器带 `.sw-home-store__tabs` 父级前缀，字符串等值匹配不上，改 `/(^| )…\[aria-current="page"\]$/`）；**假绿变真缺口**：`__size` 锚点靠前缀匹配 `__sizes` 文本，实证 size tile 从未声明 `touch-action: manipulation`（店内其余 8 个交互控件都有），已补 src/index.scss 一行；TS 侧裸读改走 `readSourceText`（源码字面契约，登记理由见债清单）；10/10 + 探针 1 次全过；产物 index.css 与 zip 随之变化，快照重建）。⑬ 第十二批 `store-stacking-contract.test.cjs` 迁完（9 条 → 4 条块级 + 2 条逐规则否定 + 1 条守卫式（source-meta 基础与窄屏覆盖规则都禁巨型 z-index）+ 删除 2 条——`\}` 冗余 1 条、迁移后与前一条**逐字重复** 1 条；4/4 + 探针 3 次全过）。⑭ 第十三批 `store-preview-context-contract.test.cjs` 迁完（10 条 → 9 条块级 + 1 条 `{atRule: /max-width:\s*560px/}` 钉窄屏 chip 缩小（T-6283 机制首次实战于"把声明挪去别的分支必须失败"）；TS 侧 1 条 `addMeta…[\s\S]*?"context"` 改写为**精确调用断言**（实查 home-store-ui.ts:116 原文，两实参间不再有自由跨度）并负向验证（改 tone 值 → 精确 FAIL，md5 还原）；TS 源码读取改走 readSourceText；10/10 提取断言全过）。⑮ 第十四批 `store-word-break-contract.test.cjs` 迁完（8 条 → 3 条块级 + 1 条配对契约（group/summary 各自同时声明 overflow-wrap 与 break-word，兑现原"pairs"名实）+ 2 条逐规则否定（声明 break-word 的规则全文件 6 条）+ 收紧 2 条文件级断言到块级；**另删除 2 条假绿**：`title/description has word break fallback` 实测 strong/span 从未声明 break-word；4/4 + 探针 2 次全过）。⑯ 第十五批 `store-motion-accessibility.test.cjs` 迁完（10 条 → 5 条块级（全部 `{atRule: /prefers-reduced-motion: reduce/}` 钉分支）+ 1 条逐规则否定（reduce 分支禁 pointer-events: none）+ 2 条改覆盖声明检查 + 删除 2 条（`
+\}` 冗余 + 逐字重复）；**两处新发现**：① card 的 transition 覆盖在两个 reduce 块各写一份（4848 块被 4944 分组规则完全包含）——块级化显形后**删被包含的 CSS**；② 复合分支 `@media (max-width: 560px) and (prefers-reduced-motion: reduce)` 的条件链也是一条，判别纯/复合分支必须用**条件链精确等于**而非条数；工具局限实录：同选择器多规则的删除探针只达首条（hover transform 断言用 md5 手工补验），已写入工具头。35→33 测试）。⑰ 第十六批 `store-scroll-contract.test.cjs` 迁完（7 条 → 5 条块级 + 1 条逐规则守卫（grid 全部规则禁 `overflow: hidden`）；**另删 1 条手写窗口**：`gridBlock` 按"第一个块尾"截块再做否定检查（第二例变量截块，锚点脆弱）+ 1 条迁移后逐字重复；5/5 + 探针 1 次全过）。⑱ 第十七批 `store-preview-disclosure-contract.test.cjs` 迁完（8 条 → 9 条块级——`&__meta`/`&__meta-chip` 按展开选择器、两个 tone 类（is-network/is-privacy）收紧到具名块；TS 侧 1 条按 home-store-ui.ts:112 原文改精确调用断言并手工负向验证（md5 还原）；TS 裸读改走 readSourceText；⑲ 第十八批（5 个小文件一次性迁完）：render-state 6（TS 侧 1 条改"锚点 + 有界窗口 + 顺序检查"并负向验证；aria-busy/focus-kind 嵌套按展开选择器）、ui-polish 5（移动端 search 用 `{atRule}` 钉 560px）、search-interaction 7（TS 侧 2 条改"锚定 click 处理器 + 顺序检查"；height 断言被 min-height 替身满足——收紧行首锚定后工具又暴露声明锚定盲区，md5 手工补验）、filter-state 6（空 tab 数据属性选择器尾部锚定）、render-stability 5。㉑ 第二十批（9 个尾部文件一次迁完）：actions 7、will-change 7（钉 hover/focus 具名块 + 逐规则否定 + 删 3 冗余）、performance 4（逐规则否定 + 删 1 冗余）、forced-colors 3（Canvas 钉分支具名规则；手写 forcedBlock 截块删除改逐规则否定 animation/opacity/rgb）、print 7（{atRule} 钉 print 分支；3 条重复窗口合并删 2）、group-semantics 4（BUILTIN_GROUPS 锚定）、sync-panel 3（syncFinish 锚定）、external-availability 8（5 个 adapter 各自 2200 字符有界窗口，实测距离 1034~1626）、mobile-external 8（560px/复合分支 {atRule}；sort 兑现为 flex: 1 1 46%；guide link 锚定）。注入/探针/手工验证全过；TS 裸读全部清零（含 .js 与 .ts）。㉑ 收口批（第二十三批）：`store-mobile-layout-contract` 86 条全部迁移——40 条 mobile 手写截块断言改块级 declaresIn（560px 分支 {atRule} 钉死，截块变量删除）、12 条基础规则断言、5 条 reduce 分支、5 条 forced-colors 分支、9 条 print 分支、约 20 条 TS 窗口改「锚定入口 + 有界窗口 + 顺序检查」；负向验证（删 uptimekuma abort 行 / 删 activateStoreTab 的 applyFilter 行）精确 FAIL，md5 还原。**债内清零，css-window-scope 标签按「用完即删」规则退役**；普查工具保留用于未来回归监测。累计：365 条 / 38 文件全部迁移，删除 31 条无信息/假绿/重复测试，兑现 15+ 条名不副实断言，2 个真实产品修复（size tile touch-action、card 冗余 reduce 覆盖去重）。⑳ 第十九批（5 个 1-2 条的小文件）：card-navigation 1（focus-visible 具名块）、focus-recovery 1（分组规则 user-select）、a11y-navigation 1（TS 侧改"锚定激活函数 + 有界窗口"并负向验证：删 applyFilter → 精确 FAIL）、rerender-focus 2（TS 侧改"锚定入口 + 有界窗口"）、pending-card 2（ready/pending 创建块各自锚定）。**⑱ 记账修正（本批自查发现）**：T-6278 时代写入的 W2「债内 87 条」从未随批次更新（实际批次 8 起为 85），且第十四/十五批提交信息里的 W1/W2 拆分有误（总数正确）——本批起以普查工具的分档输出为准逐项核对，W1/W2/W3 三数之和必须等于合计。**剩余**：形态分布（`node scripts/css-window-census.cjs`，**口径=债清单**）为 W1「选择器→声明」债内 0 条 / W2「选择器→非声明」债内 69 条（需人审：比较两属性、否定式窗口、`url(`/`javascript` 依赖检查；正确形态是"逐规则检查"——先取声明了 A 的规则，再断言这些规则的声明不含 B）、W3 窄窗口 `[^}]*` 债内 17 条，合计 **86 条 / 1 文件**（W1 已清零！剩余全部集中在 `store-mobile-layout-contract`：17 W1 + 55 W2 + 14 W3；已迁 36 个文件共 279 条：width 15、font-weight 12、box-sizing 12、line-height 14、hyphenation 14、font-metrics 11、typography 11、numeric-typography 13、selection 11、text-wrap-pretty 11、focus-navigation 10、stacking 9、preview-context 10、word-break 8、motion-accessibility 10、scroll 7、preview-disclosure 8、render-state 6、ui-polish 5、search-interaction 7、filter-state 6、render-stability 5、card-navigation 1、focus-recovery 1、a11y-navigation 1、rerender-focus 2、pending-card 2、actions 7、will-change 7、performance 4、forced-colors 3、print 7（含删 3 重复）、group-semantics 4、sync-panel 3、external-availability 8、mobile-external 8；计数变化另含助手自测 +2 与删除 30 条——纯冗余 26 + 假绿 4）。逐文件迁移，每迁完一个文件就删掉它对应的 `SOURCE_SCAN_DEBT` 条目。
+  **工具**：① `scripts/css-window-census.cjs [文件子串]` 列出待改条目（**已剥注释**——否则迁移说明注释里引用的旧写法会被再数一遍）；**按债清单分组计数**：债外的命中不计入待迁（本仓确实存在——`css-block-scan.test.cjs` 里那条是**故意的**病态对照；W3 里另有 6 条是越不过 `}` 的旧门禁，退化程度不是同一类），债**内**却零命中的文件会被点名（普查只认单行 `assert.match(css, /…/)`，跨行/`new RegExp`/走变量扫不到）。② `scripts/css-assertion-injector.cjs` 自动化"判别力三件套"（新断言精确 FAIL + 兄弟断言不受波及 + 旧写法仍绿对照），每次真跑 `node --test`，结束按 md5 字节级还原；用法与边界见其文件头，**循环式/`deepEqual` 式断言用 `--probe` 验证，不要退回手写注入脚本**。
+  **协议**：窗口断言是否漏检取决于右侧模式的稀有度，**不能靠猜**——实测 `store-font-weight-contract` 12 条里有 2 条意外地并不漏检，而 `store-box-sizing-contract` 8 条**全部**漏检；必须逐条注入实测。**对照实验必须同源**——同一处"工具报 0 条、手工报 2 条"的分歧，根因是两次注入的**值不同**（工具取交替分支的首个 `400`，我手工注 `normal`），不是工具漏采。
+- [x] T-6281（**已完成**，2026-09-17 第二十四批，见 D-396 补充）`tests/mobile-card-smoke.cjs` 的 `readSource` 迁移（债条目 `smoke-harness`）：该脚手架自带归一函数，迁移需连同 `pnpm test:smoke` 一起复跑；它同时是手机端 UI 门禁的主力，改动风险高于普通契约文件。**落地**：readSource 改为 readSourceText 的薄封装（剥注释 + CRLF 归一，与全仓扫描口径一致）；剥注释暴露 2 条只命中注释的死检查（「no default panel is created here」与「public home-module boundary is intentionally read-only」）——改绑真实代码（renderHomeModuleView 入口、moduleDefinitions 归一化）；smoke-harness 标签按「用完即删」退役；负向验证（破坏 renderHomeModuleView 方法名 → smoke 精确失败，md5 还原）；smoke 70 PASS。
+- [x] T-6282（**已完成**，T-6280 第三批捞出、第五批收口）`SOURCE_SCAN_DEBT` 的**理由标签从不被验证**——`DEBT_REASONS` 只校验"标签取自词汇表 + 说明 ≥20 字 + 每个标签都被用到"，**从不校验标签与文件内容是否相符**。实测 `tests/kernel-endpoint-guard.test.cjs` 贴着 `css-window-scope`（说明写着"文件里的断言是无界窗口"），但该文件**一条窗口断言都没有**：它唯一那处 `[\s\S]*?` 是 `source.match(/KERNEL_ENDPOINTS\s*=\s*new Set\(\[([\s\S]*?)\]\)/)` 里的**区间截取**，不在 assert 内；它真正的债是"读 `src/index.ts` **原始文本**"（注释掉的 `case "/api/…":` 照样会被 `dispatchCases()` 数到）。**处置（已落地）**：① 新增 `DEBT_REASON_CHECKS`——给全部 4 个标签各配一条**必要条件**级内容判据（判据作用在剥注释后的文本上；试跑 39 个债文件，唯一未通过的就是这个贴错标签的文件，38/39 佐证判据既不严也不松）；② 新增门禁"每个债条目的理由标签与内容相符"，配两级自检（词汇表↔判据表双向相等防死判据；**每条判据必须至少拒绝一个反例样本**——否则把判据改成 `() => true` 不会被发现）；③ `kernel-endpoint-guard` 改走 `readSourceText` 并移出债清单（8/8 仍绿）。**负向验证 3 轮**（均 md5 字节级还原）：A 把该文件重新登记为 `css-window-scope` → 新旧两道门禁**双**FAIL；B 把 `shipped-i18n-parity` 贴成 `doc-comment-contract` → 内容判据 FAIL（点出文件与标签）+ 词汇表门禁 FAIL（`json-data` 成死标签）；C 把判据改成恒真 → 反例自检 FAIL（"判据失去了判别力"）。**这正是清单"白名单值必须被断言"那一条的又一次自我适用**（本仓第三次：`sanitizeAllowlist`、`DEBT_REASONS` 的词汇校验、现在的内容判据）。
+- [x] T-6283（**已完成**，T-6280 第四批）`parseRules` 记录 **at-rule 身份**（`atRules` 条件链），`declaresIn(..., {atRule: /…/})` 让"**窄屏分支**里必须有 X"可被精确断言。触发场景（`store-box-sizing-contract` 的 `card keeps max width full`）已用新开关收紧；自测 +2，含"深度够（`atDepth > 0`）但身份不对（声明在 print 分支）必须失败"与"topLevel 与 atRule 同给且互斥时必须失败"。
+
+
+## T-6272~T-6275 v0.20 存储兼容性审计与叙述纠错（2026-09-16，已完成）
+
+**本组终态**：`dist/index.js` 614133 bytes、`dist/index.css` 145639 bytes、`package.zip` 313129 bytes——**与上一批逐字节一致**（`5768→5776`、`164→166` 均为等长替换，JSDoc 注释被压缩器剥离，docs 变更不进归档）；测试 5776 项（166 文件）；`pnpm verify:release` 全链绿（5776/5776 + 三套 UI 门禁共 80 项 PASS）。
+
+**为什么做这一批**：两件事同源，都是「叙述与事实脱节」。(1) **纠自己引入的错论**：上一批（T-6269/D-392）为解释"为什么要做读取侧归一化"，在 JSDoc 里写了「旧版本上限更大留下的残留」。收尾时逐版本核对四个缩略图常量，发现这句话**在任何维度上都不成立**——它还被复制进了 TODO / PROGRESS / DECISIONS 共四处。(2) **补路线图明列却尚未产出的交付物**：ROADMAP v0.20「存储版本统一审计：8 个数据 key 的迁移函数、容量边界与跨版本兼容矩阵」此前只有 T-326/T-327 两道**静态门禁**（key 唯一登记处 + 降级函数白名单），从无审计文档。
+
+- [x] T-6272 缩略图归一化的叙述纠错（`src/util.js` JSDoc + TODO/PROGRESS/DECISIONS 同步）：**git 逐版本证据**（`git log -S` 定位引入提交 + 逐 tag 统计）推翻原错论，四点结论——① 桌面 `THUMB_CACHE_MAX = 40` / `THUMB_HTML_MAX = 200 * 1024` 自 v0.2.0（`cc8fde1f`）引入起**从未变过**；② `THUMB_CACHE_MAX_MOBILE` 是 v0.7.0（`e5299c6`）引入为 **20**、v0.8.0（`ec55fe5`）起改为 **30**（上限**变大**）；③ `THUMB_HTML_MAX_MOBILE` 一直是 80 KiB；④ **关键发现**——v0.7.0 的 `setThumbCache` **硬编码桌面常量**（该版本全仓 `isMobile ? THUMB` 出现 **0** 次），手机端常量当时"定义了却未被写入侧使用"，实际按 40 条 / 200 KiB 收，v0.8.0 起才按端型选择。**因此"上限更大"在手机端真实成立**（残留 31~40 条、或单条 80~200 KiB），但桌面端从未如此——原句是**归因错误**而非纯错。改写后的 JSDoc 同时给出两类真实来源：结构损坏（手动改 data 文件 / 同步冲突 / 写入中断）与上述手机端上限语义变化。
+- [x] T-6273 存储兼容矩阵文档与文档契约门禁：新增 `docs/storage-compatibility-matrix.md` 六节——① **先勘误**：逐 tag 统计证明路线图那句「8 个数据 key」是 **v0.16.9 时点**的数字（v0.0.1=1 → v0.1.0=3 → v0.2.0=4 → v0.3.0=5 → v0.6.0=6 → v0.15.0=7 → **v0.16.9=8** → **v0.16.16=13**，此后恒定），复现命令一并写入，故审计以代码为准共 13 个 key；② 唯一登记处（constants.ts / HANDLED_KEYS 11 + INSPECTED_KEYS 2 / agent-capabilities 计数同源）；③ 13 key 的迁移函数、函数所在模块、容量边界与**引入版本**（逐个由 `git log -S` 核实到 `plugin.json` 版本）；④ 跨版本迁移矩阵时间线（v0.0.3 `LEGACY_HOTKEY`、v0.2.0 缩略图引入、v0.7.0/v0.8.0 手机端上限语义、v0.16.4 `capMru`、v0.16.11 `sw_home_state` 的 `widgets→instances`/`layout→layouts`、v0.16.12 `migrateFavoriteEntry` + 默认值标记 + 文档集 schema、v0.16.13 分端布局、v0.19.0 `STORAGE_SCHEMA_VERSION=1`、v0.20/D-392 读取侧归一化）；⑤ 门禁清单；⑥ **已知未覆盖**（真机升级矩阵属 v0.21、`sw_settings`/`sw_home_state` 仍是 inspect、版本标记 `reset` 的语义边界）。**成对门禁** `tests/storage-compatibility-matrix.test.cjs` 6 项：文档 key 集合与 `constants.ts` **双向**相等、分类列与 `HANDLED_KEYS`/`INSPECTED_KEYS` 一致、容量数字与真实常量一致（含缩略图四个端型数字）、schema 标记值与运行时相等。**审计面自检**：被审计的上限常量清单必须**恰好等于** `DEFAULT_LIMITS` 注释里声明的来源常量集合（首版漏了 `THUMB_HTML_MAX`，自检立刻报错——这条自检本身就是"清单不得漂移"的守卫）；清单刻意显式，因为 `constants.ts` 里另有 `COLUMNS_MAX`/`PANEL_SCALE_MAX` 等与存储 key 无关的上限，宽泛正则会把它们拉进来逼文档引用无关常量。**负向验证 4 轮**（均先确认注入生效、均哈希字节级还原，md5 `319df268…`）：A 删文档表格行 → 测试 3 + 5 双 FAIL；B 文档把 `sw_pinned` 标成 `inspect` → 测试 3 FAIL；C 文档把 `MRU_MAX` 写成 999 → 测试 5 FAIL；D **在 `constants.ts` 新增一个 key、文档未同步 → 测试 2 FAIL**（这条证明门禁能捕获"代码增长、文档过期"这一真实风险）。**方法论固化**：`docs/gate-audit-checklist.md` 新增**第九类失效模式「叙述性历史断言无防线」**——写进 JSDoc/文档的「旧版本上限更大」「自 vX 起从未变过」既不进代码审查视野也无测试覆盖，比失效门禁更隐蔽（失效门禁至少还在跑，错论只是安静地误导并被当作决策依据沿用，本批就是四处复制）；处置是"每条历史断言附可复现 git 命令"+"数量/边界类事实以代码为准并配文档契约门禁"；一键扫描新增 `无据历史断言` 规则（4/4 正样本命中、4/4 负样本不误报）。
+- [x] T-6274 文档与快照同步：README 双语 5768→**5776** 项、164→**166** 文件；`docs/release-readiness.md` 测试数同步（产物快照因等长替换**无需变更**）。**门禁再次生效**：两次新增测试文件后 `README test-file count matches the discovered host test matrix` 均立即失败（先期望 165、后期望 166），证明该门禁真的在守护文件数。
+- [x] T-6275 扫描规则全仓自查与对外文档版本承诺修复（D-394）：把第九类的一键扫描规则拿来扫**全仓**（此前只在被修的几处用过），命中 4 类结果并逐个人工判定——**规则命中不等于错误，这正是清单"一键扫描不能替代人审"的实例**。① **真错误 1（已修）**：`src/index.ts:968` 还留着**第五处**同源错论（「旧版本更大上限留下的残留」）——上一批只改了 `src/util.js` 的 JSDoc，漏掉宿主 `sanitizePersistentData()` 里的同一句注释；已改写为与 JSDoc 一致的准确表述（含"手机端 v0.7.0 写入侧误用桌面上限、v0.8.0 起收紧后留下 31~40 条残留；桌面 40 条 / 200 KiB 自 v0.2.0 起未变"）。② **真错误 2（已修）**：`docs/widget-invite-drafts.md:93` 与 `docs/invitations/task-horizon.md:58` 称「只读契约自 **v0.16.17** 起向后兼容」，而权威的 `docs/widget-protocol.md:205` 与 **v0.16.16 tag 实测**均为 **v0.16.16**（`git show v0.16.16:docs/widget-protocol.md` 该版本已列出 moduleId/title/icon/sizes/description/read/open 六字段并声明兼容起点）。补充证据：`registerHomeModule` 由 v0.16.12 引入、protocol v2 由 `4b30402`（版本 0.16.17，**无 tag**）扩展，而 v0.16.16 **有 tag**。已在两处邀请函统一为 v0.16.16 并注明与协议文档一致。③ **判定为非错误（有意表述，不改）**：`docs/widget-protocol.md:163` 的「自 **v0.17** 起注册 `workspace-runtime-registry-diagnostics`」——该能力实际由 `f0ae354`（=v0.16.39）引入，但该句写于 `6bebb51`（=**v0.16.40**）时点，指向"下一个**对外发布**版本"；即文档按**发布版本**而非提交版本表述，与① 的错误性质不同。④ 外部事实有据、不动：`src/battery-model.js` 的"Chromium 历史上出现过 level 恒 0 的实现缺陷"（D-372 已记依据）。**新增门禁** `tests/protocol-compat-claim.test.cjs`（2 项）：docs 下所有「只读契约 … 向后兼容」且写明版本号的声明必须**唯一一致**（含"审计面 ≥3"非空自检，防单份文档时恒真），且任何兼容起点不得晚于当前 `plugin.json` 版本。**负向验证 2 轮**（均先确认注入生效、均 md5 字节级还原）：A 只改一份文档的起点（模拟真实漂移）→ 一致性断言精确 FAIL；B 把三处**一致地**改成 `v0.99.0` → 一致性通过、但"不得承诺未来版本"精确 FAIL（证明两条断言相互独立，后者不是装饰）。
+
+## T-6269~T-6270 v0.20 数据连续性第六批：`sw_thumb_cache` 读取侧归一化 + 源码扫描门禁缺陷修复（2026-09-16，已完成）
+
+**本组终态**：`dist/index.js` 614133 bytes、`dist/index.css` 145639 bytes、`package.zip` 313129 bytes；测试 5768 项（164 文件）；`pnpm verify:release` 全链绿（5768/5768、mobile-card-smoke 70 PASS、mobile-toolbar-layout 3 PASS、chromium-style-smoke 7 PASS）。
+
+**为什么做这一批（选型依据）**：v0.20「存储迁移演练」的尾巴是「对象类 key 只做了形状分类（inspect）」——`sw_settings` / `sw_home_state` / `sw_thumb_cache` 三个 key 从不进 `data`、只报形状。逐个探查后只有第三个存在**真实数据完整性缺口**：它此前只有**写入侧**上限（`setThumbCache` 会拒绝超长 html、按最旧 `ts` 淘汰），读取侧 `getThumbCache()` 只做「是不是对象」的粗判——于是磁盘上超限或损坏的缓存**永远不会被清理**（写入侧只拦新增、不清理存量）：结构损坏（手动改过 data 文件、同步冲突、写入中断的半条记录）与手机端旧版本的上限语义变化——v0.7.0 的 `setThumbCache` 硬编码桌面常量，手机端常量（20 条 / 80 KiB）当时定义了却**未被写入侧使用**、实际按 40 条 / 200 KiB 收，v0.8.0 起才按端型收紧到 30 条 / 80 KiB，故手机端可能滞留 31~40 条或单条 80~200 KiB 的条目——都会一直占着持久化存储。桌面 40 条 / 200 KiB 自 v0.2.0 引入起从未变过，**不存在「桌面旧上限更大」的残留**（此结论由 git 逐版本核对四个常量得出，见 D-392）。`sw_settings` / `sw_home_state` 的读取路径本来就有 `normalizeSettings` / `normalizeHomeState` 兜底，没有缺口，因此**刻意不动**（不做无缺口的动作是本批的克制点）。
+
+- [x] T-6269 `sw_thumb_cache` 读取侧归一化（D-392）：`src/util.js` 新增纯函数 `normalizeThumbCache(values, {max, htmlMax})` → `{cache, kept, removed, changed}`，规则**刻意与 `setThumbCache` 镜像**以免出现第二套语义（非对象整体重置为空对象；条目非对象 / html 非字符串 / html 超上限 → 丢弃并计入 `removed`；条目数超上限 → 按 `ts` 淘汰最旧、`ts` 相同按原有键顺序，与 `setThumbCache` 的 `stableSortBy` 同规则；`title` 非字符串归一空串、`ts` 非正有限数归一 0 并计入 `changed`）。**边界可取**：`html.length === htmlMax` 保留、`htmlMax + 1` 丢弃，与写入侧 `> htmlMax` 拒绝一致。**非对象输入返回 `changed: false`**，与 `sanitizeStringList` / `sanitizeFavorites` 的既有约定一致——启动期不因「缺失/损坏分不清」而无谓回写。接线点在 `index.ts` 的 `sanitizePersistentData()`，按 `this.isMobile` 选上限（桌面 40 / 200 KiB、手机 30 / 80 KiB），仅在 `changed` 时 `saveDataDebounced`。**同源的运行时闭环**：`captureStorageMigrationSnapshot()` 也按同一端型传 `limits`——此前演练恒用桌面上限，手机端 35 条缓存会被宿主判 `cleaned`、被演练判 `kept`，「演练与宿主同源」在手机端并不成立；这是本批顺带修掉的真缺口。顺带加固 `getThumbCache()`：旧判据 `typeof data === "object"` 对**数组**同样为真，会把数组当缓存返回并在其上挂具名属性，现与归一化用同一容器判据（数组 → `{}`）。
+- [x] T-6270 源码扫描门禁缺陷修复（D-392，`tests/storage-key-audit.test.cjs` + 新增 `tests/source-scan.cjs`）：修掉两个**真会假绿**的门禁缺陷。① `storage-key-audit` 的 `sanitizeAllowlist` 值从未被断言——它只遍历 `Object.keys()`，那些函数名纯属装饰，「每个持久化 key 的读取路径必须有对应清洗函数」这句文件头承诺其实从未被强制执行。现要求每个 key 至少有一个白名单函数在 `index.ts` 里**被调用**（用反向否定环视 `(?<!export function )\bname\(` 排除 ambient 声明——声明存在不等于调用存在），并断言 `checkedKeys === registered.length` 防止只查子集。② 源码扫描类断言读的是**原始文本**，于是「把调用注释掉」或「在注释里写下同样的调用文本」都能让断言通过。新增 `tests/source-scan.cjs` 的 `stripComments()`（按引号状态逐字符扫描，跨过字符串内部的 `//` 与 `/*`，避免误伤 `"https://…"`），两处门禁改为扫描去注释后的文本。**门禁**：`tests/storage-migration.test.cjs` +7 项（超限/损坏条目的 kept-removed 记账、字段类型修复而非丢弃、按 ts 淘汰且同 ts 稳定、非对象重置与空对象 kept、端型上限改变判级、key 分类不可漂移且总数恒 13、宿主先清洗后演练必须全 kept 的不动点），`tests/util.test.cjs` +9 项纯函数契约，`tests/source-scan.test.cjs` +5 项辅助自测。**负向验证 7 轮**（J~Q，均先确认注入发生、均 md5 字节级还原）：J 宿主不再调用归一化（`normalizeThumbCache` → `injected_noop`）→ key-audit 与同源契约双 FAIL；K 演练恒用桌面上限 → 同源契约 FAIL（常量选择点 3→2）；L 撤掉数组防线 → 契约报 `runtime cache reads must reject arrays exactly like normalizeThumbCache`；M 淘汰排序忽略 `ts` → 2 项单元测试 FAIL；N 同一 key 同时归入两个分类集 → 含 `key classification cannot drift` 在内 7 项 FAIL；P 把调用降级为**行尾注释**（调用文本仍在文件里）→ 两处门禁仍双 FAIL（这正是修复前会假绿的形态）；Q 白名单指向未调用函数 → key-audit FAIL。**M 轮顺带暴露并修掉一个自查出的假绿**：`eviction follows ts, not key name or insertion position` 首版构造里插入序与 `ts` 恰好同向，注入「忽略 ts」后**仍然通过**——改造成插入序/键名/`ts` 三者互相反相关后才具备判别力（该轮由 1 项失败变为 2 项失败即为证据）。
+- [x] T-6271 文档与快照同步：README 双语测试项数 5747→5768、测试文件数 163→164；`docs/release-readiness.md` 产物快照 612356→614133 / 312656→313129（768 KiB 余量 172299、512 KiB 余量 211159）与测试数同步。
+
+**工具链教训（写入 `docs/gate-audit-checklist.md` 第八类）**：在 Git Bash 上用 `sed -i` 编辑 **CRLF** 文件会把整个文件静默转成 LF——本次 `src/util.js` 被如此改写（67638 bytes 应为 68940），若只比对「内容看起来一样」根本发现不了。负向验证的还原步骤因此改为**逐字节 python 替换 + md5 校验**，并在还原后确认换行符计数；`sed -i` 仅用于 LF 文件（如 `src/index.ts`）。
+
+## T-6267~T-6268 v0.20 数据连续性第五批：文档集恢复报告导出（2026-09-16，已完成）
+
+**本组终态**：`dist/index.js` 612356 bytes、`dist/index.css` 145639 bytes、`package.zip` 312656 bytes；测试 5747 项（163 文件）；`pnpm verify:release` 全链绿（5747/5747）。
+
+- [x] T-6267 恢复报告纯函数（D-391）：`src/document-sets.js` 新增 `buildDocumentSetRestoreReport(plan, probe, execution, {now})` + `DOCUMENT_SET_RESTORE_REPORT_VERSION` + `DOCUMENT_SET_RESTORE_STATUS`。补齐的真实缺口——恢复结果此前只经 `showMessage` 一闪即逝，用户无法复核"哪几篇失败、为什么失败"。报告含 schemaVersion / generatedAt / setId / setName / counts（复用 `summarizeDocumentSetRestore` 口径，与界面提示同源不分叉）/ entries（逐项 `{rootId,title,status,error?}`，status ∈ opened|restored|failed|missing|pending）。逐项顺序沿用 `planDocumentSetRestore` 的排序（按持久化 index 再按数组位置），故报告读起来与真实尝试顺序一致且不随取消漂移；同一 rootId 只认首条结果（执行器重试会产生重复项）；失败文本经 `cleanText` 截断至 160 字符并清洗控制字符；entries 上限 40 且**不信任调用方**（生产路径已被 `normalizeSet` 截断，纯函数仍自行兜底）。时间戳 `now` 可注入以便构造确定性快照——与 `storage-migration` 的"无时间戳报告"刻意不同：那是 Agent 只读投影必须确定，本报告是用户主动导出的本地文件，时间戳正是其价值。
+- [x] T-6268 设置页接线与门禁（D-391）：`settings-sections.ts` 每个文档集操作行新增"导出恢复报告"按钮，**默认禁用**，恢复完成（含取消/中断）后启用——取消场景恰恰最需要复核"哪些没走完"；报告只活在本次渲染的闭包内，不落盘、不进插件数据，避免扩大持久化数据面。导出文件名 `siyuan-speed-switch-restore-report-<setId>.json`。i18n 补 zh-CN/en 三键（`documentSetRestoreReport` / `documentSetRestoreReportNone` / `documentSetRestoreReportExported`），避开"死 key"门禁。门禁：`tests/document-sets.test.cjs` 新增 4 项（状态分类全枚举 + 计数与界面同源、有界与文本清洗、确定性与垃圾输入容错、取消时未尝试项保持 pending 且重复结果取首条），`tests/mobile-card-smoke.cjs` 文档集契约扩 9 条断言锁定"纯函数存在 + 恢复完成处接线 + 默认禁用 + 文件名前缀 + 两个提示键"。**负向验证 4 轮**（均先确认注入发生、均 md5 字节级还原）：F 删 `exportReport.disabled = false` → 契约 FAIL；G 报告改由空 `{}` 执行结果构建（锚点漂移）→ 契约 FAIL；H 移除 entries 上限截断 → 单元测试精确 1 项失败；I 失败文本不做清洗截断 → 单元测试报 `failure text must be truncated before export`。**诚实边界**：报告不含正文与路径，仅 rootId/标题/状态/错误摘要；真实宿主下的导出下载行为仍需人工点一次确认。
+
+## T-6265~T-6266 手机端图标兜底全表面审计与门禁缺陷修复（2026-09-16，已完成）
+
+**本组终态（覆盖 T-6264 的临时计数）**：`dist/index.js` 610310 bytes、`dist/index.css` 145639 bytes、`package.zip` 312085 bytes；测试 5743 项（163 文件）；`pnpm verify:release` 全链绿（5743/5743、mobile-card-smoke 70 PASS、mobile-toolbar-layout 3 PASS、chromium-style-smoke 7 PASS）。
+
+- [x] T-6265 全表面同类风险审计与真机实证（D-390）：按 D-389 的两条判据（容器有无宿主尺寸兜底 × svg 尺寸是否只写在插件 CSS 里）扫描 `home-view.js` 全文件，又补出 2 处无兜底裸 svg——`sw__home-weekday-dot`、`sw__home-module-item-check`（容器是纯插件类、尺寸仅来自 `容器 svg{width:11px}`，且正位于孙堃截图③的组件面板表面），补显式 `width/height="11"`。**把判据①从推断升级为真机实证**：在本机思源安装目录找到手机端基础样式 `resources/stage/build/mobile/base.9450c3c32a0f5d8ce01a.css`，确认 `.b3-button svg{height:16px;width:16px;margin-right:4px;flex-shrink:0}` 存在（故带 b3-button 的 `.sw__home-module-toggle` 排除出暴露面是正确的），而 `.b3-tooltips svg{margin-right:0}` **不含尺寸**——后者恰好解释了真机截图中筛选按钮（只带 b3-tooltips）为何失控到 320×165。该前提已写进 `tests/fixtures/siyuan-mobile-base.css`（标注真机来源）并新增 `#hosted-bare` 探针：断开插件样式表后，落在 b3-button 内的裸 svg 必须仍为实测 16×16。
+- [x] T-6266 门禁缺陷修复（D-390）：原审计断言用"类名后 400 字符窗口"作锚点，实测注入 `sw__home-module-item-check` 违规却报出 `sw__home-weekday-dot`——第 529 行注释里提到后者，成了**伪锚点**。该写法有归因错误与假绿（目标语句漂出窗口后 `doesNotMatch` 静默通过）两个反向缺陷。改为**变量绑定式锚点**：由 `X.className = "..."` 建"变量→类名"映射（多值 Set，因本文件 title/label/row/grid 各绑两个类名），再取 `X.innerHTML = ...` 完整语句断言，取语句时按引号状态扫描以跨过字符串内分号。新增整文件不变式"裸 svg 必须带尺寸或落在 b3-button 内"（含 `withSvg.length >= 3` 非空自检，防清单模式④）。该失效模式固化为 `docs/gate-audit-checklist.md` **第七类**并加入一键扫描正则（规则本身经双向验证：模板串双反斜杠与正则字面量单反斜杠两种真实写法均能命中，现行测试文件命中 0）。**负向验证 5 轮**（均先确认注入发生、均 md5 字节级还原）：A 破坏 dot → 报 `sw__home-weekday-dot`；B 只破坏 check → 报 `sw__home-module-item-check`（归因修正的直接证据，修复前此处错报 weekday-dot）；C 尺寸漂移 11→13 → 报 `must pin width="11"`；D 新增无兜底裸 svg（nav 容器）→ 报 `nav`/`sw__home-calendar-nav`；E 从 fixture 删除 b3-button 尺寸规则 → `hostedBare:300×150` 且布局门禁 FAIL，证明该 fixture 块是载荷而非注释。
+
+## T-6263~T-6264 手机端三处 UI 缺陷：图标尺寸兜底 / 顶栏芯片可读 / 组件面板高度（2026-09-16，已完成）
+
+- [x] T-6263 三处缺陷根因实证与修复（D-389）：**全部先做真实 Chromium 实测再动手，不靠读代码猜**。① **裸 SVG 尺寸失控**（图"刚进去大图标"）：插件 index.css 未作用到新插入节点时，裸 `<svg>` 退回浏览器默认 300×150，把顶栏撑成"巨型图标 + 控件竖排"；实测对照证明带 `b3-button` 类的图标有思源基础样式兜底故正常，只有裸图标（放大镜 300×150 / 筛选 320×165 / 时钟 384×160）失控。修复：`buildMobileSwitcherHtml` 逐个补显式 width/height（HTML 属性优先级低于作者样式，CSS 就绪后视觉零变化）+ 排序按钮与最近打开触发器同补 + util.js 新增 `clampOversizedIcons` 兜底扫描（只改实测 >32px 的图标，jsdom 实测恒 0 故不误触发）+ `renderModuleIcon` 同因加固。② **顶栏芯片文字被裁**（"收藏/设置"只剩单字）：旧版纯图标规则 `.speed-switch.sw__mobile .sw__mobile-toolbar .sw__mobile-fav-btn{width:34px}` 是 4 类且源码更靠前，压住 3 类的芯片规则，实测标签可用宽仅 18px 而"收藏"需 24px。修复：以同级更后的 4 类选择器接管尺寸（width:auto + min-width:34px 保住纯图标下限 + padding 接管 + svg flex:none 防压缩）。③ **组件面板卡片高度塌陷**（"一行一个但显示不出来"）：手机端单列后 `grid-row` 归零，但网格仍是 `.sw-home .sw-home__grid{grid-auto-rows:40px}`，每卡只剩 40px 行单元、叠加 overflow:hidden 内容被整片裁掉。修复：移动端 `grid-auto-rows:auto !important` 把行高交还内容（条目少的卡片自然更矮，形成用户期待的层次），并补 min-height:112px 可读下限与 max-height:68vh 防超长组件淹没整屏。
+
+- [x] T-6264 门禁与发版（D-389）：新增 `tests/mobile-toolbar-layout.cjs` 真实 Chromium 布局门禁（三断言：芯片标签 clientWidth≥scrollWidth 且按钮已脱离 34px、网格单列 + 行高达 auto + 三卡高度 ≥100 且条目多者更高 + body 未被裁、正常路径无 >32px 图标）——其中"样式失效"用**同页对照**做因果证明：`pluginSheet.disabled = true` 后带属性 svg 必须保持 14×14 而裸 svg 必须退回 300×150，两者表现相同即判定对照失效（防门禁假绿）；新增 `tests/mobile-icon-fallback-contract.test.cjs` 11 项源码契约（四个模板段无裸 svg、fallback 表尺寸在 32px 预算内且覆盖 4 个关键控件、`clampOversizedIcons` 只改异常项且无布局环境不误触发、SCSS 三处修复声明存在）——它专门补上"Chromium 门禁 HTML 与生产模板是两份、会漂移"的缺口。**负向验证 4 轮（均先确认注入真的发生）**：删模板 star 图标 width → 契约精确 1 项失败；阈值改 3000 → 兜底行为精确 1 项失败；删 `grid-auto-rows:auto !important` → 复现 `cellHeights:[40,40,...]` 且布局门禁精确 1 项失败（另两项 PASS）；芯片 width 改回 34px → 复现 `favLabel clientWidth 0 / scrollWidth 24` 且精确 1 项失败——四轮均字节级还原（md5 校验）。既存契约同步 1 处（mobile-card-smoke 的排序按钮 innerHTML 断言改绑显式尺寸形态）。**成本**：`dist/index.js` 609173→610264、`dist/index.css` 145109→145639、`package.zip` 311363→312069；测试 5729→5740（+11）、新增 1 个 smoke 门禁；README 双语计数 5740/163 同步、`docs/release-readiness.md` 快照同步；`pnpm verify:release` 等价全链独占全绿（tsc 0 错误、构建通过、5740/5740、mobile-card-smoke 70 PASS、mobile-toolbar-layout 3 PASS、chromium-style-smoke 7 PASS）。
+
+## T-6262 v0.20 数据连续性第四批：性能基准纳入硬门禁（2026-09-16，已完成）
+
+- [x] T-6262 倍增比例复杂度门禁（D-388）：新增 tests/perf-complexity-gate.test.cjs——ROADMAP 明确空查询 p95 有 48ms 环境长尾，绝对耗时门禁会被偶发抖动阻断开发，故只锁复杂度类别：输入 ×2、min-of-N 耗时比 ≤3（sortItems 为 n log n 给 4.5），机器速度差异被比值消去。覆盖搜索与首页数据路径四个核心纯算子：sortItems（实测 2.21）/sanitizeFavorites（1.12）/buildSearchCacheKey（1.96）/planDocResultsPage（1.64）；JIT 预热 + min-of-5 消抖 + 夹具预构建（不混入构建成本）；含测量装置自检（light/heavy 工作量必须可区分）。负向验证：向 sanitizeFavorites 注入 O(n²) 扫描 → 比例 4.06 精确失败后字节级还原。诚实边界：锁纯算子复杂度，DOM 渲染计时仍属 UI smoke 与真机验收。README 双语计数修正至 5729/162（发现 T-6260/T-6261 两批漏改静态项数——文件数有门禁、项数无，教训记 D-388）；全量 5729/5729
+
+## T-6261 v0.20 数据连续性第三批：存储健康挂入 workspace-context（2026-09-16，已完成）
+
+- [x] T-6261 恢复报告只读暴露（D-386/D-387）：agent-capabilities 新增 buildAgentStorageHealth 纯投影——available 门控（keys 数组缺失即 unavailable，杜绝半截数据冒充健康）、totals 六计数钳制 0..13、anomalies 仅保留 cleaned/reset/migrated（key ≤32 字符、maxItems 13、不回显 note/原始数据）；workspace-context outputSchema 增加 storageHealth（required、additionalProperties false），description 同步；宿主 handler 透传 this.storageMigrationReport；新增 8 项测试（含泄漏防护与钳制边界），workspace-context 既有完整 shape 断言更新；zip 单条目压缩预算 160→168 KiB（D-387，按 D-353/D-366 先例：index.js 压缩 164015 超限 175 字节，只读无写入）并重建 baseline；全量 5724/5724、tsc 0 错误；产物 index.js 609173 / zip 311363
+
+## T-6260 v0.20 数据连续性第二批：onload 演练快照接线（2026-09-16，已完成）
+
+- [x] T-6260 D-386 第二步·保守桥接：initPersistentData 在 sanitizePersistentData 之后调用 captureStorageMigrationSnapshot——用同源演练管道对 this.data 只读演练，报告存实例内存（不落盘、不重写数据）；出现 cleaned/reset/migrated 时 logger.warn 暴露宿主清洗缺口（运行时同源验证）；生产闭包 41→42（storage-migration 入图，只读、无写入动作；index.js 607365 / zip 310902 已复核 D-353 门禁）；源码契约锁定（onload 必须调用 + 快照方法体禁回写 + 报告仅内存），负向验证（方法体注入 saveDataDebounced）精确失败；测试 5717 项
+
+## T-6259 v0.20 数据连续性第一批：存储版本迁移演练与恢复报告（2026-09-16，已完成）
+
+- [x] T-6259 存储迁移演练纯模型（D-386）：新建 src/storage-migration.js——runStorageMigration 以 loadData 全量 payload 为输入输出迁移数据 + 有界恢复报告（每 key 一条固定记录、note ≤80 字符、无时间戳无原始回显）；per-key 处理器全部委托既有 sanitize 家族（capMru/sanitizeStringList/sanitizeFavorites/sanitizeOpenHistory/normalizeClosedEntries/sanitizeQuickActions/migrateQuickActionDefaults/normalizeDocumentSets）确保演练与宿主 sanitizePersistentData 同源；对象类 key（settings/home_state/thumb_cache）本批仅形状分类（inspect），深度迁移随接线批次注册；**演练优先两步走**——本批不接 onload、不进生产闭包（dist/index.js 601607 不变），宿主接线于 T-6260 单独批次执行。新增 tests/storage-migration.test.cjs 13 项：演练纯度、健康直通、脏数据清洗与 kept/removed 记账、上限覆盖、垃圾重置、defaults 版本标记语义、文档集旧形态/schemaVersion 迁移、inspect 泄漏防护、双契约（宿主委托清单 + constants 上限一致性）——双契约负向验证均精确失败后字节级还原；README 双语计数同步（5716 项/161 文件）；全量 5716/5716、tsc 0 错误、构建通过
+
+
+## T-6258 乱码修复批次：PUA 损坏注释全量恢复（2026-09-16，已完成）
+
+- [x] T-6258 v0.16.9（ac889f2）编码事故遗留的 351 行 PUA 损坏注释全量恢复（D-385）：scripts/restore_pua.py 四阶段匹配（唯一 ASCII 锚 → 有损逆向 3-gram 重叠 + 块邻近先验 → 等分重复注释取同内容 → 中文分段全包含）自动解析 322 行（原文源 ed3858d=v0.16.8 零 PUA）；29 行自动匹配器无法判定的行以 MANUAL 映射人工定源——26 行经 ed3858d grep 逐行核对（含 L2286 短变体/长变体、L5538/L5549 置顶 vs 收藏、L2177/L7412/L8035 三条孤儿条目变体的精确区分），2 行 born-corrupted（L2550/L2585，registerQuickActionAdapter 与 doc-search session 为 v0.16.9 新增、原文从未入库）按有损逆向 + 上下文语义重建，嵌入缩进空格数（8 空格 // 与 5 空格 *）证明原始换行被吞、恢复时拆回多行（2 行/3 行）；关键机制发现：PUA 字符经 gb18030 编码可还原为原始 2 字节（L462/L2077 无损严格双向转换验证成功），€ (U+20AC) 须覆写为单字节 0x80（cp936 映射与 gb18030 分歧）；全 src 目录 PUA 清零校验通过；tsc 0 错误、全量测试 5703/5703、verify:release 全绿（含 mobile-card-smoke 与 Chromium smoke，证明无测试依赖损坏注释文本）
+
+
+## T-6257 搜索成熟化：增量展开与统一缓存 key 收口（2026-09-16，已完成）
+
+- [x] T-6257 分页与查看全部体验（D-384）：统一缓存 key 核查确认已达成（canonicalFilterValue 键排序 + UNORDERED_FILTER_KEYS + v:1，既有测试锁定）；取数上限常量化 DOC_SEARCH_FETCH_LIMIT=33（两处 UI 调用 + 回退天花板 + Agent 路径共用）；面板内「加载更多」增量展开——search-model.planDocResultsPage 纯函数（切片/去重/已打开排除/hasMore，49 单测）+ DOM 薄壳接线（renderDocResults 消费 plan、焦点恢复 preventScroll、尽头回落原生出口）；新增 doc-search-pagination-contract 契约 6 项；i18n 双语 docSearchLoadMore；负向验证 2 例（hasMore 破坏→精确 FAIL、缓存 key 依赖注入→精确 FAIL，均字节级还原）；README 测试矩阵计数同步（5702 项/160 文件）；verify:release 全绿
+
+
+## T-6256 重构批次 R5b：搜索方法群外迁 doc-search-ui.ts（2026-09-16，已完成）
+
+- [x] T-6256 R5b 本体（D-383）：20 方法 + 1 模块级函数（loadDocSearchPathChildren → buildDocResultItem，887 行）字节原样搬移至 doc-search-ui.ts（919 行）；DocSearchUiHost 12 成员；群内互调 .call(this)，外部调用点 19 处改指；index.ts 10021→9156 行。契约同步：path-filter-ui-contract 3 项改指 + 代际自增断言补强（负向验证发现弱点）、production-graph sanity + 闭包 40→41、store-focus-navigation 1 项、mobile-card-smoke 9 契约 ~30 子句按归属分流；strictBindCallApply 关闭导致的 .call 返回 any 以最小显式注解修复；负向验证 2 例（含断言补强后再注入）；verify:release 独占全绿 5693/5693 + smoke 70/70；发布矩阵 index.js 600715、package.zip 307941
+
+
+## T-6253~T-6255 组件审查与面板秒开（2026-09-16，已完成）
+
+- [x] T-6253 组件全面审查（41 个内置+外部）：控制器/视图/adapter 三层审查——骨架 loading、失败旧快照保留+缓存徽章、空态 emptyHint、错误重试、3s 快照缓存+800ms 超时+失败退避+in-flight 去重、IntersectionObserver 懒加载、图片 lazy、DateTimeFormat 复用均健全；27 个内置 adapter 全部本地 SQL+refreshOn 事件订阅，13 个外部组件独立 TTL/超时（来源审计覆盖）
+- [x] T-6254 秒开优化（D-382）三件套：① 组件面板快照直出——read 回调捕获最后好快照存实例级内存 Map，controller 支持 initialSnapshot 首帧直出"缓存"态内容（复用既有 retained+更新中指示器路径，零 loading 闪帧），配置变更时失效；② 商店面板 renderStore 全区块离屏 fragment 装配一次挂载（原 9 处逐组 append 活 DOM 多轮重排）；③ 组件面板 renderPanel 工具栏/问候/网格同样 fragment 一次挂载
+- [x] T-6255 门禁与发版：新增快照直出契约测试（jsdom：首帧 ready+缓存条目+无骨架+refresh 静默更新）；商店装配契约同步+新增一次性挂载断言；负向验证双注入（破坏 initialSnapshot 分支/删除 fragment 挂载 → 各自精确 FAIL → 字节级还原）；verify:release 独占全绿 5693/5693；发布矩阵 index.js 601563、package.zip 307859
+
+
+## T-6251~T-6252 重构批次 R5a：搜索状态宿主收拢（2026-09-16，已完成）
+
+- [x] T-6251 R5 前置决策（D-381）：对比"拆状态宿主"与"补搜索渲染契约"两方案后由孙堃拍板方案 A——6 个 docSearch 状态字段收拢为 search-state 模块，避免 R5 制造 20+ 成员的过渡态 host；6 个字段中 docSearchFilters 有 4 处方法群外消费点（applySearch/unload/面板恢复/默认参数），收拢顺带收敛该耦合
+- [x] T-6252 状态收拢：新建 `src/doc-search-state.ts`（createDocSearchState，6 字段 + JSDoc，pathGeneration 竞态语义不变）；index.ts 33 处使用点纯引用改写 this.docSearchState.*（机械替换逐项计数校验 4/4/14/4/4/3）；6 个声明行删除、IDocSearchResult/IDocSearchFilters/ISearchSession 加 export 供 import type；契约同步（smoke filters.set 断言、path-filter generation 契约改指状态宿主模块并加宿主持有断言）；生产图加 doc-search-state、闭包 39→40；负向验证（删 pathGeneration 声明 → 精确 1 项 FAIL → 字节还原）；发布矩阵 index.js 601085、package.zip 307743；verify:release 独占全绿 5691/5691
+
+
+## T-6248~T-6250 重构批次 R1：商店 UI 外迁 home-store-ui.ts（2026-09-16，已完成）
+
+- [x] T-6248 R1 立项前提核实：store-* 契约群覆盖密度核实（store-mobile-layout 467 + store-preview-lifecycle 76 + home-store-contract 66 + store-mobile-external 10 条断言，全部为真实维护的源码正则契约），推翻 D-374"R1 需先补商店渲染快照类契约"的保守评估，R1 直接立项（D-379）
+- [x] T-6249 商店 UI 外迁：openStoreWidgetPreview（125 行）+ openHomeWidgetStore（995 行，含 4 行前置注释）自 index.ts 字节原样搬移至 home-store-ui.ts；HomeStoreUiHost 13 成员（i18n/isMobile/homeRuntime 内联类型/3 个集合字段 + 7 个行为方法）；store 内互调 this.openStoreWidgetPreview → openStoreWidgetPreview.call(this)（恰 1 处）；外部调用点 2 处改 openHomeWidgetStore.call(this,）；index.ts 11126→10007 行
+- [x] T-6250 契约同步与门禁：22 个测试文件约 1028 条断言按"真实正则 .test() 逐位置判定"分流改指新模块；2 条互调断言更新为新调用形态；BUILTIN_GROUPS 声明块断言改指 storeUiSource；生产图 WIRED_SANITY_MODULES 加 home-store-ui、闭包上限 38→39；负向验证 2 例（删 role=region 行、删互调回调行 → 精确 FAIL → 字节级还原）；发布矩阵同步（index.js 600911、package.zip 307699）；verify:release 独占全绿 5691/5691；记录 D-379/D-380
+
+
+## T-6245~T-6247 重构批次 R6：util 字素工具收敛（2026-09-16，已完成）
+
+- [x] T-6245 util.js 新增导出 graphemeSlice（前 n 字素截断，含"码元 ≤ 上限原样返回"短路优化——自 search-model 搬入并证实对所有调用方语义等价）与 graphemeSliceByCodePoints（码点预算内完整字素截断，自 agent-capabilities asText 搬入）；graphemeLength 补导出
+- [x] T-6246 三处私有 Segmenter 持有收敛：quick-actions（本地 graphemeLength 删除、re-export 保持测试兼容、normalizeLabel 改调 graphemeSlice）、search-model（normalizeText 截断段改调 util.graphemeSlice）、agent-capabilities（asText 码点预算循环改调 util.graphemeSliceByCodePoints）——全仓 `new Intl.Segmenter` 4→1（仅 util.js）
+- [x] T-6247 门禁升级：release-quality 的 Segmenter 测试由"每文件 ≤1 处"收紧为"全仓恰 1 处且必须在 util.js"；负向验证（注入第二个持有点 → 精确失败 → 字节级还原）；发布矩阵同步（index.js 600923、package.zip 308190）；verify:release 独占全绿（5691/5691 + smoke 77 PASS）；记录 D-378；R5 勘察发现（状态字段深度交织）记入候选清单
+
+
+## T-6241~T-6244 重构批次 R3：配置表单拆分（2026-09-16，已完成）
+
+- [x] T-6241 新建 `src/home-config-form.ts`（~380 行）：openHomeConfigForm（324 行方法体，含 renderField/placeholderText 闭包与 textarea 分支）自 index.ts 4024~4347 行按字节原样迁入；`this` 参数模式绑定宿主（HomeConfigFormHost 7 成员：i18n/isMobile/homeRuntime/getHomeState/saveHomeState/loadNotebooks/currentDocumentSetEntries）——R3 依赖面为三批中最小
+- [x] T-6242 新建 `src/store-labels.ts`：resolveStoreNetworkLabel/resolveStorePrivacyLabel 两个纯函数收纳（index.ts 顶部定义，商店卡片与配置表单两处消费），index.ts 11126 行（-316）；4 个调用点改 `.call(this)`
+- [x] T-6243 契约同步（本批改动量最大项）：4 个测试文件 100+ 条断言按"真实正则匹配判定"自动分流——store-mobile-layout 97 条、home-store-contract 8 条方法体断言改指 configFormSource，5 条调用点断言同步 `.call(this` 形态；生产图 WIRED + home-config-form/store-labels、闭包 36→38
+- [x] T-6244 负向验证（删 reportValidity 行 → store-mobile-layout 精确 1 项失败 → 字节级还原）；发布矩阵同步（index.js 601057、package.zip 308125）；verify:release 独占全绿（5691/5691 + smoke 77 PASS）；refactor-candidates 补 R3 执行记录；记录 D-377
+
+
+## T-6236~T-6240 重构批次 R4：设置页 UI 构建外迁（2026-09-16，已完成）
+
+- [x] T-6236 新建 `src/settings-sections.ts`（1068 行）：16 个设置页 UI 构建函数（区域 A 13 个：外观/行为/面板/Dock/主页/移动端/日记/收藏 4 件套等；区域 B 3 个：快捷动作 + 传输控件 + 文档集）自 index.ts 三个区域按字节原样迁入；`this` 参数模式绑定宿主（SettingsSectionsHost 38 成员），分节互调 8 处改为同模块直接调用
+- [x] T-6237 index.ts 接线：三区域（2034~2431 / 6537~6810 / 6877~7191）替换为注释，lazy map 9 处改 `.call(this)`（12442 → 11458 行）；10 个共享类型加 export（ISwSettings/IFavoriteItem/IQuickAction 等），新模块 `import type` 引用（编译期擦除零运行时循环）；数据方法（getDocumentSets/currentDocumentSetEntries/saveDocumentSet/probeDocumentSetEntries）按"注册/构建定义外迁、共享机制留宿主"裁定保留
+- [x] T-6238 契约同步：home-store-guide 的 mobileHomePanelFixed 断言改指 settings-sections；mobile-card-smoke 的 documentSetContractOk 33 条断言按搬移归属分流（18 条留 index.ts 数据/恢复执行、15 条改指 sections UI 构建）；生产图 WIRED + settings-sections、闭包 35→36
+- [x] T-6239 负向验证 3 轮（D-361 协议）：smoke 注入 editingSetId→editingSetIdXX 零失败系注入无效（子串包含），改删 aria-busy 行 → smoke 精确 FAIL；删 mobileHomePanelFixed 行 → home-store-guide 精确 FAIL；均字节级还原
+- [x] T-6240 发布矩阵同步（index.js 601526→601102、package.zip 307961）；verify:release 干净全绿（5691/5691 + smoke 77 项 PASS）；refactor-candidates 补 R4 执行记录；记录 D-376
+
+
+## T-6232~T-6235 重构批次 R2：外部组件注册外迁（2026-09-16，已完成）
+
+- [x] T-6232 新建 `src/home-external-adapters.ts`（273 行）：13 个外部组件注册定义（11 个直接 register + 2 个 registerExternalFeed，原清单按 11 计低估了 feed 助手拆分）自 index.ts 3816~4058 行按字节原样迁入；`this` 参数模式绑定宿主（i18n + 内核代理 fetch），块内 `this.i18n`/`this.fetchActivityWatchViaKernel` 接线形态零漂移
+- [x] T-6233 index.ts 接线替换：`registerExternalHomeAdapters.call(this, register)` 单次调用（12681 → 12442 行）；导入清理（仅保留区域外仍使用的 millisecondsToNextMinute/mergeHolidayPayloads/holidayPresentation/loadHolidayYear 与内核代理白名单符号）；lifeModuleIds/clockModuleIds/BUILTIN_GROUPS 属运行时行为逻辑，按语义保留 index.ts
+- [x] T-6234 契约同步：component-availability-audit 双文件合并扫描；external-widget-availability-contract 28 条断言改指新文件（life proxy 12 条仍锁 index.ts 内核代理方法）；external-widget-model 6 处读取改指（kernel proxy/heartbeat/timer dispose 3 处保留）；生产图 WIRED + home-external-adapters、闭包 34→35
+- [x] T-6235 负向验证 2 轮（D-361 协议，先确认注入发生再判零失败）：删 external-fx-frankfurter 注册 → audit 精确指名失败 + contract 2 项失败 → 均字节级还原；发布矩阵同步（index.js 601526、package.zip 307789）；verify:release 5691/5691；refactor-candidates 补 R2 执行记录；记录 D-375
+
+## T-6229~T-6231 重构候选清单（2026-09-16，已完成）
+
+- [x] T-6229 按工作流要求产出 `docs/refactor-candidates.md`：src 全量文件行数排序、index.ts 巨型类方法 Top 15（openHomeWidgetStore 995 行、registerBuiltinHomeAdapters 769 行等）、六个重构批次候选（R1 商店拆分 ~1200 行 / R2 外部组件注册外迁 ~300 / R3 配置表单 ~400 / R4 设置页 ~800 / R5 搜索链路 ~500 / R6 util 去重）按预期削减行数与风险排序
+- [x] T-6230 建议批次顺序：先 R2（风险最低、契约最完备、服务后续扩充）→ R4（独立节演练）→ R1（需先补商店渲染契约）→ R3/R5 → R6；明确不建议动 agent-* 未接线模块与纯数据目录
+- [x] T-6231 记录 D-374
+
+## T-6219~T-6228 组件扩充第三批 P2 第二部分：Miniflux 未读（2026-09-16，已完成）
+
+- [x] T-6219 凭据传递设计审计：Token 只走 `X-Auth-Token` 请求头（不进 URL——缓存 key 基于 URL 天然不含凭据；不进错误消息——全部固定字面量；不进快照）；配置层 `normalizeMinifluxToken` 清洗（拒绝 CR/LF/控制字符/超 128 字符，防 header 注入）；Token 暴露面收窄到"发往本机内核的代理请求体"，内核侧日志行为不可控已在目录描述声明
+- [x] T-6220 网络层：`allowedMinifluxUrl`（https 或本机 http + `/v1/entries` + 恰两参数 status=unread/limit=1-50 + 拒 userinfo/fragment/额外参数）+ `loadMinifluxEntries`（15 分钟缓存 + 陈旧回退 + 畸形 Token 请求前拒绝）+ `fetchBoundedLifeJson` 新增受控 `extraHeaders` 合入
+- [x] T-6221 内核代理扩展：`fetchActivityWatchViaKernel` 接受 `init.headers`（对象），逐键校验头名 `[A-Za-z0-9-]+` 后合入代理头数组；既有调用零变化
+- [x] T-6222 模型层：`normalizeMinifluxConfig`/`buildMinifluxRequestUrl`/`normalizeMinifluxEntries`（有界解析，条目 URL 拒绝 javascript:/data: 等危险 scheme、允许 http 自建源）/`buildMinifluxSnapshot`（stat 未读总数、feed·日期元信息、来源行）
+- [x] T-6223 接线：DEFAULT_MODULES（endpoint+token+limit）+ register（8500ms/15min，invalid_token 与配置缺失同显配置提示）+ lifeModuleIds + 生活分组 + 目录条目（trending 分类、api-key 凭据、AGPL-3.0）+ 四映射 + 占位符 + 双语 i18n（6 个新 key）
+- [x] T-6224 新增测试：网络层 8 项（含 X-Auth-Token 头传递断言、缓存 key 不含 Token 断言、畸形 Token 零网络请求断言）、模型层 7 项、契约行 7 项（含"Token 不进 URL"静态扫描）
+- [x] T-6225 计数同步：目录 15→16（trending 4、api 查询 7、needsConfiguration 7）、home-model 41/mobile 39、audit 39→40、依赖摘要 12 项（self-hosted-api 4）、README 5670→5691
+- [x] T-6226 负向验证（D-361 协议）：注入 limit 白名单放宽→1 项失败；注入 Token 校验移除→1 项失败（首次注入因脚本转义层级错误未实际发生，按行级锚点修正后验证）；均字节级还原
+- [x] T-6227 同步 roadmap（Miniflux 已交付）与发布矩阵（index.js 601480、package.zip 307872，余量 184952/216416）；`pnpm verify:release` 5691/5691 + 两套 UI 烟测
+- [x] T-6228 记录 D-373
+
+## T-6207~T-6218 组件扩充第三批 P2 第一部分：每日引言 + 设备电量（2026-09-16，已完成）
+
+- [x] T-6207 每日引言模型 `src/quote-model.js`：48 条公有领域古籍语录集（逐条标注篇目）、FNV-1a 本地日期键确定性轮换（同日稳定、跨日轮换、时区无关）、自定义语录多行解析（`——`/`—`/`──`/`|` 分隔出处、去空行去重、上限 50 条/160 字）
+- [x] T-6208 设备电量模型 `src/battery-model.js`：Battery Status API 读数归一化（level 百分比、充电状态、充/放电时长估计上限 7 天）、level 0 视为已知 Chromium 实现缺陷降级、纯函数无网络
+- [x] T-6209 接线：DEFAULT_MODULES +2（quote 全端/textarea 配置；battery 仅 desktop+sidebar）+ register（quote 挂分钟心跳跨天轮换；battery 能力探测 + 诚实降级文案 + 30s 缓存）+ 分组（quote→洞见组、battery→系统组）
+- [x] T-6210 通用 `textarea` 配置字段类型：renderField 新分支（rows 6、maxLength 4000、placeholder 支持）+ controls 类型扩展 HTMLTextAreaElement
+- [x] T-6211 external-widget-model 目录 +2（quote→新分类 inspiration、battery→新分类 device；均 builtin/direct/local-only），目录 13→15、语义分组 7→9
+- [x] T-6212 home-store-model 四映射 + 占位符 token（`external-quote-daily:quotes`）+ 双语 i18n（11 个新 key）
+- [x] T-6213 新增测试：quote-model 10 项、battery-model 8 项；计数同步（目录 15 处、audit 37→39、home-model 38→40/mobile 38、心跳正则、分组契约、controls 类型、生产图 WIRED +2 与闭包 32→34、README 5652→5670/159 文件）
+- [x] T-6214 负向验证（D-361 协议）：注入轮换漂移（哈希恒 0）→1 项失败；注入缺陷防御移除（level 0 视为有效）→2 项失败；均字节级还原
+- [x] T-6215 修复 i18n 写入脚本引入的真实换行控制字符（JSON 非法），改用 Edit 精确修复并验证 599 key 双语一致
+- [x] T-6216 同步 roadmap 第三批标注（quote/battery 已交付、Miniflux 单独成批、iCal 不接入）、发布矩阵（index.js 596190、package.zip 306310，余量 190242/217978）
+- [x] T-6217 跑通 `pnpm verify:release` 5670/5670 + 两套 UI 烟测
+- [x] T-6218 记录 D-371、D-372
+
+## T-6193~T-6206 组件扩充第二批 P1 + 小项（2026-09-16，已完成）
+
+- [x] T-6193 修正 4 个存量外部组件 sizes 口径不一致（以 DEFAULT_MODULES 为权威：weather+large、dailyhot→medium/wide/large/full、newsnow+full、activitywatch+large）；新增 `tests/external-catalog-sizes-contract.test.cjs` 门禁并完成负向验证
+- [x] T-6194 世界时钟 cities 配置项补 HOME_CONFIG_PLACEHOLDERS 占位提示 + `placeholderText` token 扩展 + 双语 i18n
+- [x] T-6195 Uptime Kuma 网络：`allowedUptimeKumaUrl`（用户端点 + 已知路由 `/api/status-page/{slug}` 与 `/heartbeat/{slug}`，slug 字符集约束，拒绝查询/userinfo/fragment/远程 http）+ `loadUptimeKumaPage`（5 分钟缓存 + 陈旧回退）
+- [x] T-6196 Uptime Kuma 模型：`normalizeUptimeKumaConfig`/`normalizeUptimeKumaStatus`（monitorList 上限 24 + incident 标题）/`normalizeUptimeKumaHeartbeat`（latest beat + uptimeList 24h）/`buildUptimeKumaSnapshot`（stat `${up}/${total}`、incident 置顶、双 envelope 健康取较差者）/`buildUptimeKumaPageUrl`
+- [x] T-6197 Frankfurter 网络：`allowedFrankfurterUrl`（主机 api.frankfurter.dev + 路径 /v2/rates + 恰 2 参数 + base/quotes ECB 白名单 + quotes 1-6 且不含 base）+ `loadFrankfurterRates`（12 小时缓存）
+- [x] T-6198 Frankfurter 模型：`normalizeFrankfurterConfig`（配置层即过滤 ECB 白名单，默认 CNY，quotes 1-6 去重去 base）/`buildFrankfurterRequestUrl`/`buildFrankfurterSnapshot`（rate 有限性/范围校验、来源行带日期）；清理 `emptyHint` 不可达死分支
+- [x] T-6199 网络层新增受控 `isAllowed` 门禁谓词：loader 内部先各自白名单校验再传入 `fetchBoundedLifeJson`，不引入任意 URL 通道
+- [x] T-6200 接线：DEFAULT_MODULES + register（Uptime Kuma 双 envelope 经内核代理 8500ms/5min；Frankfurter 8500ms/12h）+ lifeModuleIds + BUILTIN_GROUPS（fx→生活组、uptime→系统组）+ 双语 i18n
+- [x] T-6201 external-widget-model 目录登记 2 条（uptimekuma external/http/endpoint-only 归 activity；fx external/http/none 新增 finance 分类），目录 11→13
+- [x] T-6202 home-store-model 四映射成对登记（SOURCE_INFO/DEPENDENCY_INFO/PREVIEW_KINDS/CONFIG_KINDS）
+- [x] T-6203 新增测试：网络层 15 项、模型层 15 项、契约行 12 项；既有计数断言同步（目录计数、home-model 36/35→38/37、依赖摘要 9→11、分组契约、可用性审计 35→37）
+- [x] T-6204 负向验证（D-361 协议）：注入 Uptime Kuma startsWith 漂移→先暴露测试盲区（补 slug 前缀与 heartbeat 路径误用用例后再验证→1 项失败）；注入 Frankfurter 主机漂移→6 项失败；均字节级还原
+- [x] T-6205 同步 roadmap 第二批交付标注、README 中英文测试数字 5610→5652（157 个测试文件）、发布矩阵产物尺寸（index.js 582792、package.zip 301677）
+- [x] T-6206 记录 D-369、D-370
+
+## T-6177~T-6192 第三方（非思源插件）组件扩充第一批（2026-09-16，已完成）
+
+- [x] T-6177 多渠道调研：HN Algolia（免 Key/CORS/万次每小时）、Frankfurter（ECB 免 Key）、Uptime Kuma 状态页（免认证只读）、Miniflux（X-Auth-Token）、Obsidian 仪表盘与 Notion 小组件生态（仅类型灵感，iframe 不可用）
+- [x] T-6178 产出 `docs/external-widget-expansion-roadmap.md`（范围语义、渠道结论、准入门槛、三批路线、仅研究清单）
+- [x] T-6179 明确登记语义：外部来源登记面为 external-widget-model + home-store-model + home-model 三处成对；widget-catalog.js 仅限思源插件 provider
+- [x] T-6180 世界时钟模型：`normalizeWorldClockConfig`/`buildWorldClockSnapshot`（IANA 校验、去重、上限 8、空配置回退本地+UTC、per-zone DateTimeFormat 缓存）
+- [x] T-6181 世界时钟接线：DEFAULT_MODULES + register + 分钟心跳扩展（clockModuleIds 集合）+ 生活分组 + 双语 i18n + 商店 SOURCE_INFO/PREVIEW_KINDS/CONFIG_KINDS
+- [x] T-6182 HN 模型：`normalizeHackerNewsConfig`/`buildHackerNewsSnapshot`（objectID/href/标题三重去重、无外链回退 HN 讨论页、非 HTTPS scheme 拒绝、来源行、stale 健康透传）
+- [x] T-6183 HN 网络：字面量端点 `https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=12` 进 allowedLifeWidgetUrl（参数全固定，任何变化拒绝）+ `loadHackerNewsFrontPage`（30 分钟缓存 + 陈旧回退）
+- [x] T-6184 HN 接线：register（8500ms 超时/30 分钟缓存）+ 思源内核代理 fetchImpl + lifeModuleIds 低频心跳 + DEPENDENCY_INFO
+- [x] T-6185 external-widget-model 目录登记 2 条（世界时钟 builtin/direct/local-only；HN external/http/none），目录 9→11
+- [x] T-6186 新增测试：世界时钟 8 项、HN 快照 9 项、HN 网络 7 项、生产接线断言 2 项；既有计数断言同步（目录 19 处、home-model、依赖摘要、分组契约、可用性审计 33→35）
+- [x] T-6187 负向验证（D-361 协议）：注入白名单放宽（startsWith）1 项失败；注入删除 DEFAULT_MODULES 条目 2 项失败；均字节级还原
+- [x] T-6188 修复 3 处测试预期与实现的去重语义偏差（标题重复条目有意丢弃、limit 钳制最小 3）
+- [x] T-6189 同步 docs/release-readiness.md 产物尺寸（index.js 571944、package.zip 298315）
+- [x] T-6190 同步 README 中英文测试数字 5581→5610
+- [x] T-6191 跑通 `pnpm verify:release` 5610/5610 + 移动端/Chromium 烟测
+- [x] T-6192 记录 D-368
+
+### 后续小项（已并入第二批处理）
+- [x] T-6193 修正 4 个存量外部组件 sizes 在 DEFAULT_MODULES 与 EXTERNAL_WIDGET_CATALOG 间的口径不一致（以 DEFAULT_MODULES 为权威）
+- [x] T-6194 为世界时钟 cities 配置项补 HOME_CONFIG_PLACEHOLDERS 占位提示（如 Asia/Shanghai, America/New_York）
+
+## T-6169~T-6176 UI 第二轮：按下反馈（2026-09-16，已完成）
+
+- [x] T-6169 审计交互态覆盖：`:hover` 55 处 vs `:active` 10 处，其中仅 2 处为真正的物理反馈
+- [x] T-6170 定位 4 个缺按下反馈的主要可点击元素（图标按钮、组件面板条目、设置页标签、商店标签）
+- [x] T-6171 图标按钮加 `scale(0.94)`（先确认其 hover 只改背景、不碰 transform）
+- [x] T-6172 三处列表项/标签改用背景加深一档作为按下反馈
+- [x] T-6173 引入 `--sw-accent-pressed` 令牌，并在 `prefers-contrast: more` 块同步抬高（避免高对比度下反馈反转）
+- [x] T-6174 `prefers-reduced-motion` 下把缩放降级为纯颜色反馈
+- [x] T-6175 修复一处 Edit 误删 `&.is-active` 的失误，并以构建验证 SCSS 语法
+- [x] T-6176 跑通 `pnpm verify:release` 5581/5581；同步发布矩阵；记录 D-367
+
+## T-6159~T-6168 接入桌面路径筛选（2026-09-16，已完成）
+
+- [x] T-6159 依据 D-365 证据放宽 `path-filter-ui-contract` 门禁：由"禁止接入"改为"约束接入方式"
+- [x] T-6160 新增白名单端点与字面量 URL 请求分支
+- [x] T-6161 导入 `path-filter-model`，生产闭包 31→32，图隔离清单同步迁移
+- [x] T-6162 实现代际标记取消（内核辅助函数不接受外部 signal）
+- [x] T-6163 实现 `null → unavailable` 降级，不阻塞其他筛选维度
+- [x] T-6164 实现路径菜单：逐级下钻、返回上级、筛选此路径、子菜单、chip 移除、未选笔记本前置提示
+- [x] T-6165 依据 D-365 边界发现（不存在路径返回空列表）**未**为已删除路径前缀设计错误分支
+- [x] T-6166 补 11 组中英文案；筛选摘要计入路径数
+- [x] T-6167 单条目压缩上限 148→160 KiB（依 D-353 先例），基线按有意变更重建
+- [x] T-6168 跑通 `pnpm verify:release` 5581/5581；同步 README 与发布矩阵；记录 D-366
+
+## T-6151~T-6158 真实宿主只读实测与证据采集（2026-09-16，已完成）
+
+- [x] T-6151 探测本机思源实例：`SiYuan-Kernel.exe` PID 20364 监听 `127.0.0.1:6806`
+- [x] T-6152 确认认证边界：`/api/system/version` 免认证返回 3.8.4-beta.2；业务端点未认证返回 401
+- [x] T-6153 定位工作空间与凭据来源（token 仅在内存使用，未打印、未落盘）
+- [x] T-6154 实测 `/api/notebook/lsNotebooks` 与 **`/api/filetree/listDocsByPath`**（200 / code 0 / 22ms）
+- [x] T-6155 逐项比对响应结构与 `path-filter-model.js` 假设：`box`/`path` 回显一致、`files[]` 字段齐备，`mismatch` 分支不会误触发
+- [x] T-6156 采集边界行为：不存在路径→空列表而非错误；不存在 notebook/缺参数→`code:-1`；`maxListCount` 被遵守（截断探测成立）
+- [x] T-6157 产出脱敏证据文档 `docs/path-filter-host-evidence.md`（不含任何笔记名/标题/路径内容）
+- [x] T-6158 更新 B-005（部分解除）与 T-107（完成 2/3，保持未完成）；记录 D-365
+
+## T-6143~T-6150 样式表健康度扫描（2026-09-16，已完成）
+
+- [x] T-6143 扫描 CSS 自定义属性：17 个全部被 `var()` 引用，**无死变量**
+- [x] T-6144 核查 `!important` 57 处：集中在 `display`/`width`/`height`/`position`，用途为覆盖思源宿主样式，**非滥用**
+- [x] T-6145 核查"同块重复属性"：多数为有意的渐进增强链（`var`→`color-mix`、`balance`→`pretty`、`block`→`-webkit-box`），**不可删**
+- [x] T-6146 定位 2 处真冗余：`font-weight: 500` 被 `550` 覆盖、`font-weight: 600` 被 `650` 覆盖
+- [x] T-6147 删除两处无效声明并注释原因（保留后者——最后声明者才是生效值）
+- [x] T-6148 评估 SCSS 嵌套最深 6 层（11 处）：扁平化会改变选择器特异性、风险不抵收益，**仅记录不改**
+- [x] T-6149 跑通 `pnpm verify:release` 5577/5577；同步发布矩阵（`index.css` −32 字节）
+- [x] T-6150 记录 D-364
+
+## T-6135~T-6142 UI 无障碍补强（2026-09-16，已完成）
+
+- [x] T-6135 评估间距体系：589 处 25 个值，除奇数为元素居中的微调外全为 2 的倍数，属自洽的 2px 基准，**判定不宜归并**
+- [x] T-6136 评估阴影：62 处中 21 处内联、12 种取值，令牌化会改变外观且无法验证，**判定不宜改**，仅记录现状
+- [x] T-6137 定位真实缺口：`prefers-reduced-motion` 7 处、`forced-colors` 2 处，但 `prefers-contrast` 为 0
+- [x] T-6138 新增 `@media (prefers-contrast: more)`，覆盖两个令牌作用域，收紧低透明度软层
+- [x] T-6139 明确与 `forced-colors` 的分工（系统强制色 vs 用户偏好），并保证只覆盖令牌不改布局
+- [x] T-6140 新增 2 条断言：两作用域均已覆盖、该块不得出现布局属性
+- [x] T-6141 负向验证（删除适配、混入布局属性）均被拦截，`index.scss` 字节级还原
+- [x] T-6142 跑通 `pnpm verify:release` 5577/5577；同步 README 与发布矩阵；记录 D-363
+
+## T-6125~T-6134 UI 动效语言令牌化（2026-09-16，已完成）
+
+- [x] T-6125 客观评估 `src/index.scss`（6382 行）：主题变量、color-mix、focus-visible、reduced-motion、contain 均已具备，基础扎实，问题集中在动效语言
+- [x] T-6126 量化短板：40 处过渡声明散落 34 种写法、时长分 7 档、`.15s` 与 `0.15s` 混写、缓动全为浏览器默认 `ease`（37 处）
+- [x] T-6127 引入 4 档时长令牌 + 2 条曲线（快启动平滑停止 / 对称），刻意用 SCSS 变量实现零运行时开销
+- [x] T-6128 替换 43 处过渡声明；修正正则缺陷（开头的 `\b` 在"空格 + `.`"间不成立，导致 `.12s` 类省略零写法全部漏替换）
+- [x] T-6129 消除 2 处 `transition: all`，按真实交互态改为显式属性列表
+- [x] T-6130 保留进度条 `width` 过渡并就地注释取舍理由（单元素非逐帧、改 scaleX 会拉伸圆角）
+- [x] T-6131 同步 4 处硬绑字面量的 CSS 契约测试，改绑令牌模式
+- [x] T-6132 新增 2 条保护性断言：过渡须用令牌（禁裸时长/裸 ease）、6 个令牌必须保持定义
+- [x] T-6133 负向验证三种注入（裸时长、默认 ease、删除令牌定义）均被拦截，`index.scss` 字节级还原
+- [x] T-6134 跑通 `pnpm verify:release` 5575/5575；同步 README 与发布矩阵数字；记录 D-362
+
+## T-6119~T-6124 门禁审查方法论固化（2026-09-16，已完成）
+
+- [x] T-6119 将 D-354/D-359/D-360 三轮审计的方法论沉淀为 `docs/gate-audit-checklist.md`
+- [x] T-6120 梳理六类失效模式并各附真实案例：自造数据自断言、恒真表达式、测试自造正则、空集合恒真、名不副实、自指扫描
+- [x] T-6121 写入强制验证协议（同条件注入 + 按失败项名称判定 + 字节级还原 + 前后对比）与两个注入陷阱
+- [x] T-6122 列出五类**已确认非缺陷**的有意设计，防止后续误报式"修复"
+- [x] T-6123 在 `AGENTS.md` 开发协议新增"门禁"条，使清单在后续开发中被实际遵守
+- [x] T-6124 确认三份新开发文档不进发布归档（`package.zip` 仍 13 条目）；跑通 `pnpm verify:release`；记录 D-361
+
+## T-6109~T-6118 宿主发布门禁有效性审查与修复（2026-09-16，已完成）
+
+- [x] T-6109 完成 16 个宿主门禁文件、159 个断言的全量审查（模式化扫描 + 逐文件语义人审），报告见 `docs/host-gate-audit.md`
+- [x] T-6110 发现 4 处"自造数据再断言自造数据"的完全恒真断言：`release-dry-run`、`release-final-consistency`、`release-quality-report`、`reproducible-build`
+- [x] T-6111 发现 `release-quality-report` 的分类 `package`/`drift` 连生产实现都不识别（映射为 `RELEASE_UNKNOWN`），证明其与实现脱节
+- [x] T-6112 发现 2 处"测试自造正则"：`rollback-preflight`、`release-docs-safety` 实际验证 JS 正则引擎而非发布流程约束
+- [x] T-6113 发现 `reproducible-build` 测试名声称 deterministic 却无确定性验证，且全仓无构建产物两次构建对比——可复现性声明缺自动化证据
+- [x] T-6114 修复前三处恒真断言：改为从 workflow `files:` 声明、真实 `formatReleaseDiagnostics`、真实 `classifyReleaseFailure` 取数
+- [x] T-6115 修复 `reproducible-build`：删除恒真行数断言、改校验 sha256 摘要形态、修正测试名为准确描述
+- [x] T-6116 修复 `compatibility-matrix` 链接检查的静默风险：补 `checked >= 10` 自检（当前实检 22 条）
+- [x] T-6117 更新 `package-resource-audit` 过时注释 320→512 KiB（D-353）
+- [x] T-6118 负向验证三处修复（非法资源名、去截断、kind 降级为 UNKNOWN）均被拦截；跑通 `pnpm verify:release`；记录 D-360
+
+## T-6101~T-6108 恒真断言审计与修复（2026-09-16，已完成）
+
+- [x] T-6101 延续 D-354 思路审计全仓断言，扫描恒真模式（`assert.ok(true)` 类、`typeof` 类型断言、`assert.equal(x, x)` 类）
+- [x] T-6102 定位缺陷一：`workspace-diagnostics-wiring` 的 re-export 链守卫三元式化简后恒等于 `typeof` 自身，导出改名/删除时静默放过，与注释声称的"断链先失败"意图相反
+- [x] T-6103 定位缺陷二：`final-package-audit` 的"审计只读"断言 `typeof fs.readFileSync === 'function'` 恒真、零覆盖
+- [x] T-6104 修复缺陷一：按类型分组做真实存在性断言（函数组/常量组），常量组额外排除 `null` 与空对象
+- [x] T-6105 修复缺陷二：改为扫描审计源码不含写/删/改文件调用；禁用词按"词根 + 后缀"拼接，规避自指导致 `includes` 恒真
+- [x] T-6106 修正首版自指陷阱：直接写完整字面量会使列表自身出现在被测源码里，断言退化为恒真
+- [x] T-6107 前后对比实证：移除 runtime 导出时旧断言**从未触发**、新断言触发；引入写操作时旧断言下**零失败**、新断言触发
+- [x] T-6108 跑通 `pnpm verify:release` 5573/5573；记录 D-359
+
+## T-6093~T-6100 内核端点白名单门禁（2026-09-16，已完成）
+
+- [x] T-6093 确认 `KERNEL_ENDPOINTS` 是 `fetchKernelJson` 的 SSRF 关键守卫（四重检查），但全仓测试零引用
+- [x] T-6094 核对当前一致性：10 个端点的白名单与 switch 分支恰好一一对应，无现存 bug；风险在漂移无人拦截
+- [x] T-6095 新建 `tests/kernel-endpoint-guard.test.cjs`，8 项断言覆盖白名单非空、同源相对路径形态、白名单↔分支双向一致、字面量 fetch 同集合、禁止变量与绝对 URL、default 分支存在、四重守卫齐全
+- [x] T-6096 负向验证：注入 5 类违规（漏分支、漏白名单、变量 URL、绝对 URL、删 default），全部被精确拦截；`src/index.ts` 字节级还原
+- [x] T-6097 把"不存在变量 URL 请求"从仅靠外部扫描器（B-003 Mimosa L3）固化为可在本地运行的断言
+- [x] T-6098 修正 README 测试矩阵长期滞后数字：5573 项 / 156 个文件（中英各 5 处）；v0.16.39 日志中的 1513 项属历史记录不改
+- [x] T-6099 同步 `docs/release-readiness.md` 的 `package.zip` 294404→294403（512 KiB 余量 229885）
+- [x] T-6100 跑通 `pnpm verify:release` 5573/5573；记录 D-358
+
+## T-6085~T-6092 路径筛选接入前置核实与方案存档（2026-09-16，已完成）
+
+- [x] T-6085 核实 T-103 的真实阻塞条件：台账原记"待预算释放"，经查预算已于 D-353 解除，但另有一道仍有效的宿主证据门禁
+- [x] T-6086 定位门禁依据：`tests/path-filter-ui-contract.test.cjs` 断言 `listDocsByPath` 不得进生产，T-107 以桌面大版本验收为判定前提，D-042 规定桌面实测仅在大版本节点，三者一致指向 B-005
+- [x] T-6087 按方案实现端点白名单与字面量 URL 请求分支（安全扫描要求不存在变量 URL 请求）
+- [x] T-6088 实现代际标记取消与降级映射：`fetchKernelJson` 不接受外部 signal，故每次打开路径菜单自增代号、过期响应丢弃；辅助函数返回 null 时统一降级为 unavailable
+- [x] T-6089 实现路径菜单（逐级浏览、返回上级、筛选此路径、子菜单下钻）与已选路径 chip 移除，未选笔记本时给前置提示
+- [x] T-6090 补充 11 组中英文案，i18n 门禁 11/11 通过（key 集合一致 + 无死 key）
+- [x] T-6091 迁移生产图清单：`path-filter-model` 由 UNWIRED 移入 WIRED、闭包上限 31→32，门禁 3/3 通过（闭包实测 32）；`tsc --noEmit` 0 错误
+- [x] T-6092 因宿主证据门禁主动回滚生产接线，方案完整存档于 `docs/path-filter-desktop-plan.md`；更新 T-103 状态说明、B-005 与 D-357
+
+## T-6079~T-6084 工作树遗留门禁失败清理（2026-09-16，已完成）
+
+- [x] T-6079 定位 i18n 门禁失败根因：`src/i18n/zh-CN.json` 残留探针 key `zzzParityProbeKey`（值"探针"），系此前验证 parity 门禁是否真生效时植入、事后未清理
+- [x] T-6080 确认该 key 同时触发"zh-CN 与 en 的 key 集合不一致"与"存在源码未引用的死 key"两项失败，且 `en.json` 中无对应项
+- [x] T-6081 逐 key 比对确认同批 105+/104− 格式化改动为零值变化（555 个同名 key 全部一致），据此保留格式化、仅删除探针 key
+- [x] T-6082 定位 `document-context` 跨行断言失败根因：`core.autocrlf=true` 使 `src/index.ts` 工作树全为 CRLF，而正则写死 `\n`；实际代码语义完好，属测试对行尾敏感
+- [x] T-6083 全仓扫描 7 处跨行正则，确认仅 1 处受影响；并按既有先例（`store-mobile-layout-contract.test.cjs:695`）改为 `\r?\n`，使断言行尾无关
+- [x] T-6084 跑通 `pnpm verify:release` 5565/5565；记录 D-356
+
+## T-6073~T-6078 生产依赖图隔离门禁失效修复（2026-09-16，已完成）
+
+- [x] T-6073 核实 UNWIRED 清单与生产图实际闭包的一致性，发现 `agent-document-context` 已在图内却仍列为未接线
+- [x] T-6074 定位根因：泄漏断言只检查裸名与 `.ts`，未检查 `.js`；而遍历存的是带扩展名的解析文件名
+- [x] T-6075 量化影响：31 个在图中的模块，旧逻辑漏检 27 个；`UNWIRED` 清单 16 项全为 `.js`，门禁从未生效
+- [x] T-6076 修复：提取共用 `inGraph()` 统一解析裸名/`.js`/`.ts`，UNWIRED 与 WIRED 两个断言共用，杜绝再次不对称
+- [x] T-6077 按事实将 `agent-document-context` 由 UNWIRED 移入 `WIRED_SANITY_MODULES`（其接线已在 D-352 确认），并更新注释中过时的 320 KiB 前提
+- [x] T-6078 负向验证：新逻辑漏检数为 0（旧为 27）；记录 D-354，跑通 `pnpm verify:release`
+
+## T-6065~T-6072 包体上限重校准与集市图标合规（2026-09-15，已完成）
+
+- [x] T-6065 核查思源官方对插件包大小的实际约束（结论：无 `package.zip` 限制，仅 `icon.png` ≤ 20 KB、`preview.png` ≤ 200 KB）
+- [x] T-6066 将 `package.zip` 硬上限由 320 KiB 上调至 512 KiB（`package-integrity`、`package-budget-checkpoint`）
+- [x] T-6067 将 `dist/index.js` 自律线由 548 KiB 上调至 768 KiB（`release-quality`）
+- [x] T-6068 修正 `icon.png` 超出官方 20 KB 规范的问题（256×256 44720 → 160×160 18376 bytes，无损路径）
+- [x] T-6069 压缩方案比选：BILINEAR 原生 RGBA 20059 bytes 超 421；zlib 多策略重压无增益；清理透明区杂色无收益（alpha 仅 1 取值）；zopfli 为唯一无损达标路径
+- [x] T-6070 同步中英文 README、ROADMAP v0.20 条目、`docs/external-widget-source-audit.md` 中的旧上限数字
+- [x] T-6071 重新构建并同步 `docs/release-readiness.md` 产物数据（该文件的字节数由宿主页门禁硬校验）
+- [x] T-6072 记录 D-353 并跑通 `pnpm verify:release`（5565/5565，退出码 0）
+
+## T-6059~T-6064 卡片时间戳格式化器缓存（2026-09-15，已完成）
+- [x] T-6059 测量 DateTimeFormat 构造成本：63µs vs 复用 2µs
+- [x] T-6060 formatUpdatedAt 改为模块级缓存实例
+- [x] T-6061 时区失效键选型：getTimezoneOffset 0.3µs vs resolvedOptions 68µs
+- [x] T-6062 契约测试：缓存复用后不同时间戳仍输出各自结果
+- [x] T-6063 全量门禁验证：TypeScript、5565 项测试、生产构建与两项 smoke
+- [x] T-6064 发布矩阵产物大小同步（index.js 560476、package.zip 320649）
+
+## T-6051~T-6058 每调用构造昂贵对象治理（2026-09-15，已完成）
+- [x] T-6051 扫描生产源码中每调用构造的 Intl.Segmenter / RegExp / DateTimeFormat
+- [x] T-6052 日记月历：把两个前缀正则提出 64 行 SQL 结果循环
+- [x] T-6053 快捷入口：graphemeLength 复用模块级 Segmenter
+- [x] T-6054 快捷入口：normalizeLabel 复用模块级 Segmenter
+- [x] T-6055 宿主页静态门禁：单文件最多 1 处 new Intl.Segmenter(
+- [x] T-6056 源码扫描记录 util.js 已存在的 graphemeLength 重复实现（暂不收敛）
+- [x] T-6057 全量门禁验证：TypeScript、5564 项测试、生产构建与两项 smoke
+- [x] T-6058 发布矩阵产物大小同步（index.js 560365、package.zip 320582）
+
+## T-6043~T-6050 搜索文本归一化性能修复（2026-09-15，已完成）
+- [x] T-6043 定位性能基准失败：200 页签扇出均值 3.098ms 超 2.5ms 预算
+- [x] T-6044 热点剖析：normalizeText 对每个字符串执行全量 Intl.Segmenter 切分
+- [x] T-6045 normalizeText 增加长度快速路径（码元长度 ≤ 上限时直接返回）
+- [x] T-6046 等价性随机比对：20 万例组合字符/ZWJ emoji/控制字符零差异
+- [x] T-6047 契约测试：短串经快速路径后输出与原串恒等
+- [x] T-6048 契约测试：超长输入仍按字素截断至 256
+- [x] T-6049 全量门禁验证：TypeScript、5563 项测试、生产构建与两项 smoke
+- [x] T-6050 发布矩阵产物大小同步（index.js 560411、package.zip 320588）
+
+## T-6009~T-6042 Agent document-context outline demand control (2026-09-15)
+- [x] T-6009 includeOutline request field
+- [x] T-6010 includeOutline boolean schema
+- [x] T-6011 includeOutline default true
+- [x] T-6012 includeOutline false normalization
+- [x] T-6013 includeOutline truthy fallback
+- [x] T-6014 includeOutline null fallback
+- [x] T-6015 unknown request isolation
+- [x] T-6016 outline not-requested enum
+- [x] T-6017 outline not-requested schema
+- [x] T-6018 outline not-requested helper
+- [x] T-6019 outline skip headings isolation
+- [x] T-6020 outline skip failure distinction
+- [x] T-6021 legacy request compatibility
+- [x] T-6022 limit independence
+- [x] T-6023 id independence
+- [x] T-6024 boolean bound regression
+- [x] T-6025 metadata-first skip path
+- [x] T-6026 structured output skip path
+- [x] T-6027 host conditional request
+- [x] T-6028 host skip request branch
+- [x] T-6029 host not-requested status
+- [x] T-6030 host empty headings fallback
+- [x] T-6031 preview false preservation
+- [x] T-6032 unavailable outline preservation
+- [x] T-6033 request schema additionalProperties
+- [x] T-6034 output schema required update
+- [x] T-6035 output key order update
+- [x] T-6036 focused contract tests
+- [x] T-6037 focused wiring tests
+- [x] T-6038 performance intent documentation
+- [x] T-6039 package budget review
+- [x] T-6040 full regression gate
+- [x] T-6041 local market sync
+- [x] T-6042 outline demand-control batch record
+
+## T-5975~T-6008 Agent document-context notebook provenance (2026-09-15)
+- [x] T-5975 notebook source enum
+- [x] T-5976 notebook source schema
+- [x] T-5977 notebook source required field
+- [x] T-5978 empty name none derivation
+- [x] T-5979 cache source derivation
+- [x] T-5980 tab source derivation
+- [x] T-5981 unknown source fallback
+- [x] T-5982 non-string name guard
+- [x] T-5983 context none source output
+- [x] T-5984 context cache source output
+- [x] T-5985 context tab source output
+- [x] T-5986 empty-name source override guard
+- [x] T-5987 unknown source isolation
+- [x] T-5988 control cleanup regression
+- [x] T-5989 enum bound regression
+- [x] T-5990 metadata independence regression
+- [x] T-5991 notebook ID independence regression
+- [x] T-5992 stable output-key regression
+- [x] T-5993 detached output regression
+- [x] T-5994 tab cache source wiring
+- [x] T-5995 kernel cache source wiring
+- [x] T-5996 cache precedence wiring
+- [x] T-5997 readonly notebook source wiring
+- [x] T-5998 builder normalization wiring
+- [x] T-5999 kernel pathless regression
+- [x] T-6000 in-memory cache regression
+- [x] T-6001 no notebook network regression
+- [x] T-6002 schema enum regression
+- [x] T-6003 source documentation update
+- [x] T-6004 100+ contract gate
+- [x] T-6005 host compatibility gate
+- [x] T-6006 package resource gate
+- [x] T-6007 market sync
+- [x] T-6008 notebook provenance batch record
+
+## T-5941~T-5974 Agent document-context explainability (2026-09-15)
+- [x] T-5941 metadata field enum
+- [x] T-5942 metadata missing schema
+- [x] T-5943 metadata missing required field
+- [x] T-5944 missing core field derivation
+- [x] T-5945 missing title derivation
+- [x] T-5946 complete missing list derivation
+- [x] T-5947 non-string missing guard
+- [x] T-5948 canonical missing order
+- [x] T-5949 path reason enum
+- [x] T-5950 path reason schema
+- [x] T-5951 path reason required field
+- [x] T-5952 available path reason
+- [x] T-5953 missing path reason
+- [x] T-5954 strict path reason input
+- [x] T-5955 normalized path reason
+- [x] T-5956 caller path reason isolation
+- [x] T-5957 context partial missing output
+- [x] T-5958 context complete missing output
+- [x] T-5959 context unavailable missing output
+- [x] T-5960 missing output bound
+- [x] T-5961 unknown missing key isolation
+- [x] T-5962 source helper compatibility
+- [x] T-5963 tab notebook fallback wiring
+- [x] T-5964 notebookName alias wiring
+- [x] T-5965 boxName alias wiring
+- [x] T-5966 cache-first precedence wiring
+- [x] T-5967 SQL projection regression
+- [x] T-5968 closed path none regression
+- [x] T-5969 outline array-length regression
+- [x] T-5970 read-only fallback regression
+- [x] T-5971 structured result regression
+- [x] T-5972 100-case document-context gate
+- [x] T-5973 explainability documentation
+- [x] T-5974 explainability batch record
+
+## T-5907~T-5940 Agent document-context M2 host compatibility (2026-09-15)
+- [x] T-5907 source normalizer extraction
+- [x] T-5908 source normalizer active fallback
+- [x] T-5909 source normalizer kernel fallback
+- [x] T-5910 source normalizer opened preservation
+- [x] T-5911 metadata derivation helper
+- [x] T-5912 metadata complete count
+- [x] T-5913 metadata partial count
+- [x] T-5914 metadata unavailable count
+- [x] T-5915 metadata string-type guard
+- [x] T-5916 path source helper extraction
+- [x] T-5917 path unavailable override
+- [x] T-5918 path tab preservation
+- [x] T-5919 path kernel preservation
+- [x] T-5920 path active fallback
+- [x] T-5921 path kernel fallback
+- [x] T-5922 path unknown fallback
+- [x] T-5923 outline status helper extraction
+- [x] T-5924 outline failure override
+- [x] T-5925 outline available preservation
+- [x] T-5926 outline empty preservation
+- [x] T-5927 outline non-empty derivation
+- [x] T-5928 outline empty derivation
+- [x] T-5929 outline unavailable rejection on success
+- [x] T-5930 malformed outline container guard
+- [x] T-5931 tab notebook name fallback
+- [x] T-5932 notebook alias fallback
+- [x] T-5933 cache-first notebook precedence
+- [x] T-5934 bounded SQL fallback regression
+- [x] T-5935 kernel path none regression
+- [x] T-5936 outline response bounded regression
+- [x] T-5937 boolean compatibility regression
+- [x] T-5938 structured result regression
+- [x] T-5939 97-case document-context gate
+- [x] T-5940 M2 host compatibility batch record
+
+## T-5874~T-5906 Agent document-context M2 status and provenance (2026-09-15)
+- [x] T-5874 metadata status enum
+- [x] T-5875 metadata status schema
+- [x] T-5876 metadata status required field
+- [x] T-5877 complete metadata derivation
+- [x] T-5878 partial metadata derivation
+- [x] T-5879 unavailable metadata derivation
+- [x] T-5880 post-normalization status derivation
+- [x] T-5881 metadata unknown-field isolation
+- [x] T-5882 path source enum
+- [x] T-5883 path source schema
+- [x] T-5884 path source required field
+- [x] T-5885 tab path attribution
+- [x] T-5886 kernel path attribution
+- [x] T-5887 missing path attribution
+- [x] T-5888 invalid path source fallback
+- [x] T-5889 explicit path source preservation
+- [x] T-5890 path availability independence
+- [x] T-5891 outline status enum
+- [x] T-5892 outline status schema
+- [x] T-5893 outline status required field
+- [x] T-5894 available outline derivation
+- [x] T-5895 empty outline derivation
+- [x] T-5896 unavailable outline derivation
+- [x] T-5897 invalid outline status fallback
+- [x] T-5898 explicit outline status preservation
+- [x] T-5899 outline boolean compatibility
+- [x] T-5900 stable output key order
+- [x] T-5901 host tab provenance wiring
+- [x] T-5902 host kernel fallback provenance wiring
+- [x] T-5903 cache-only notebook lookup regression
+- [x] T-5904 M2 contract documentation
+- [x] T-5905 targeted contract and wiring gate
+- [x] T-5906 M2 batch record
+
+## T-5830~T-5861 Agent document-context metadata completeness (2026-09-15)
+- [x] T-5830 notebookName output field
+- [x] T-5831 notebookName schema bound
+- [x] T-5832 pathAvailable output field
+- [x] T-5833 pathAvailable schema bound
+- [x] T-5834 pathAvailable required field
+- [x] T-5835 tab notebook cache lookup
+- [x] T-5836 kernel notebook cache lookup
+- [x] T-5837 missing notebook name fallback
+- [x] T-5838 missing path false state
+- [x] T-5839 normalized path true state
+- [x] T-5840 notebook name text sanitization
+- [x] T-5841 notebook name length cap
+- [x] T-5842 notebook name alias extraction
+- [x] T-5843 notebook name unknown-field isolation
+- [x] T-5844 path state deterministic derivation
+- [x] T-5845 path state legacy compatibility
+- [x] T-5846 output key order update
+- [x] T-5847 schema required list update
+- [x] T-5848 schema additionalProperties guard
+- [x] T-5849 opened metadata precedence regression
+- [x] T-5850 closed SQL fallback regression
+- [x] T-5851 active source regression
+- [x] T-5852 kernel source regression
+- [x] T-5853 notebook cache isolation regression
+- [x] T-5854 path normalization regression
+- [x] T-5855 malformed metadata regression
+- [x] T-5856 bounded text regression
+- [x] T-5857 read-only effect regression
+- [x] T-5858 document-context capacity audit
+- [x] T-5859 document-context targeted test gate
+- [x] T-5860 document-context release gate
+- [x] T-5861 document-context batch record
+
+## T-5862~T-5873 Official plugin-sample audit (2026-09-15)
+- [x] T-5862 clone official sample repository
+- [x] T-5863 inspect template purpose
+- [x] T-5864 inspect frontend lifecycle guidance
+- [x] T-5865 inspect top bar and Dock examples
+- [x] T-5866 inspect event bus examples
+- [x] T-5867 inspect settings and i18n guidance
+- [x] T-5868 inspect plugin.json platform fields
+- [x] T-5869 inspect publish-data privacy model
+- [x] T-5870 inspect kernel plugin boundary
+- [x] T-5871 inspect build and package workflow
+- [x] T-5872 record reusable recommendations
+- [x] T-5873 sample audit document
+
+## T-5798~T-5829 Agent document-context M2 provenance and outline resilience (2026-09-15)
+- [x] T-5798 document-context source enum
+- [x] T-5799 active provenance normalization
+- [x] T-5800 opened provenance normalization
+- [x] T-5801 kernel provenance normalization
+- [x] T-5802 unknown provenance fallback
+- [x] T-5803 active root source selection
+- [x] T-5804 opened tab source selection
+- [x] T-5805 closed document kernel source selection
+- [x] T-5806 outlineAvailable output field
+- [x] T-5807 outlineAvailable schema boolean
+- [x] T-5808 outlineAvailable required field
+- [x] T-5809 outline success detection
+- [x] T-5810 outline empty result handling
+- [x] T-5811 outline request exception isolation
+- [x] T-5812 outline failure stable warning
+- [x] T-5813 metadata request exception isolation
+- [x] T-5814 metadata failure stable error
+- [x] T-5815 metadata failure does not query outline
+- [x] T-5816 opened tab metadata precedence
+- [x] T-5817 kernel SQL fallback preservation
+- [x] T-5818 active flag/source consistency
+- [x] T-5819 source enum contract freeze
+- [x] T-5820 output key order regression
+- [x] T-5821 unknown source regression
+- [x] T-5822 explicit opened regression
+- [x] T-5823 explicit kernel regression
+- [x] T-5824 outline unavailable regression
+- [x] T-5825 wiring provenance regression
+- [x] T-5826 wiring failure isolation regression
+- [x] T-5827 read-only effects unchanged
+- [x] T-5828 document-context capacity audit
+- [x] T-5829 document-context batch record
+
+## T-5383~T-5422 商店视图偏好与批量管理（2026-09-15，已完成）
+- [x] T-5383 新增商店视图模式枚举
+- [x] T-5384 归一化网格视图
+- [x] T-5385 归一化列表视图
+- [x] T-5386 归一化紧凑视图
+- [x] T-5387 新增视图模式标签
+- [x] T-5388 新增视图偏好模型
+- [x] T-5389 视图偏好安全序列化
+- [x] T-5390 视图偏好异常解析回退
+- [x] T-5391 新增批量选择模型
+- [x] T-5392 选择项 ID 清洗
+- [x] T-5393 选择项去重
+- [x] T-5394 切换单项选择
+- [x] T-5395 清空批量选择
+- [x] T-5396 选择当前筛选结果
+- [x] T-5397 批量选择状态归一化
+- [x] T-5398 批量选择摘要
+- [x] T-5399 全选按钮状态
+- [x] T-5400 批量操作安全上限
+- [x] T-5401 新增筛选建议模型
+- [x] T-5402 查询建议按空结果生成
+- [x] T-5403 筛选建议按页签生成
+- [x] T-5404 推荐页签建议
+- [x] T-5405 可配置页签建议
+- [x] T-5406 来源页签建议
+- [x] T-5407 新增卡片状态摘要
+- [x] T-5408 卡片可用性摘要
+- [x] T-5409 卡片联网摘要
+- [x] T-5410 卡片配置摘要
+- [x] T-5411 新增组件主操作决策
+- [x] T-5412 外部组件主操作指向说明
+- [x] T-5413 条件组件主操作指向配置
+- [x] T-5414 就绪组件主操作指向添加
+- [x] T-5415 新增外部设置链接校验
+- [x] T-5416 HTTPS 设置链接保留
+- [x] T-5417 非法设置链接安全丢弃
+- [x] T-5418 新增配置完成度模型
+- [x] T-5419 配置字段完成度计数
+- [x] T-5420 配置字段缺失摘要
+- [x] T-5421 新增批量操作上限模型
+- [x] T-5422 完成视图与批量专项回归、构建与集市同步
+
+## T-5423~T-5452 批量操作执行与结果反馈（2026-09-15）
+- [x] T-5423 批量动作枚举归一化
+- [x] T-5424 添加动作资格判定
+- [x] T-5425 移除动作资格判定
+- [x] T-5426 配置动作资格判定
+- [x] T-5427 条件组件批量隔离
+- [x] T-5428 外部组件批量隔离
+- [x] T-5429 已添加组件批量移除筛选
+- [x] T-5430 可配置组件批量配置筛选
+- [x] T-5431 批量资格分区
+- [x] T-5432 批量结果 accepted 计数
+- [x] T-5433 批量结果 skipped 计数
+- [x] T-5434 批量结果 ID 清单
+- [x] T-5435 批量结果安全上限
+- [x] T-5436 批量结果文案摘要
+- [x] T-5437 批量动作本地化标签
+- [x] T-5438 批量选择提示
+- [x] T-5439 部分成功焦点恢复
+- [x] T-5440 全成功摘要焦点
+- [x] T-5441 部分失败保留选择
+- [x] T-5442 成功后清空选择判定
+- [x] T-5443 批量错误枚举
+- [x] T-5444 批量失败判定
+- [x] T-5445 批量部分成功判定
+- [x] T-5446 批量成功判定
+- [x] T-5447 批量回执固定结构
+- [x] T-5448 批量回执计数清洗
+- [x] T-5449 批量回执动作清洗
+- [x] T-5450 批量缺失 ID 隔离
+- [x] T-5451 批量重复 ID 去重
+- [x] T-5452 完成批量专项回归、构建与集市同步
+
+## T-5453~T-5482 非思源组件依赖与安装提醒（2026-09-15）
+- [x] T-5453 建立非思源依赖目录
+- [x] T-5454 Open-Meteo 安装地址
+- [x] T-5455 Bangumi API 地址
+- [x] T-5456 DailyHotApi 部署地址
+- [x] T-5457 NewsNow 部署地址
+- [x] T-5458 ActivityWatch 下载地址
+- [x] T-5459 holiday-cn 项目地址
+- [x] T-5460 siyuan-checkin 特殊说明
+- [x] T-5461 插件命令提供方说明
+- [x] T-5462 标记外部 API 必须配置
+- [x] T-5463 标记自建 API 必须部署
+- [x] T-5464 标记本机服务必须启动
+- [x] T-5465 标记可选节假日数据
+- [x] T-5466 标记其他插件依赖
+- [x] T-5467 记录联网边界
+- [x] T-5468 记录隐私边界
+- [x] T-5469 记录平台限制
+- [x] T-5470 记录 API Key 要求
+- [x] T-5471 记录端点配置要求
+- [x] T-5472 记录 loopback 要求
+- [x] T-5473 生成依赖提醒摘要
+- [x] T-5474 生成依赖目录查询
+- [x] T-5475 防御性复制依赖信息
+- [x] T-5476 依赖类型归一化
+- [x] T-5477 未知依赖安全返回
+- [x] T-5478 新增统一安装文档
+- [x] T-5479 文档增加自建服务警告
+- [x] T-5480 文档增加公网地址警告
+- [x] T-5481 新增依赖专项回归
+- [x] T-5482 完成依赖审计、构建与集市同步
+
+## T-5343~T-5382 组件商店操作韧性与可用性（2026-09-15）
+- [x] T-5343 新增商店动作状态枚举
+- [x] T-5344 统一动作状态归一化
+- [x] T-5345 禁用动作安全回退
+- [x] T-5346 添加动作 pending 状态
+- [x] T-5347 添加动作 success 状态
+- [x] T-5348 添加动作 error 状态
+- [x] T-5349 新增动作反馈模型
+- [x] T-5350 新增反馈忙碌标记
+- [x] T-5351 新增反馈可关闭标记
+- [x] T-5352 新增重试策略归一化
+- [x] T-5353 新增指数退避延迟
+- [x] T-5354 新增重试次数上限
+- [x] T-5355 新增错误类型枚举
+- [x] T-5356 新增超时错误识别
+- [x] T-5357 新增网络错误识别
+- [x] T-5358 新增授权错误识别
+- [x] T-5359 新增资源不存在识别
+- [x] T-5360 新增数据格式错误识别
+- [x] T-5361 新增安全错误文案
+- [x] T-5362 新增来源健康状态模型
+- [x] T-5363 新增来源健康色调
+- [x] T-5364 新增来源健康摘要
+- [x] T-5365 新增缓存状态模型
+- [x] T-5366 新增缓存色调
+- [x] T-5367 新增缓存标签本地化
+- [x] T-5368 新增组件可安装性推导
+- [x] T-5369 新增条件组件安装提示
+- [x] T-5370 外部组件安装按钮安全禁用
+- [x] T-5371 新增触控目标尺寸归一化
+- [x] T-5372 移动端触控目标增大
+- [x] T-5373 窄桌面单列判定
+- [x] T-5374 新增分页窗口模型
+- [x] T-5375 新增分页摘要文案
+- [x] T-5376 新增空状态焦点目标
+- [x] T-5377 新增操作播报文案
+- [x] T-5378 新增操作日志有界模型
+- [x] T-5379 新增操作统计摘要
+- [x] T-5380 新增错误恢复动作映射
+- [x] T-5381 新增错误恢复计划
+- [x] T-5382 完成韧性专项回归、构建与集市同步
+
+> 当前基线：v0.17.0（`791dcf7`）；开发头为本地 `main` 的未推送开发提交，继续开发优先于正式发版；发版需维护者明确确认。
+
+## T-5313~T-5342 商店状态反馈与卡片可读性（2026-09-15）
+
+- [x] T-5313 新增商店动作枚举
+- [x] T-5314 规范化未知商店动作
+- [x] T-5315 新增密度本地化标签解析
+- [x] T-5316 新增筛选标签摘要模型
+- [x] T-5317 新增结果计数归一化
+- [x] T-5318 新增结果摘要统一渲染
+- [x] T-5319 新增卡片色调模型
+- [x] T-5320 新增已添加成功色调
+- [x] T-5321 新增条件可用警告色调
+- [x] T-5322 新增网络来源色调
+- [x] T-5323 新增卡片徽章模型
+- [x] T-5324 新增推荐徽章
+- [x] T-5325 新增可配置徽章
+- [x] T-5326 新增已添加徽章
+- [x] T-5327 新增卡片可配置判定
+- [x] T-5328 新增状态计数模型
+- [x] T-5329 接入卡片色调数据属性
+- [x] T-5330 接入推荐徽章渲染
+- [x] T-5331 避免重复渲染可配置徽章
+- [x] T-5332 使用模型统一结果摘要
+- [x] T-5333 保留旧摘要替换契约
+- [x] T-5334 商店工具栏保持 sticky
+- [x] T-5335 紧凑模式压缩徽章间距
+- [x] T-5336 推荐徽章使用主题色
+- [x] T-5337 已添加徽章使用成功色
+- [x] T-5338 增加 reduced-motion 回退
+- [x] T-5339 扩展模型导出清单
+- [x] T-5340 增加模型边界回归
+- [x] T-5341 更新发布包体自律线
+- [x] T-5342 完成全量测试、构建与 smoke 验证
+
+## T-5283~T-5312 组件商店推荐筛选与视图密度（2026-09-15）
+
+- [x] T-5283 新增推荐页签模型
+- [x] T-5284 新增可配置页签模型
+- [x] T-5285 推荐与来源筛选保持正交
+- [x] T-5286 推荐状态支持显式元数据
+- [x] T-5287 内置离线组件自动进入推荐集合
+- [x] T-5288 推荐卡片数量统计
+- [x] T-5289 可配置卡片数量统计
+- [x] T-5290 卡片归一化保留 configurable 标记
+- [x] T-5291 卡片归一化保留 recommended 标记
+- [x] T-5292 推荐筛选异常输入安全回退
+- [x] T-5293 可配置筛选异常输入安全回退
+- [x] T-5294 更新中英文推荐文案
+- [x] T-5295 更新中英文可配置文案
+- [x] T-5296 商店加入卡片密度按钮
+- [x] T-5297 卡片密度舒适模式
+- [x] T-5298 卡片密度紧凑模式
+- [x] T-5299 紧凑模式隐藏次级分组说明
+- [x] T-5300 紧凑模式压缩卡片内边距
+- [x] T-5301 密度按钮提供 aria-pressed
+- [x] T-5302 密度按钮提供可读标题
+- [x] T-5303 新增商店视图重置按钮
+- [x] T-5304 重置按钮恢复搜索状态
+- [x] T-5305 重置按钮恢复筛选状态
+- [x] T-5306 重置按钮恢复排序状态
+- [x] T-5307 重置按钮恢复折叠分组
+- [x] T-5308 新增视图状态归一化
+- [x] T-5309 新增视图状态序列化
+- [x] T-5310 新增视图状态解析容错
+- [x] T-5311 新增视图状态相等判断
+- [x] T-5312 新增推荐/密度专项回归并完成构建验证
+
+## T-1995~T-2044 ActivityWatch 与商店来源分类（2026-09-14）
+
+- [x] T-1995 核验 ActivityWatch 官方 REST 与 Query API
+- [x] T-1996 核验官方默认 5600 端口和本机安全边界
+- [x] T-1997 核验官方查询请求 timeperiods 与 query 数组结构
+- [x] T-1998 核验官方应用级聚合查询方法
+- [x] T-1999 核验 ActivityWatch Rust 服务 CORS 默认限制
+- [x] T-2000 核验思源公开 JSON 正向代理契约
+- [x] T-2001 ActivityWatch 端点仅允许三类 loopback 主机
+- [x] T-2002 ActivityWatch 端点拒绝凭据、查询和 fragment
+- [x] T-2003 ActivityWatch 端点拒绝任意附加路径
+- [x] T-2004 ActivityWatch 请求固定为 `/api/0/query/`
+- [x] T-2005 ActivityWatch 统计范围限制为 1~168 小时
+- [x] T-2006 ActivityWatch 应用数量限制为 3~10
+- [x] T-2007 Query 在服务端按 app 聚合
+- [x] T-2008 Query 不读取窗口 title 字段
+- [x] T-2009 Query 在服务端限制返回条数
+- [x] T-2010 Query 请求体限制为 8 KiB
+- [x] T-2011 Query 响应限制为 128 KiB
+- [x] T-2012 Query 请求限制 5 秒超时
+- [x] T-2013 Query 禁止自动跟随重定向
+- [x] T-2014 通过思源本机代理解决 WebView CORS
+- [x] T-2015 思源代理再次校验固定 loopback 路由
+- [x] T-2016 归一化 ActivityWatch 聚合响应
+- [x] T-2017 过滤空应用名和零时长条目
+- [x] T-2018 应用名去重并限制文本长度
+- [x] T-2019 新增分钟与小时用时格式化
+- [x] T-2020 新增总使用时长统计卡
+- [x] T-2021 新增应用排行与相对进度条
+- [x] T-2022 新增 ActivityWatch 5 分钟缓存
+- [x] T-2023 新增 fresh/cached/stale 来源健康
+- [x] T-2024 服务失败时回退最近成功快照
+- [x] T-2025 插件卸载复用生活组件缓存清理
+- [x] T-2026 限定 ActivityWatch 仅桌面与侧栏
+- [x] T-2027 新增“设备与专注”功能分组
+- [x] T-2028 新增 ActivityWatch 专属商店预览
+- [x] T-2029 新增本机服务来源徽标
+- [x] T-2030 新增屏幕使用时间式渐变卡片
+- [x] T-2031 新增紧凑排行与等宽时长显示
+- [x] T-2032 商店新增离线可用筛选
+- [x] T-2033 商店新增本机服务筛选
+- [x] T-2034 商店新增外部 API 筛选
+- [x] T-2035 来源筛选与功能分组保持正交
+- [x] T-2036 核验 Glance 高 Star 小组件类型
+- [x] T-2037 核验 Homepage 信息/服务组件分层
+- [x] T-2038 核验 Dashy RSS 与公共信息组件池
+- [x] T-2039 核验 Homarr 网格与密钥管理思路
+- [x] T-2040 记录高 Star 项目仅参考不复制的边界
+- [x] T-2041 明确下一批 Hacker News/RSS/iCal 候选优先级
+- [x] T-2042 新增模型、网络、商店和代理专项回归
+- [x] T-2043 更新路线、来源审计、决策与环境阻塞
+- [x] T-2044 跑完整发布门禁、同步本地集市并记录产物
+  - 证据：1816/1816、TypeScript、移动端/Chromium smoke、生产图 31 模块通过；产物与本地集市哈希已复核
+
+## T-2045~T-2074 组件来源使用说明与跳转入口（2026-09-15）
+
+- [x] T-2045 建立统一组件商店使用说明文档
+- [x] T-2046 记录离线组件定义
+- [x] T-2047 记录本机服务组件定义
+- [x] T-2048 记录外部 API 组件定义
+- [x] T-2049 记录插件组件定义
+- [x] T-2050 记录条件可用组件定义
+- [x] T-2051 说明来源分类可叠加规则
+- [x] T-2052 补充 Open-Meteo 配置说明
+- [x] T-2053 补充 DailyHotApi 配置说明
+- [x] T-2054 补充 NewsNow 配置说明
+- [x] T-2055 补充 Bangumi 配置说明
+- [x] T-2056 补充 ActivityWatch 启动说明
+- [x] T-2057 说明 ActivityWatch 回环安全边界
+- [x] T-2058 说明 ActivityWatch 不读取窗口标题
+- [x] T-2059 说明离线时间与日期组件
+- [x] T-2060 说明日历与日记前置条件
+- [x] T-2061 说明今日待办数据来源
+- [x] T-2062 说明联网组件零配置不发请求
+- [x] T-2063 说明远程请求超时与响应上限
+- [x] T-2064 说明缓存与过期缓存状态
+- [x] T-2065 说明商店来源筛选顺序
+- [x] T-2066 说明预览与独立添加按钮
+- [x] T-2067 说明已添加组件配置入口
+- [x] T-2068 说明删除组件不删除笔记
+- [x] T-2069 增加商店内使用说明按钮
+- [x] T-2070 增加使用说明对话框跳转
+- [x] T-2071 使用 noopener 保护外部文档链接
+- [x] T-2072 将说明文档纳入生产包
+- [x] T-2073 增加文档内容专项回归
+- [x] T-2074 增加跳转入口专项回归
+
+## T-2075~T-2104 GitHub 高 Star 候选组件审计（2026-09-15）
+
+- [x] T-2075 通过 GitHub Repository API 按 stars 检索候选
+- [x] T-2076 核验 Glance Hacker News 组件方向
+- [x] T-2077 核验 FreshRSS RSS 聚合方向
+- [x] T-2078 核验 Miniflux Token 组件方向
+- [x] T-2079 核验 Uptime Kuma 状态组件方向
+- [x] T-2080 核验 Glances 资源摘要方向
+- [x] T-2081 核验 Beszel 服务器监控方向
+- [x] T-2082 核验 Actual Budget 财务摘要方向
+- [x] T-2083 核验 ezBookkeeping 记账摘要方向
+- [x] T-2084 核验 Jellyfin 媒体摘要方向
+- [x] T-2085 核验 Immich 回忆摘要方向
+- [x] T-2086 核验 Owncast 直播状态方向
+- [x] T-2087 核验 Koel 音乐状态方向
+- [x] T-2088 核验 Cal.com 预约聚合方向
+- [x] T-2089 核验 OpenBB 市场数据方向
+- [x] T-2090 核验 Syncthing 同步状态方向
+- [x] T-2091 记录候选项目 stars 快照
+- [x] T-2092 记录候选项目许可证
+- [x] T-2093 记录候选项目联网前置
+- [x] T-2094 记录候选项目凭据要求
+- [x] T-2095 记录候选项目隐私边界
+- [x] T-2096 区分候选与可直接添加组件
+- [x] T-2097 拒绝未审计服务控制操作
+- [x] T-2098 拒绝任意 HTML/iframe 候选
+- [x] T-2099 拒绝原生权限未验证候选
+- [x] T-2100 拒绝默认公共演示端点
+- [x] T-2101 优先 Hacker News 无 Key 接入
+- [x] T-2102 优先 RSS/Miniflux 用户端点接入
+- [x] T-2103 优先 Uptime Kuma 只读状态接入
+- [x] T-2104 增加候选链接与来源审计回归
+
+## T-2105~T-2134 手机品牌小组件候选审计（2026-09-15）
+
+- [x] T-2105 核验 Apple 官方小组件说明
+- [x] T-2106 核验 Huawei 官方小组件说明
+- [x] T-2107 核验 OPPO 官方小组件说明
+- [x] T-2108 核验 Xiaomi HyperOS 官方入口
+- [x] T-2109 记录品牌动态排名不固化原则
+- [x] T-2110 提取天气卡片候选
+- [x] T-2111 提取电池卡片候选
+- [x] T-2112 提取日历事件卡片候选
+- [x] T-2113 提取提醒事项卡片候选
+- [x] T-2114 提取世界时钟卡片候选
+- [x] T-2115 提取照片回忆卡片候选
+- [x] T-2116 提取股票摘要卡片候选
+- [x] T-2117 提取健身活动卡片候选
+- [x] T-2118 提取 Huawei 月历卡片候选
+- [x] T-2119 提取 Huawei 备忘录卡片候选
+- [x] T-2120 提取联系人快捷卡片候选
+- [x] T-2121 提取屏幕使用时间卡片候选
+- [x] T-2122 提取 OPPO 音乐卡片候选
+- [x] T-2123 提取 OPPO 快捷设置候选
+- [x] T-2124 提取 Xiaomi 设备管家候选
+- [x] T-2125 提取品牌主题卡片候选
+- [x] T-2126 标注天气组件 API 前置
+- [x] T-2127 标注日历组件时区前置
+- [x] T-2128 标注媒体组件本机服务前置
+- [x] T-2129 标注系统权限候选风险
+- [x] T-2130 排除通讯录读取候选
+- [x] T-2131 排除 HealthKit 权限候选
+- [x] T-2132 排除系统开关控制候选
+- [x] T-2133 排除交易操作候选
+- [x] T-2134 增加品牌候选链接与数量回归
+
+## T-2135~T-2164 手机组件面板单列模式（2026-09-15）
+
+- [x] T-2135 确认手机端保留组件面板
+- [x] T-2136 统一手机端组件尺寸语义
+- [x] T-2137 优先 medium 作为手机统一尺寸
+- [x] T-2138 为特殊组件增加首尺寸回退
+- [x] T-2139 手机端禁用并排网格
+- [x] T-2140 手机端强制 1 列 CSS Grid
+- [x] T-2141 手机端卡片占满网格宽度
+- [x] T-2142 手机端卡片行高改为自动
+- [x] T-2143 手机端迁移旧尺寸配置
+- [x] T-2144 手机端持久化统一尺寸
+- [x] T-2145 手机商店仅展示统一尺寸
+- [x] T-2146 手机商店保留预览入口
+- [x] T-2147 桌面端尺寸选择保持不变
+- [x] T-2148 侧栏端尺寸选择保持不变
+- [x] T-2149 特殊大组件手机端安全回退
+- [x] T-2150 日历组件手机端纵向渲染
+- [x] T-2151 待办组件手机端纵向渲染
+- [x] T-2152 天气组件手机端纵向渲染
+- [x] T-2153 资讯组件手机端纵向渲染
+- [x] T-2154 媒体组件手机端纵向渲染
+- [x] T-2155 增加单列回归测试
+- [x] T-2156 增加统一尺寸模型回归
+- [x] T-2157 增加 Grid CSS 回归
+- [x] T-2158 增加 inline style 回归
+- [x] T-2159 保留手机组件添加能力
+- [x] T-2160 保留手机组件配置能力
+- [x] T-2161 避免窄屏文字截断
+- [x] T-2162 避免窄屏按钮溢出
+- [x] T-2163 记录保留手机面板决策
+- [x] T-2164 完成单列模式门禁
+
+## T-2165~T-2194 手机端状态归一化与触控体验（2026-09-15）
+
+- [x] T-2165 增加手机布局专用归一化函数
+- [x] T-2166 将手机布局 x 坐标固定为 0
+- [x] T-2167 将手机布局宽度固定为 12 列
+- [x] T-2168 保留手机布局 y 顺序
+- [x] T-2169 保留手机折叠状态
+- [x] T-2170 过滤手机布局未知实例
+- [x] T-2171 手机布局迁移重复执行保持稳定
+- [x] T-2172 组件渲染读取统一尺寸模型
+- [x] T-2173 商店手机端隐藏多余尺寸
+- [x] T-2174 手机卡片占满整行
+- [x] T-2175 手机卡片自动行高
+- [x] T-2176 手机网格设置 gap
+- [x] T-2177 防止手机卡片横向溢出
+- [x] T-2178 增加手机全宽布局回归
+- [x] T-2179 增加手机统一尺寸回归
+- [x] T-2180 增加手机 CSS 列数回归
+- [x] T-2181 增加手机 CSS 行规则回归
+- [x] T-2182 增加手机商店尺寸回归
+- [x] T-2183 增加移动端 smoke 复核
+- [x] T-2184 增加 Chromium smoke 复核
+- [x] T-2185 保持桌面布局宽度语义
+- [x] T-2186 保持侧栏布局宽度语义
+- [x] T-2187 保持页签移动端列数设置
+- [x] T-2188 保持手机面板添加能力
+- [x] T-2189 保持手机面板配置能力
+- [x] T-2190 保持手机面板刷新能力
+- [x] T-2191 保持手机面板折叠能力
+- [x] T-2192 保持无障碍区域语义
+- [x] T-2193 更新手机端使用说明
+- [x] T-2194 完成状态归一化门禁
+
+## T-2195~T-2224 手机设置与组件面板语义收口（2026-09-15）
+
+- [x] T-2195 明确手机端保留组件面板
+- [x] T-2196 明确手机端组件面板单列
+- [x] T-2197 明确手机端组件面板统一尺寸
+- [x] T-2198 区分页签列表列数设置
+- [x] T-2199 增加手机设置说明提示
+- [x] T-2200 增加中英文提示文案
+- [x] T-2201 增加设置提示无障碍 note 语义
+- [x] T-2202 增加设置提示视觉样式
+- [x] T-2203 保留 FAB 设置
+- [x] T-2204 保留页签单列选项
+- [x] T-2205 保留页签双列选项
+- [x] T-2206 保留页签自动选项
+- [x] T-2207 组件面板不读取页签列数
+- [x] T-2208 组件面板不使用 auto columns
+- [x] T-2209 组件面板不使用 double columns
+- [x] T-2210 固定手机卡片整行
+- [x] T-2211 固定手机卡片自动行高
+- [x] T-2212 固定手机布局 x=0
+- [x] T-2213 固定手机布局 w=12
+- [x] T-2214 保持手机组件顺序
+- [x] T-2215 保持手机组件折叠状态
+- [x] T-2216 保持手机组件刷新
+- [x] T-2217 保持手机组件配置
+- [x] T-2218 保持手机组件添加
+- [x] T-2219 更新组件商店手机说明
+- [x] T-2220 更新统一使用说明
+- [x] T-2221 增加设置提示回归
+- [x] T-2222 增加单列样式回归
+- [x] T-2223 增加构建产物回归
+- [x] T-2224 完成手机体验收口门禁
+
+## T-2225~T-2254 手机端触控与可读性增强（2026-09-15）
+
+- [x] T-2225 统一手机组件卡片 box sizing
+- [x] T-2226 防止手机组件卡片横向溢出
+- [x] T-2227 组件头部允许安全换行
+- [x] T-2228 组件标题允许任意 Unicode 换行
+- [x] T-2229 组件上下文允许安全换行
+- [x] T-2230 组件状态允许安全换行
+- [x] T-2231 折叠按钮达到 44px 触控高度
+- [x] T-2232 重试按钮达到 44px 触控高度
+- [x] T-2233 组件条目按钮达到 44px 触控高度
+- [x] T-2234 组件工具按钮达到 44px 触控高度
+- [x] T-2235 打开文档按钮达到 44px 触控高度
+- [x] T-2236 手机端启用 manipulation 触控策略
+- [x] T-2237 手机端条目取消单行截断
+- [x] T-2238 手机端条目启用断词换行
+- [x] T-2239 手机端条目标签允许换行
+- [x] T-2240 保留条目按钮语义
+- [x] T-2241 保留条目按钮 type 属性
+- [x] T-2242 增加长标题渲染回归
+- [x] T-2243 增加按钮高度 CSS 回归
+- [x] T-2244 增加触控策略 CSS 回归
+- [x] T-2245 增加组件头部换行回归
+- [x] T-2246 增加组件状态换行回归
+- [x] T-2247 增加手机卡片溢出回归
+- [x] T-2248 保持桌面端单行显示
+- [x] T-2249 保持侧栏端布局不变
+- [x] T-2250 保持日历七列网格
+- [x] T-2251 保持天气响应式预报
+- [x] T-2252 保持资讯排行榜布局
+- [x] T-2253 保持媒体封面比例
+- [x] T-2254 完成触控与可读性门禁
+
+## T-2255~T-2284 组件商店发现性与状态模型增强（2026-09-15）
+
+- [x] T-2255 商店排序枚举归一化
+- [x] T-2256 卡片 ID 安全归一化
+- [x] T-2257 搜索关键词分词
+- [x] T-2258 多关键词 AND 匹配
+- [x] T-2259 已添加状态排序等级
+- [x] T-2260 条件状态排序等级
+- [x] T-2261 外部状态排序等级
+- [x] T-2262 标题排序
+- [x] T-2263 状态排序
+- [x] T-2264 分类排序
+- [x] T-2265 相关性排序
+- [x] T-2266 排序稳定性
+- [x] T-2267 可用性计数固定结构
+- [x] T-2268 集成方式计数固定结构
+- [x] T-2269 商店 Tab 计数摘要
+- [x] T-2270 已添加 Tab 计数
+- [x] T-2271 卡片无障碍状态标签
+- [x] T-2272 缺失标题无障碍回退
+- [x] T-2273 商店分页元数据
+- [x] T-2274 分页大小边界
+- [x] T-2275 空结果分页稳定性
+- [x] T-2276 商店分页切片
+- [x] T-2277 空列表分页切片
+- [x] T-2278 焦点索引边界
+- [x] T-2279 空列表焦点语义
+- [x] T-2280 焦点向前循环
+- [x] T-2281 焦点向后循环
+- [x] T-2282 折叠分组稳定序列化
+- [x] T-2283 折叠分组安全解析
+- [x] T-2284 完成发现性与状态模型门禁
+
+## T-2285~T-2314 外部组件来源状态与配置引导增强（2026-09-15）
+
+- [x] T-2285 外部组件健康状态枚举
+- [x] T-2286 外部组件操作动作枚举
+- [x] T-2287 健康状态安全归一化
+- [x] T-2288 失败原因文本清洗
+- [x] T-2289 需配置状态动作解析
+- [x] T-2290 本机服务状态动作解析
+- [x] T-2291 参考组件动作解析
+- [x] T-2292 可添加状态动作解析
+- [x] T-2293 过期状态重试动作解析
+- [x] T-2294 状态本地化标签
+- [x] T-2295 未知状态标签回退
+- [x] T-2296 离线外部组件不可用态
+- [x] T-2297 错误态重试提示
+- [x] T-2298 配置要求状态保留
+- [x] T-2299 可选择状态判断
+- [x] T-2300 不可用状态禁选
+- [x] T-2301 参考状态禁选
+- [x] T-2302 状态摘要固定结构
+- [x] T-2303 状态摘要选择计数
+- [x] T-2304 状态摘要降级计数
+- [x] T-2305 外部目录标题排序
+- [x] T-2306 外部目录可用性排序
+- [x] T-2307 外部目录异常输入回退
+- [x] T-2308 组件说明锚点生成
+- [x] T-2309 说明锚点安全清洗
+- [x] T-2310 API Key 配置步骤
+- [x] T-2311 本机服务配置步骤
+- [x] T-2312 参考组件限制说明
+- [x] T-2313 隐私等级归一化
+- [x] T-2314 完成来源状态与配置门禁
+
+## T-2315~T-2344 外部组件状态快照与恢复模型（2026-09-15）
+
+- [x] T-2315 状态快照版本常量
+- [x] T-2316 状态历史容量常量
+- [x] T-2317 时间戳归一化
+- [x] T-2318 负时间戳安全回退
+- [x] T-2319 组件快照构建
+- [x] T-2320 健康状态快照
+- [x] T-2321 快照版本归一化
+- [x] T-2322 快照兼容性校验
+- [x] T-2323 非法动作拒绝
+- [x] T-2324 快照稳定序列化
+- [x] T-2325 快照安全解析
+- [x] T-2326 恶意 JSON 隔离
+- [x] T-2327 状态差异计算
+- [x] T-2328 健康差异计算
+- [x] T-2329 无变化快照识别
+- [x] T-2330 状态迁移事件
+- [x] T-2331 unchanged 迁移事件
+- [x] T-2332 历史快照归一化
+- [x] T-2333 缺失组件过滤
+- [x] T-2334 历史追加
+- [x] T-2335 空快照拒绝
+- [x] T-2336 历史容量裁剪
+- [x] T-2337 指定数量裁剪
+- [x] T-2338 最新组件快照
+- [x] T-2339 缺失快照空态
+- [x] T-2340 健康状态历史筛选
+- [x] T-2341 历史摘要固定版本
+- [x] T-2342 历史健康计数
+- [x] T-2343 多来源快照合并
+- [x] T-2344 完成快照与恢复模型门禁
+
+## T-2345~T-2374 外部组件刷新调度与错误韧性（2026-09-15）
+
+- [x] T-2345 新鲜度枚举
+- [x] T-2346 错误类型枚举
+- [x] T-2347 重试次数上限
+- [x] T-2348 健康等级排序
+- [x] T-2349 健康比较符号
+- [x] T-2350 TTL 最小边界
+- [x] T-2351 TTL 最大边界
+- [x] T-2352 快照年龄计算
+- [x] T-2353 缺失时间戳处理
+- [x] T-2354 fresh 新鲜度判定
+- [x] T-2355 expired 新鲜度判定
+- [x] T-2356 重试次数归一化
+- [x] T-2357 指数退避延迟
+- [x] T-2358 退避延迟上限
+- [x] T-2359 可重试健康状态
+- [x] T-2360 健康状态终止重试
+- [x] T-2361 重试计划构建
+- [x] T-2362 最大次数停止重试
+- [x] T-2363 timeout 错误分类
+- [x] T-2364 配置错误分类
+- [x] T-2365 本机服务错误分类
+- [x] T-2366 未知错误分类
+- [x] T-2367 刷新时间计算
+- [x] T-2368 到期刷新判断
+- [x] T-2369 瞬态错误显示回退
+- [x] T-2370 旧快照优先
+- [x] T-2371 健康排序
+- [x] T-2372 健康分组
+- [x] T-2373 刷新摘要
+- [x] T-2374 完成刷新调度门禁
+
+## T-2375~T-2404 外部组件刷新队列与批量编排（2026-09-15）
+
+- [x] T-2375 刷新状态枚举
+- [x] T-2376 刷新队列容量
+- [x] T-2377 刷新状态归一化
+- [x] T-2378 优先级归一化
+- [x] T-2379 队列条目归一化
+- [x] T-2380 队列清洗
+- [x] T-2381 刷新入队
+- [x] T-2382 模块去重
+- [x] T-2383 高优先级保留
+- [x] T-2384 单条出队
+- [x] T-2385 空队列出队
+- [x] T-2386 优先级出队
+- [x] T-2387 队列条目更新
+- [x] T-2388 成功回执状态
+- [x] T-2389 失败回执状态
+- [x] T-2390 取消回执状态
+- [x] T-2391 队列条目删除
+- [x] T-2392 队列状态计数
+- [x] T-2393 并发数归一化
+- [x] T-2394 批量出队
+- [x] T-2395 批量并发上限
+- [x] T-2396 批量队列剩余
+- [x] T-2397 批量摘要
+- [x] T-2398 成功刷新 receipt
+- [x] T-2399 取消刷新 receipt
+- [x] T-2400 receipt 去重
+- [x] T-2401 receipt 排序
+- [x] T-2402 刷新调度判断
+- [x] T-2403 清理非运行队列
+- [x] T-2404 完成刷新队列门禁
+
+## T-2405~T-2434 组件商店排序与动态筛选接线（2026-09-15）
+
+- [x] T-2405 商店排序状态
+- [x] T-2406 排序下拉控件
+- [x] T-2407 排序无障碍标签
+- [x] T-2408 相关性排序接线
+- [x] T-2409 名称排序接线
+- [x] T-2410 状态排序接线
+- [x] T-2411 分类排序接线
+- [x] T-2412 多关键词搜索接线
+- [x] T-2413 搜索词 AND 语义
+- [x] T-2414 卡片 moduleId 数据集
+- [x] T-2415 Tab 原始标签缓存
+- [x] T-2416 Tab 动态数量更新
+- [x] T-2417 All 数量更新
+- [x] T-2418 内置数量更新
+- [x] T-2419 插件数量更新
+- [x] T-2420 离线数量更新
+- [x] T-2421 本机服务数量更新
+- [x] T-2422 外部 API 数量更新
+- [x] T-2423 条件数量更新
+- [x] T-2424 已添加数量更新
+- [x] T-2425 排序状态重渲染保持
+- [x] T-2426 搜索与排序组合
+- [x] T-2427 当前设备过滤兼容
+- [x] T-2428 分组渲染兼容
+- [x] T-2429 预览按钮兼容
+- [x] T-2430 添加按钮兼容
+- [x] T-2431 配置按钮兼容
+- [x] T-2432 清空筛选兼容
+- [x] T-2433 商店契约回归
+- [x] T-2434 完成商店排序接线门禁
+
+## T-2435~T-2464 组件商店视觉与触控收口（2026-09-15）
+
+- [x] T-2435 排序控件视觉样式
+- [x] T-2436 排序控件宽度边界
+- [x] T-2437 排序控件高度边界
+- [x] T-2438 排序控件无障碍标签
+- [x] T-2439 卡片悬停反馈
+- [x] T-2440 卡片焦点反馈
+- [x] T-2441 卡片主色边框
+- [x] T-2442 Tab 触控高度
+- [x] T-2443 Tab 文本不截断
+- [x] T-2444 Tab 触控策略
+- [x] T-2445 Tab 悬停反馈
+- [x] T-2446 Tab 键盘焦点
+- [x] T-2447 分组标题高度
+- [x] T-2448 分组按钮触控
+- [x] T-2449 结果摘要稳定高度
+- [x] T-2450 手机搜索区换行
+- [x] T-2451 手机搜索框满行
+- [x] T-2452 手机排序控件伸展
+- [x] T-2453 手机说明按钮伸展
+- [x] T-2454 手机禁用卡片悬浮位移
+- [x] T-2455 手机 Tab 横向滚动
+- [x] T-2456 新增视觉专项测试
+- [x] T-2457 新增触控专项测试
+- [x] T-2458 新增键盘专项测试
+- [x] T-2459 新增排序接线测试
+- [x] T-2460 新增搜索接线测试
+- [x] T-2461 新增 Tab 计数测试
+- [x] T-2462 新增卡片数据属性测试
+- [x] T-2463 新增移动布局测试
+- [x] T-2464 完成商店视觉与触控门禁
+
+## T-2465~T-2494 组件商店键盘与读屏交互增强（2026-09-15）
+
+- [x] T-2465 Tab 激活辅助函数
+- [x] T-2466 Tab roving tabindex
+- [x] T-2467 初始 Tab 焦点
+- [x] T-2468 点击 Tab 激活
+- [x] T-2469 ArrowRight 导航
+- [x] T-2470 ArrowLeft 导航
+- [x] T-2471 ArrowDown 导航
+- [x] T-2472 ArrowUp 导航
+- [x] T-2473 Home 导航
+- [x] T-2474 End 导航
+- [x] T-2475 导航阻止默认行为
+- [x] T-2476 导航焦点迁移
+- [x] T-2477 aria-selected 同步
+- [x] T-2478 结果摘要 live region
+- [x] T-2479 分组网格稳定 ID
+- [x] T-2480 aria-controls 关联
+- [x] T-2481 添加按钮 aria-label
+- [x] T-2482 预览按钮 aria-label
+- [x] T-2483 Tab 状态持久化
+- [x] T-2484 Tab 激活刷新筛选
+- [x] T-2485 Tab 焦点集合
+- [x] T-2486 前向循环
+- [x] T-2487 后向循环
+- [x] T-2488 Home 首项
+- [x] T-2489 End 末项
+- [x] T-2490 分组按钮 button 语义
+- [x] T-2491 添加按钮 button 语义
+- [x] T-2492 预览按钮 button 语义
+- [x] T-2493 新增读屏专项回归
+- [x] T-2494 完成键盘与读屏门禁
+
+## T-2495~T-2524 组件商店卡片键盘导航增强（2026-09-15）
+
+- [x] T-2495 卡片可编程聚焦
+- [x] T-2496 卡片 group 语义
+- [x] T-2497 卡片 keydown 监听
+- [x] T-2498 可见卡片集合
+- [x] T-2499 卡片 ArrowRight
+- [x] T-2500 卡片 ArrowLeft
+- [x] T-2501 卡片 ArrowDown
+- [x] T-2502 卡片 ArrowUp
+- [x] T-2503 卡片 Home 导航
+- [x] T-2504 卡片 End 导航
+- [x] T-2505 卡片导航阻止默认
+- [x] T-2506 卡片焦点迁移
+- [x] T-2507 卡片前向循环
+- [x] T-2508 卡片后向循环
+- [x] T-2509 当前卡片索引
+- [x] T-2510 隐藏卡片排除
+- [x] T-2511 卡片键盘焦点样式
+- [x] T-2512 卡片主色焦点环
+- [x] T-2513 卡片焦点环偏移
+- [x] T-2514 保留 section 元素
+- [x] T-2515 保留 aria-label
+- [x] T-2516 保留嵌套按钮
+- [x] T-2517 区分 Tab/卡片导航
+- [x] T-2518 未识别按键忽略
+- [x] T-2519 空索引安全返回
+- [x] T-2520 过滤后焦点顺序
+- [x] T-2521 键盘可见焦点
+- [x] T-2522 group 角色约束
+- [x] T-2523 非正 tabindex 约束
+- [x] T-2524 完成卡片导航门禁
+
+## T-2525~T-2554 组件商店搜索清理与焦点恢复（2026-09-15）
+
+- [x] T-2525 清空搜索按钮
+- [x] T-2526 清空按钮 button 语义
+- [x] T-2527 清空按钮独立样式类
+- [x] T-2528 清空按钮 aria-label
+- [x] T-2529 空搜索初始隐藏
+- [x] T-2530 清空查询状态
+- [x] T-2531 清空输入值
+- [x] T-2532 清空后重新筛选
+- [x] T-2533 清空后恢复焦点
+- [x] T-2534 输入同步按钮可见性
+- [x] T-2535 搜索键盘监听
+- [x] T-2536 Escape 快捷键
+- [x] T-2537 Escape 阻止默认
+- [x] T-2538 Escape 触发清理
+- [x] T-2539 空搜索 Escape 忽略
+- [x] T-2540 清空按钮挂载搜索栏
+- [x] T-2541 清空按钮宽度
+- [x] T-2542 清空按钮高度
+- [x] T-2543 清空按钮最小高度
+- [x] T-2544 清空按钮圆角
+- [x] T-2545 清空按钮字形
+- [x] T-2546 手机清空按钮位置
+- [x] T-2547 手机清空按钮层级
+- [x] T-2548 中文清理文案
+- [x] T-2549 英文清理文案
+- [x] T-2550 搜索值边界归一化
+- [x] T-2551 清空不重置排序
+- [x] T-2552 清空不重置 Tab
+- [x] T-2553 清空保持结果空态
+- [x] T-2554 完成搜索清理门禁
+
+## T-2555~T-2584 组件商店状态说明与读屏文案增强（2026-09-15）
+
+- [x] T-2555 卡片标题稳定 ID
+- [x] T-2556 可用性徽标 aria-label
+- [x] T-2557 可用性徽标 tooltip
+- [x] T-2558 支持表面 aria-label
+- [x] T-2559 来源徽标 tooltip
+- [x] T-2560 尺寸按钮 aria-label
+- [x] T-2561 配置按钮 tooltip
+- [x] T-2562 移除按钮 aria-label
+- [x] T-2563 预览按钮 tooltip
+- [x] T-2564 中文尺寸提示
+- [x] T-2565 英文尺寸提示
+- [x] T-2566 尺寸占位符保留
+- [x] T-2567 模块标题 ID 作用域
+- [x] T-2568 外部状态本地化
+- [x] T-2569 条件状态本地化
+- [x] T-2570 支持表面本地化
+- [x] T-2571 尺寸状态本地化
+- [x] T-2572 配置文案包含标题
+- [x] T-2573 移除文案包含标题
+- [x] T-2574 预览文案包含标题
+- [x] T-2575 来源文案复用
+- [x] T-2576 尺寸文案复用
+- [x] T-2577 支持表面字段稳定
+- [x] T-2578 标题不泄漏配置
+- [x] T-2579 tooltip 文本有界
+- [x] T-2580 移除按钮 button 语义
+- [x] T-2581 配置按钮 button 语义
+- [x] T-2582 预览按钮 button 语义
+- [x] T-2583 新增状态说明回归
+- [x] T-2584 完成状态说明门禁
+
+## T-2585~T-2614 组件商店筛选状态纯模型增强（2026-09-15）
+
+- [x] T-2585 卡片标题归一化
+- [x] T-2586 排序标签解析
+- [x] T-2587 排序标签安全回退
+- [x] T-2588 卡片元数据构建
+- [x] T-2589 分组摘要构建
+- [x] T-2590 预览动作可用性
+- [x] T-2591 配置动作可用性
+- [x] T-2592 移除动作可用性
+- [x] T-2593 操作按钮文案
+- [x] T-2594 卡片顺序清洗
+- [x] T-2595 模块索引查询
+- [x] T-2596 缺失索引回退
+- [x] T-2597 卡片移动重排
+- [x] T-2598 空列表移动
+- [x] T-2599 搜索空态类型
+- [x] T-2600 筛选空态类型
+- [x] T-2601 全量空态类型
+- [x] T-2602 筛选说明文案
+- [x] T-2603 筛选序列化
+- [x] T-2604 筛选解析
+- [x] T-2605 错误筛选安全回退
+- [x] T-2606 筛选相等判断
+- [x] T-2607 筛选差异判断
+- [x] T-2608 筛选合并
+- [x] T-2609 筛选重置
+- [x] T-2610 操作回退文案
+- [x] T-2611 元数据联网字段
+- [x] T-2612 摘要计数保留
+- [x] T-2613 添加动作边界
+- [x] T-2614 完成筛选模型门禁
+
+## T-2615~T-2644 组件商店状态徽标与命中模型增强（2026-09-15）
+
+- [x] T-2615 状态色调解析
+- [x] T-2616 条件状态警示色
+- [x] T-2617 外部状态信息色
+- [x] T-2618 集成方式色调
+- [x] T-2619 操作优先级
+- [x] T-2620 未添加操作顺序
+- [x] T-2621 已添加操作顺序
+- [x] T-2622 命中文本边界
+- [x] T-2623 命中范围计算
+- [x] T-2624 命中范围排序
+- [x] T-2625 命中片段构建
+- [x] T-2626 未命中片段保留
+- [x] T-2627 搜索空态动作
+- [x] T-2628 筛选空态动作
+- [x] T-2629 全量空态动作
+- [x] T-2630 空态动作文案
+- [x] T-2631 分组 key slug
+- [x] T-2632 分组稳定 ID
+- [x] T-2633 紧凑密度
+- [x] T-2634 宽松密度
+- [x] T-2635 尺寸归一化
+- [x] T-2636 尺寸安全回退
+- [x] T-2637 布局模型
+- [x] T-2638 移动统一尺寸
+- [x] T-2639 来源摘要
+- [x] T-2640 卡片身份比较
+- [x] T-2641 身份差异判断
+- [x] T-2642 身份去重
+- [x] T-2643 异常列表去重
+- [x] T-2644 完成状态徽标与命中门禁
+
+## T-2645~T-2674 组件商店搜索评分与操作提示模型（2026-09-15）
+
+- [x] T-2645 卡片搜索评分
+- [x] T-2646 精确命中加权
+- [x] T-2647 前缀命中加权
+- [x] T-2648 包含命中加权
+- [x] T-2649 空查询评分
+- [x] T-2650 卡片评分排序
+- [x] T-2651 评分排序稳定性
+- [x] T-2652 搜索摘要构建
+- [x] T-2653 筛选徽标文案
+- [x] T-2654 键盘提示文案
+- [x] T-2655 操作集合构建
+- [x] T-2656 添加操作集合
+- [x] T-2657 配置操作集合
+- [x] T-2658 来源标签归一化
+- [x] T-2659 状态标签归一化
+- [x] T-2660 卡片 tooltip 构建
+- [x] T-2661 tooltip 长度边界
+- [x] T-2662 搜索状态归一化
+- [x] T-2663 Tab 状态归一化
+- [x] T-2664 排序状态归一化
+- [x] T-2665 搜索状态异常回退
+- [x] T-2666 搜索状态相等判断
+- [x] T-2667 搜索状态差异判断
+- [x] T-2668 搜索状态重置
+- [x] T-2669 操作按钮标题
+- [x] T-2670 操作启用状态
+- [x] T-2671 评分平局顺序
+- [x] T-2672 空摘要处理
+- [x] T-2673 键盘设备回退
+- [x] T-2674 完成搜索评分门禁
+
+## T-2675~T-2704 组件商店状态色调视觉接线（2026-09-15）
+
+- [x] T-2675 状态色调模型导入
+- [x] T-2676 集成色调模型导入
+- [x] T-2677 卡片状态数据属性
+- [x] T-2678 卡片集成数据属性
+- [x] T-2679 success 状态样式
+- [x] T-2680 warning 状态样式
+- [x] T-2681 info 状态样式
+- [x] T-2682 network 来源强调
+- [x] T-2683 local 来源强调
+- [x] T-2684 offline 来源强调
+- [x] T-2685 success 顶部边框
+- [x] T-2686 warning 顶部边框
+- [x] T-2687 info 顶部边框
+- [x] T-2688 network chip 加粗
+- [x] T-2689 local chip 加粗
+- [x] T-2690 offline chip 加粗
+- [x] T-2691 数据属性顺序
+- [x] T-2692 状态依赖添加状态
+- [x] T-2693 集成依赖来源状态
+- [x] T-2694 主题边框变量
+- [x] T-2695 主题警示变量
+- [x] T-2696 主题主色变量
+- [x] T-2697 保持卡片布局
+- [x] T-2698 保持焦点样式
+- [x] T-2699 保持悬停样式
+- [x] T-2700 来源 chip 作用域
+- [x] T-2701 卡片作用域
+- [x] T-2702 无网络副作用
+- [x] T-2703 视觉契约回归
+- [x] T-2704 完成状态色调门禁
+
+## T-2705~T-2734 组件商店减弱动效与触控稳定性（2026-09-15）
+
+- [x] T-2705 减弱动效媒体查询
+- [x] T-2706 卡片过渡关闭
+- [x] T-2707 Tab 过渡关闭
+- [x] T-2708 悬停位移关闭
+- [x] T-2709 标准媒体语法
+- [x] T-2710 保留卡片过渡
+- [x] T-2711 保留 Tab 过渡
+- [x] T-2712 移动悬停关闭
+- [x] T-2713 保留卡片焦点
+- [x] T-2714 保留 Tab 焦点
+- [x] T-2715 不隐藏内容
+- [x] T-2716 不禁用输入
+- [x] T-2717 保留边框
+- [x] T-2718 保留语义
+- [x] T-2719 动效范围隔离
+- [x] T-2720 键盘卡片兼容
+- [x] T-2721 键盘 Tab 兼容
+- [x] T-2722 移动规则顺序
+- [x] T-2723 卡片选择器
+- [x] T-2724 Tab 选择器
+- [x] T-2725 important 覆盖
+- [x] T-2726 悬停回退
+- [x] T-2727 无动画循环
+- [x] T-2728 无关键帧副作用
+- [x] T-2729 无透明度丢失
+- [x] T-2730 主题焦点保留
+- [x] T-2731 触控策略保留
+- [x] T-2732 样式确定性
+- [x] T-2733 CSS 结构闭合
+- [x] T-2734 完成减弱动效门禁
+
+## T-2735~T-2764 组件商店高对比度模式适配（2026-09-15）
+
+- [x] T-2735 forced-colors 媒体查询
+- [x] T-2736 卡片高对比度
+- [x] T-2737 Tab 高对比度
+- [x] T-2738 分组按钮高对比度
+- [x] T-2739 清空按钮高对比度
+- [x] T-2740 Canvas 背景
+- [x] T-2741 CanvasText 边框
+- [x] T-2742 CanvasText 文本
+- [x] T-2743 forced-color-adjust
+- [x] T-2744 卡片焦点 Highlight
+- [x] T-2745 Tab 焦点 Highlight
+- [x] T-2746 焦点偏移保留
+- [x] T-2747 active Tab Highlight
+- [x] T-2748 active Tab HighlightText
+- [x] T-2749 active Tab 背景
+- [x] T-2750 高对比度作用域
+- [x] T-2751 CSS 结构闭合
+- [x] T-2752 无动画副作用
+- [x] T-2753 无透明度副作用
+- [x] T-2754 卡片语义保留
+- [x] T-2755 Tab 语义保留
+- [x] T-2756 焦点语义保留
+- [x] T-2757 激活语义保留
+- [x] T-2758 系统颜色使用
+- [x] T-2759 Highlight 颜色使用
+- [x] T-2760 无硬编码渐变
+- [x] T-2761 无硬编码 rgb
+- [x] T-2762 操作控件覆盖
+- [x] T-2763 高对比度回归
+- [x] T-2764 完成高对比度门禁
+
+## T-2765~T-2794 组件商店打印与导出友好样式（2026-09-15）
+
+- [x] T-2765 print 媒体查询
+- [x] T-2766 隐藏搜索栏
+- [x] T-2767 隐藏筛选 Tab
+- [x] T-2768 隐藏尺寸控件
+- [x] T-2769 隐藏预览区
+- [x] T-2770 隐藏分组按钮
+- [x] T-2771 none important 覆盖
+- [x] T-2772 避免卡片分页
+- [x] T-2773 移除打印阴影
+- [x] T-2774 打印边框
+- [x] T-2775 打印黑色文字
+- [x] T-2776 打印白色背景
+- [x] T-2777 卡片辅助文字保留
+- [x] T-2778 支持表面文字保留
+- [x] T-2779 状态文字保留
+- [x] T-2780 辅助文字加深
+- [x] T-2781 print 样式作用域
+- [x] T-2782 print CSS 闭合
+- [x] T-2783 不隐藏卡片
+- [x] T-2784 不隐藏标题
+- [x] T-2785 状态可读性
+- [x] T-2786 支持可读性
+- [x] T-2787 边框回退
+- [x] T-2788 阴影回退
+- [x] T-2789 分页回退
+- [x] T-2790 控件批量隐藏
+- [x] T-2791 预览隐藏
+- [x] T-2792 尺寸行隐藏
+- [x] T-2793 高对比度兼容
+- [x] T-2794 完成打印样式门禁
+
+## T-2795~T-2824 组件商店卡片性能与内容隔离（2026-09-15）
+
+- [x] T-2795 layout paint containment
+- [x] T-2796 content-visibility
+- [x] T-2797 intrinsic size
+- [x] T-2798 卡片作用域隔离
+- [x] T-2799 内容可见性显式
+- [x] T-2800 尺寸边界
+- [x] T-2801 移动端减弱动效查询
+- [x] T-2802 移动端恢复内容可见
+- [x] T-2803 移动端保留布局隔离
+- [x] T-2804 避免固定高度
+- [x] T-2805 避免溢出裁剪
+- [x] T-2806 保留焦点样式
+- [x] T-2807 保留悬停样式
+- [x] T-2808 保留移动布局
+- [x] T-2809 标准 content-visibility
+- [x] T-2810 标准 contain
+- [x] T-2811 无脚本依赖
+- [x] T-2812 无网络依赖
+- [x] T-2813 保留打印样式
+- [x] T-2814 保留高对比度
+- [x] T-2815 保留减弱动效
+- [x] T-2816 性能契约确定性
+- [x] T-2817 宽度边界
+- [x] T-2818 高度边界
+- [x] T-2819 移动端不绘制隔离
+- [x] T-2820 移动端恢复可见
+- [x] T-2821 纯 CSS 实现
+- [x] T-2822 卡片作用域
+- [x] T-2823 媒体块闭合
+- [x] T-2824 完成性能隔离门禁
+
+## T-2825~T-2854 组件商店滚动稳定性与边界控制（2026-09-15）
+
+- [x] T-2825 网格 overscroll contain
+- [x] T-2826 卡片滚动外边距
+- [x] T-2827 Tab 横向滚动
+- [x] T-2828 Tab 横向 overscroll
+- [x] T-2829 稳定滚动条槽
+- [x] T-2830 网格显示保留
+- [x] T-2831 卡片显示保留
+- [x] T-2832 Tab 显示保留
+- [x] T-2833 避免网格隐藏溢出
+- [x] T-2834 避免固定 Tab 宽度
+- [x] T-2835 移动端兼容
+- [x] T-2836 焦点兼容
+- [x] T-2837 触控兼容
+- [x] T-2838 containment 兼容
+- [x] T-2839 intrinsic size 兼容
+- [x] T-2840 纯 CSS 约束
+- [x] T-2841 无网络副作用
+- [x] T-2842 标准 overscroll
+- [x] T-2843 标准 gutter
+- [x] T-2844 标准 scroll margin
+- [x] T-2845 网格/Tab 双覆盖
+- [x] T-2846 稳定性确定性
+- [x] T-2847 卡片位置边界
+- [x] T-2848 横向边界
+- [x] T-2849 纵向边界
+- [x] T-2850 选择器闭合
+- [x] T-2851 滚动契约回归
+- [x] T-2852 移动滚动回归
+- [x] T-2853 窄窗口回归
+- [x] T-2854 完成滚动稳定门禁
+
+## T-2855~T-2884 组件商店窄屏文本排版增强（2026-09-15）
+
+- [x] T-2855 卡片标题断词
+- [x] T-2856 卡片标题平衡换行
+- [x] T-2857 卡片说明断词
+- [x] T-2858 分组标签断词
+- [x] T-2859 分组标签平衡
+- [x] T-2860 摘要断词
+- [x] T-2861 标题 block 语义
+- [x] T-2862 说明行数限制
+- [x] T-2863 说明溢出隐藏
+- [x] T-2864 卡片作用域
+- [x] T-2865 分组作用域
+- [x] T-2866 摘要作用域
+- [x] T-2867 Unicode 断词
+- [x] T-2868 URL 断词
+- [x] T-2869 长标签平衡
+- [x] T-2870 摘要最小高度
+- [x] T-2871 标题字号保留
+- [x] T-2872 说明字号保留
+- [x] T-2873 支持字号保留
+- [x] T-2874 分组字号保留
+- [x] T-2875 摘要字号保留
+- [x] T-2876 无固定宽度
+- [x] T-2877 无 nowrap
+- [x] T-2878 移动端兼容
+- [x] T-2879 焦点兼容
+- [x] T-2880 触控兼容
+- [x] T-2881 标准断词
+- [x] T-2882 标准平衡
+- [x] T-2883 无网络副作用
+- [x] T-2884 完成排版门禁
+
+## T-2885~T-2914 组件商店自动断词与长文本适配（2026-09-15）
+
+- [x] T-2885 标题 hyphens auto
+- [x] T-2886 说明 hyphens auto
+- [x] T-2887 分组 hyphens auto
+- [x] T-2888 摘要 hyphens auto
+- [x] T-2889 标题断词保留
+- [x] T-2890 说明断词保留
+- [x] T-2891 分组断词保留
+- [x] T-2892 摘要断词保留
+- [x] T-2893 标题平衡保留
+- [x] T-2894 分组平衡保留
+- [x] T-2895 卡片作用域
+- [x] T-2896 分组作用域
+- [x] T-2897 摘要作用域
+- [x] T-2898 移动端兼容
+- [x] T-2899 焦点兼容
+- [x] T-2900 触控兼容
+- [x] T-2901 打印兼容
+- [x] T-2902 高对比度兼容
+- [x] T-2903 减弱动效兼容
+- [x] T-2904 无固定宽度
+- [x] T-2905 无单行锁定
+- [x] T-2906 标准 hyphens
+- [x] T-2907 无网络副作用
+- [x] T-2908 无脚本副作用
+- [x] T-2909 标题可见
+- [x] T-2910 摘要边界
+- [x] T-2911 说明截断
+- [x] T-2912 契约确定性
+- [x] T-2913 CSS 闭合
+- [x] T-2914 完成长文本门禁
+
+## T-2915~T-2944 组件商店数字与状态排版增强（2026-09-15）
+
+- [x] T-2915 状态 tabular numerics
+- [x] T-2916 摘要 tabular numerics
+- [x] T-2917 状态 legibility
+- [x] T-2918 摘要 legibility
+- [x] T-2919 来源徽标 legibility
+- [x] T-2920 可用性徽标 legibility
+- [x] T-2921 标准 numeric 属性
+- [x] T-2922 标准 rendering 属性
+- [x] T-2923 状态可见性
+- [x] T-2924 摘要可见性
+- [x] T-2925 来源徽标可见性
+- [x] T-2926 可用性徽标可见性
+- [x] T-2927 主题色保留
+- [x] T-2928 状态强调保留
+- [x] T-2929 移动端兼容
+- [x] T-2930 打印兼容
+- [x] T-2931 高对比度兼容
+- [x] T-2932 减弱动效兼容
+- [x] T-2933 状态字号边界
+- [x] T-2934 摘要字号边界
+- [x] T-2935 来源字号边界
+- [x] T-2936 无固定宽度
+- [x] T-2937 无网络 URL
+- [x] T-2938 无脚本依赖
+- [x] T-2939 CSS 纯实现
+- [x] T-2940 状态选择器闭合
+- [x] T-2941 摘要选择器闭合
+- [x] T-2942 来源选择器闭合
+- [x] T-2943 可读性回归
+- [x] T-2944 完成数字排版门禁
+
+## T-2945~T-2974 组件商店多语言字体度量适配（2026-09-15）
+
+- [x] T-2945 标题字体度量
+- [x] T-2946 说明字体度量
+- [x] T-2947 来源字体度量
+- [x] T-2948 可用性字体度量
+- [x] T-2949 标题紧凑字距
+- [x] T-2950 状态可读字距
+- [x] T-2951 from-font 标准值
+- [x] T-2952 卡片作用域
+- [x] T-2953 状态作用域
+- [x] T-2954 来源作用域
+- [x] T-2955 可用性作用域
+- [x] T-2956 标题 block
+- [x] T-2957 说明截断
+- [x] T-2958 断词兼容
+- [x] T-2959 自动断词兼容
+- [x] T-2960 平衡换行兼容
+- [x] T-2961 移动兼容
+- [x] T-2962 打印兼容
+- [x] T-2963 高对比度兼容
+- [x] T-2964 减弱动效兼容
+- [x] T-2965 宽度安全
+- [x] T-2966 无网络 URL
+- [x] T-2967 无脚本依赖
+- [x] T-2968 标准字体属性
+- [x] T-2969 标准字距属性
+- [x] T-2970 主题文本保留
+- [x] T-2971 状态强调保留
+- [x] T-2972 CSS 闭合
+- [x] T-2973 字体契约回归
+- [x] T-2974 完成字体度量门禁
+
+## T-2975~T-3004 组件商店纵向节奏与行高稳定性（2026-09-15）
+
+- [x] T-2975 标题行高
+- [x] T-2976 说明行高
+- [x] T-2977 状态行高
+- [x] T-2978 分组行高
+- [x] T-2979 摘要行高
+- [x] T-2980 标题字号保留
+- [x] T-2981 说明字号保留
+- [x] T-2982 状态字号保留
+- [x] T-2983 分组字号保留
+- [x] T-2984 摘要字号保留
+- [x] T-2985 无单位行高
+- [x] T-2986 避免高度锁定
+- [x] T-2987 断词保留
+- [x] T-2988 自动断词保留
+- [x] T-2989 平衡换行保留
+- [x] T-2990 移动兼容
+- [x] T-2991 打印兼容
+- [x] T-2992 高对比度兼容
+- [x] T-2993 减弱动效兼容
+- [x] T-2994 标题作用域
+- [x] T-2995 状态作用域
+- [x] T-2996 分组作用域
+- [x] T-2997 摘要作用域
+- [x] T-2998 无网络副作用
+- [x] T-2999 无脚本副作用
+- [x] T-3000 标准行高属性
+- [x] T-3001 标题规则闭合
+- [x] T-3002 状态规则闭合
+- [x] T-3003 摘要规则闭合
+- [x] T-3004 完成行高门禁
+
+## T-3005~T-3034 组件商店字体层级与权重优化（2026-09-15）
+
+- [x] T-3005 标题 650 权重
+- [x] T-3006 状态 550 权重
+- [x] T-3007 分组 650 权重
+- [x] T-3008 摘要 450 权重
+- [x] T-3009 来源 550 权重
+- [x] T-3010 可用性 550 权重
+- [x] T-3011 标题行高保留
+- [x] T-3012 状态行高保留
+- [x] T-3013 分组行高保留
+- [x] T-3014 摘要行高保留
+- [x] T-3015 断词保留
+- [x] T-3016 自动断词保留
+- [x] T-3017 平衡换行保留
+- [x] T-3018 字体度量保留
+- [x] T-3019 数字等宽保留
+- [x] T-3020 移动端兼容
+- [x] T-3021 打印兼容
+- [x] T-3022 高对比度兼容
+- [x] T-3023 减弱动效兼容
+- [x] T-3024 标题层级
+- [x] T-3025 状态层级
+- [x] T-3026 摘要层级
+- [x] T-3027 数值权重
+- [x] T-3028 无网络副作用
+- [x] T-3029 无脚本副作用
+- [x] T-3030 卡片作用域
+- [x] T-3031 状态作用域
+- [x] T-3032 来源作用域
+- [x] T-3033 摘要作用域
+- [x] T-3034 完成字体层级门禁
+
+## T-3035~T-3064 组件商店段落平滑断行增强（2026-09-15）
+
+- [x] T-3035 pretty 标题
+- [x] T-3036 pretty 说明
+- [x] T-3037 pretty 状态
+- [x] T-3038 pretty 分组
+- [x] T-3039 balance 回退
+- [x] T-3040 标题 pretty
+- [x] T-3041 说明 pretty
+- [x] T-3042 状态 pretty
+- [x] T-3043 分组 pretty
+- [x] T-3044 摘要断词保留
+- [x] T-3045 自动断词保留
+- [x] T-3046 行高保留
+- [x] T-3047 移动兼容
+- [x] T-3048 打印兼容
+- [x] T-3049 高对比度兼容
+- [x] T-3050 减弱动效兼容
+- [x] T-3051 标准 CSS 属性
+- [x] T-3052 无网络副作用
+- [x] T-3053 无脚本副作用
+- [x] T-3054 标题 block
+- [x] T-3055 说明 clamp
+- [x] T-3056 状态 display
+- [x] T-3057 分组字距
+- [x] T-3058 摘要字号
+- [x] T-3059 字体度量
+- [x] T-3060 数字等宽
+- [x] T-3061 焦点兼容
+- [x] T-3062 触控兼容
+- [x] T-3063 契约确定性
+- [x] T-3064 完成平滑断行门禁
+
+## T-3065~T-3094 组件商店旧 WebView 断词回退适配（2026-09-15）
+
+- [x] T-3065 word-break 基础属性
+- [x] T-3066 标题断词回退
+- [x] T-3067 说明断词回退
+- [x] T-3068 分组断词回退
+- [x] T-3069 摘要断词回退
+- [x] T-3070 与 overflow-wrap 组合
+- [x] T-3071 与 hyphens 组合
+- [x] T-3072 与 pretty 组合
+- [x] T-3073 移动端兼容
+- [x] T-3074 打印兼容
+- [x] T-3075 高对比度兼容
+- [x] T-3076 减弱动效兼容
+- [x] T-3077 标准 CSS
+- [x] T-3078 无 URL 依赖
+- [x] T-3079 无脚本依赖
+- [x] T-3080 标题 block
+- [x] T-3081 说明 clamp
+- [x] T-3082 状态可见
+- [x] T-3083 分组可见
+- [x] T-3084 摘要可见
+- [x] T-3085 平衡换行
+- [x] T-3086 行高保留
+- [x] T-3087 字体度量
+- [x] T-3088 数字度量
+- [x] T-3089 焦点兼容
+- [x] T-3090 触控兼容
+- [x] T-3091 标题作用域
+- [x] T-3092 分组作用域
+- [x] T-3093 摘要作用域
+- [x] T-3094 完成断词回退门禁
+
+## T-3095~T-3124 组件商店卡片宽度与 Flex 收口（2026-09-15）
+
+- [x] T-3095 标题 min-width 0
+- [x] T-3096 标题 max-width 100
+- [x] T-3097 说明 min-width 0
+- [x] T-3098 说明 max-width 100
+- [x] T-3099 状态 min-width 0
+- [x] T-3100 状态 max-width 100
+- [x] T-3101 分组 min-width 0
+- [x] T-3102 分组 max-width 100
+- [x] T-3103 摘要 min-width 0
+- [x] T-3104 摘要 max-width 100
+- [x] T-3105 断词保留
+- [x] T-3106 word-break 保留
+- [x] T-3107 hyphens 保留
+- [x] T-3108 pretty 保留
+- [x] T-3109 balance 保留
+- [x] T-3110 移动兼容
+- [x] T-3111 打印兼容
+- [x] T-3112 高对比度兼容
+- [x] T-3113 减弱动效兼容
+- [x] T-3114 标准 min-width
+- [x] T-3115 标准 max-width
+- [x] T-3116 标题宽度安全
+- [x] T-3117 说明宽度安全
+- [x] T-3118 状态宽度安全
+- [x] T-3119 分组宽度安全
+- [x] T-3120 摘要宽度安全
+- [x] T-3121 卡片作用域
+- [x] T-3122 状态作用域
+- [x] T-3123 分组摘要作用域
+- [x] T-3124 完成宽度门禁
+
+## T-3125~T-3154 组件商店盒模型与边界稳定性（2026-09-15）
+
+- [x] T-3125 卡片 border-box
+- [x] T-3126 状态 border-box
+- [x] T-3127 分组 border-box
+- [x] T-3128 摘要 border-box
+- [x] T-3129 卡片 min-width
+- [x] T-3130 卡片 max-width
+- [x] T-3131 状态 min-width
+- [x] T-3132 分组 min-width
+- [x] T-3133 摘要 min-width
+- [x] T-3134 断词保留
+- [x] T-3135 word-break 保留
+- [x] T-3136 hyphens 保留
+- [x] T-3137 行高保留
+- [x] T-3138 移动兼容
+- [x] T-3139 打印兼容
+- [x] T-3140 高对比度兼容
+- [x] T-3141 减弱动效兼容
+- [x] T-3142 标准盒模型
+- [x] T-3143 避免 content-box
+- [x] T-3144 卡片作用域
+- [x] T-3145 状态作用域
+- [x] T-3146 分组作用域
+- [x] T-3147 摘要作用域
+- [x] T-3148 无网络副作用
+- [x] T-3149 无脚本副作用
+- [x] T-3150 焦点保留
+- [x] T-3151 触控保留
+- [x] T-3152 内容隔离保留
+- [x] T-3153 固有尺寸保留
+- [x] T-3154 完成盒模型门禁
+
+## T-3155~T-3184 组件商店层叠上下文与主题隔离（2026-09-15）
+
+- [x] T-3155 网格 isolation
+- [x] T-3156 卡片 isolation
+- [x] T-3157 来源元数据 relative
+- [x] T-3158 来源元数据 z-index
+- [x] T-3159 overscroll 保留
+- [x] T-3160 border-box 保留
+- [x] T-3161 焦点保留
+- [x] T-3162 悬停保留
+- [x] T-3163 移动兼容
+- [x] T-3164 打印兼容
+- [x] T-3165 高对比度兼容
+- [x] T-3166 减弱动效兼容
+- [x] T-3167 isolation 标准
+- [x] T-3168 position 标准
+- [x] T-3169 z-index 边界
+- [x] T-3170 避免巨大 z-index
+- [x] T-3171 无网络副作用
+- [x] T-3172 无脚本副作用
+- [x] T-3173 网格作用域
+- [x] T-3174 卡片作用域
+- [x] T-3175 元数据作用域
+- [x] T-3176 内容隔离保留
+- [x] T-3177 固有尺寸保留
+- [x] T-3178 字体度量保留
+- [x] T-3179 断词保留
+- [x] T-3180 触控保留
+- [x] T-3181 元数据单一 z-index
+- [x] T-3182 网格隔离确定性
+- [x] T-3183 卡片隔离确定性
+- [x] T-3184 完成层叠隔离门禁
+
+## T-3185~T-3214 组件商店卡片渲染稳定性（2026-09-15）
+
+- [x] T-3185 backface hidden
+- [x] T-3186 translateZ 合成层
+- [x] T-3187 悬停位移保留
+- [x] T-3188 isolation 保留
+- [x] T-3189 containment 保留
+- [x] T-3190 intrinsic size 保留
+- [x] T-3191 focus-visible 保留
+- [x] T-3192 transition 保留
+- [x] T-3193 移动兼容
+- [x] T-3194 打印兼容
+- [x] T-3195 高对比度兼容
+- [x] T-3196 减弱动效兼容
+- [x] T-3197 标准 backface
+- [x] T-3198 标准 transform
+- [x] T-3199 无 URL 副作用
+- [x] T-3200 无脚本副作用
+- [x] T-3201 宽度边界
+- [x] T-3202 最小宽度
+- [x] T-3203 盒模型
+- [x] T-3204 断词
+- [x] T-3205 word-break
+- [x] T-3206 hyphens
+- [x] T-3207 pretty wrapping
+- [x] T-3208 字体度量
+- [x] T-3209 数字度量
+- [x] T-3210 触控
+- [x] T-3211 层叠
+- [x] T-3212 滚动定位
+- [x] T-3213 稳定性确定性
+- [x] T-3214 完成渲染门禁
+
+## T-3215~T-3244 组件商店交互合成层优化（2026-09-15）
+
+- [x] T-3215 hover will-change transform
+- [x] T-3216 focus will-change outline
+- [x] T-3217 hover transform 保留
+- [x] T-3218 focus outline 保留
+- [x] T-3219 卡片作用域
+- [x] T-3220 标准 will-change
+- [x] T-3221 避免 will-change all
+- [x] T-3222 避免 will-change contents
+- [x] T-3223 reduced motion 保留
+- [x] T-3224 移动悬停回退
+- [x] T-3225 focus offset 保留
+- [x] T-3226 isolation 保留
+- [x] T-3227 containment 保留
+- [x] T-3228 intrinsic size 保留
+- [x] T-3229 max width 保留
+- [x] T-3230 min width 保留
+- [x] T-3231 border box 保留
+- [x] T-3232 无网络副作用
+- [x] T-3233 无脚本副作用
+- [x] T-3234 移动兼容
+- [x] T-3235 打印兼容
+- [x] T-3236 高对比度兼容
+- [x] T-3237 字体度量保留
+- [x] T-3238 断词保留
+- [x] T-3239 触控保留
+- [x] T-3240 hover 规则闭合
+- [x] T-3241 focus 规则闭合
+- [x] T-3242 hover 作用域
+- [x] T-3243 focus 作用域
+- [x] T-3244 完成交互合成门禁
+
+## P0
+
+- [x] T-001~T-004 前轮已完成（组件面板入口/商店分区/受控写/大纲能力）
+  - 状态：done
+- [x] T-018 组件面板"刷新全部"按钮（v0.16.36，已推送 2b792ce）
+  - 状态：done
+- [x] T-019 桌面端真实宿主验收（v0.16.37 RC，本机思源 v3.8.2）
+  - 验收：刷新全部/闪卡待复习/随机回顾/尺寸预览瓦片/问候头/商店页签/增删组件/布局还原 全部通过
+  - 战果：抓出 3 个潜伏 Bug（stmt 参数名 16 处、尺寸菜单塌缩、标签书签 data 形状）全部修复
+  - 结果：docs/acceptance-v0.16.37.md
+  - 状态：done
+- [x] T-020 韧性改进：读取失败时回退陈旧快照 + 错误态原因码
+  - 验收：同步高峰期超时不再整块报错，展示旧数据并标"缓存"；错误态附原因码可自诊
+  - 状态：done
+
+## P1
+
+- [x] T-021 Agent 能力真机实测（open-documents / workspace-context 等）
+  - 验收：在配置了 AI 的思源里让模型调用能力，确认确认弹窗与输出
+  - 验收：在配置了 AI 的思源里让模型调用能力，确认确认弹窗与输出
+  - 依赖：已实证 3.8.2 即有 addAgentCapability（10 项能力应已注册）；外部 RPC 桥探测返回 Plugin not loaded——前端能力只能经思源内部 AI 通道分发，无法绕过 AI 直调，必须用户在有 LLM 配置的环境里以对话触发
+  - 状态：done（2026-09-12 真机验证：workspace-context 全链路调用成功，证据见验收文档 3.5 节）
+- [x] T-022 手机端回归抽查（Android 真机）
+  - 依赖：需要 Android 设备；按 D-042 用户策略永久跳过
+  - 状态：won't-do（不再以设备测试阻塞开发）
+
+## P2
+
+- [x] T-016 收集箱组件
+  - 状态：won't-do（D-005：云端 API 不符合本地优先）
+
+## P3（持续开发）
+
+- [ ] T-366 内置组件逐项真实宿主验收（组件面板专项）
+  - 验收执行：见 `docs/acceptance-runbook.md` 对应分组
+  - 目标：为 29 个内置组件记录首读、刷新、空态、点击、配置和失败重试证据；优先验证今日日记任务、月历与联网天气。
+  - 状态：进行中；静态链路与自动测试已补，真实思源会话待执行
+
+- [x] T-263 组件商店逐项可用性审计
+  - 证据：`docs/component-availability-audit.md`；覆盖 29 个内置组件与 1 个第三方目录组件，区分真实可用、条件可用、协议依赖与不可独立使用
+  - 发现：`recent-writing-activity`、`today-reservations` 日期标签正则存在确定展示缺陷；`checkin-summary` 无 provider 时不可独立添加
+  - 状态：done（2026-09-13，静态审计；真实宿主逐项验收列为后续任务）
+- [x] T-264 修复两处 YYYYMMDD 日期标签正则
+  - 范围：`recent-writing-activity`、`today-reservations`；补回归测试，确认八位日期显示为 `YYYY-MM-DD`
+  - 证据：`tests/insight-widgets.test.cjs`；源码正则已修正
+  - 状态：done（2026-09-13）
+- [x] T-265 商店依赖提示与空态语义增强
+  - 范围：日记标题协议、`custom-reservation`、剪藏标签、活动文档、第三方插件依赖；卡片显示前置条件，空态区分“暂无数据/未满足协议”
+  - 证据：中英文 `homeDesc*` 已补充前置条件；不改变 adapter 空态协议
+  - 状态：done（2026-09-13）
+- [x] T-267 组件可用性审计自动化门禁
+  - 范围：校验 27 个内置组件均有唯一 runtime adapter、第三方目录 provider 显式外置、SQL 组件统一使用 `stmt`，并区分正常空态与未注册状态
+  - 证据：`tests/component-availability-audit.test.cjs`；当前 667/667 测试通过
+  - 状态：done（2026-09-13）
+- [ ] T-266 组件真实宿主验收矩阵
+  - 验收执行：见 `docs/acceptance-runbook.md` 对应分组
+  - 范围：在合法已认证桌面会话逐项验证首读、刷新、配置、点击、空态和错误重试；优先 SQL/API/插件协议组件
+  - 依赖：B-005；Android 仍按 D-042 后置
+  - 优先级：P1
+
+- [x] T-268 月历笔记本范围与双向时间窗
+  - 目标：让 `journal-calendar` 与其他洞察组件一致，支持可选笔记本筛选，并允许查看当前月前后 24 个月
+  - 证据：`src/home-model.js`、`src/index.ts`、`tests/home-model.test.cjs`、`tests/insight-widgets.test.cjs`
+  - 状态：done（2026-09-13）
+
+- [x] T-269 插件命令空态引导
+  - 目标：当没有已安装插件提供可执行命令时，显示明确的安装/启用提示，不把条件不可用误判为普通空数据
+  - 证据：`src/home-adapters.js`、`src/home-view.js`、`src/index.ts`、`tests/home-view.test.cjs`
+  - 状态：done（2026-09-13）
+
+- [x] T-270 商店结构化可用性徽标
+  - 目标：将组件的 ready/conditional/external 状态结构化并在商店卡片显示，减少用户把条件依赖误判为故障
+  - 证据：`src/home-model.js`、`src/index.ts`、`src/index.scss`、`tests/component-availability-audit.test.cjs`
+  - 状态：done（2026-09-13）
+
+- [x] T-271 商店可用性筛选
+  - 目标：新增“条件”筛选，快速定位需要命名协议、活动文档或特定 API 的组件；第三方待安装项保持外部状态
+  - 证据：`src/index.ts`、`src/i18n/zh-CN.json`、`src/i18n/en.json`、`tests/home-store-contract.test.cjs`
+  - 状态：done（2026-09-13）
+
+- [x] T-272 商店按当前设备过滤
+  - 目标：组件商店仅展示当前 desktop/sidebar/mobile 表面可用的组件，避免跨设备误添加
+  - 证据：`src/index.ts`、`tests/home-store-contract.test.cjs`
+  - 状态：done（2026-09-13）
+
+- [x] T-273 商店筛选分组空态
+  - 目标：筛选后自动隐藏无可见卡片的功能分组标题和网格，保持商店布局紧凑
+  - 证据：`src/index.ts`、`tests/home-store-contract.test.cjs`
+  - 状态：done（2026-09-13）
+
+- [x] T-274 条件组件首次添加引导
+  - 目标：首次添加 `conditional` 组件时给出一次性前置条件提示，后续尺寸调整不重复打扰
+  - 证据：`src/index.ts`、`src/i18n/zh-CN.json`、`src/i18n/en.json`、`tests/home-store-contract.test.cjs`
+  - 状态：done（2026-09-13）
+
+- [x] T-275 商店卡片配置入口
+  - 目标：已添加且声明 `configSchema` 的组件在商店卡片直接提供“配置”入口，减少用户回到面板编辑模式寻找设置的成本
+  - 范围：复用既有安全配置表单；保存后刷新商店与首页，不改变尺寸选择和添加按钮语义
+  - 状态：done（2026-09-13）
+
+- [x] T-276 商店支持表面提示
+  - 目标：在商店卡片显示组件支持的主面板、侧栏和移动端表面，帮助用户理解当前设备筛选与跨设备布局差异
+  - 证据：`src/index.ts`、`src/index.scss`、`src/i18n/zh-CN.json`、`src/i18n/en.json`、`tests/home-store-contract.test.cjs`
+  - 状态：done（2026-09-13）
+
+- [x] T-277 商店尺寸初始选中态
+  - 目标：打开商店时为当前已应用尺寸或默认尺寸显示明确高亮，避免用户误解尺寸按钮和添加按钮的关系
+  - 证据：`src/index.ts`、`tests/home-store-contract.test.cjs`
+  - 状态：done（2026-09-13）
+
+- [x] T-278 第三方组件失效与恢复状态
+  - 目标：已添加的第三方组件在 provider 卸载后不从商店消失，明确显示“当前不可用”，允许用户清理，并在 provider 恢复注册时自动恢复
+  - 证据：`src/widget-catalog.js`、`src/index.ts`、`tests/widget-catalog.test.cjs`、`tests/home-store-contract.test.cjs`
+  - 状态：done（2026-09-13）
+
+- [x] T-279 商店筛选语义修复与已添加筛选
+  - 目标：修复“条件”页签被分类条件误过滤为空的问题，新增“已添加”筛选，并保持分类/可用性/已添加状态正交组合
+  - 证据：`src/index.ts`、双语 i18n、`tests/home-store-contract.test.cjs`
+  - 状态：done（2026-09-13）
+
+- [x] T-280 商店分组完整性与国际化
+  - 目标：27 个内置组件恰好进入一个功能分组，补齐日历月视图和写作打卡，所有分组标题支持中英文
+  - 证据：`src/index.ts`、双语 i18n、`tests/component-availability-audit.test.cjs`
+  - 状态：done（2026-09-13）
+
+- [x] T-325 商店视觉与交互第二轮优化
+  - 范围：结果概览、轻量可折叠分组、卡片状态摘要、语义化预览、移除入口和移动端单列布局
+  - 证据：`src/index.ts`、`src/index.scss`、双语 i18n、`tests/home-store-contract.test.cjs`；TSC 与专项测试通过
+  - 状态：done（2026-09-14）
+
+## 下一阶段路线（与 ROADMAP 8.0.2 对齐）
+
+- [ ] T-1216 v0.16.42 商店真实宿主验收
+  - 验收执行：见 `docs/acceptance-runbook.md` 对应分组
+  - 目标：验证折叠分组、语义预览、尺寸/配置/移除和窄屏触控；记录长文案与真实空态证据
+  - 状态：queued（等待合法已认证桌面会话）
+- [x] T-1217 v0.16.42 空查询性能长尾拆分
+  - 目标：区分本地环境抖动、测试 harness 成本与产品路径，保留 50ms 告警线并给出可重复基准
+  - 实现：`search-model.js` 使用 WeakMap 缓存活跃页签的规范化展示元数据，关键字段变化自动失效；空查询 300 页签基准由约 48ms p95 降至约 0.6ms，关键词路径保持一致
+  - 状态：done（2026-09-14）
+- [ ] T-1218 v0.17 只读 Agent 宿主证据收口
+  - 验收执行：见 `docs/acceptance-runbook.md` 对应分组
+  - 目标：补 `document-context`/diagnostics 的权限拒绝、取消、卸载和旧宿主行为证据，不新增写动作
+  - 状态：queued（契约已完成，真实宿主待验收）
+- [ ] T-1219 v0.18 最小受控 Agent 执行闭环
+  - 验收执行：见 `docs/acceptance-runbook.md` 对应分组
+  - 目标：仅在真实确认弹窗通过后接入 open/open-batch，验证审批摘要、一次性令牌、超时和回执
+  - 状态：queued（依赖 T-1218 与 open-documents 真机点击）
+- [ ] T-1220 v0.18 桌面路径筛选生产入口
+  - 验收执行：见 `docs/acceptance-runbook.md` 对应分组
+  - 目标：将已完成的路径模型接入桌面筛选 chip，具备取消、API 缺失回退和缓存隔离；侧栏后置
+  - 状态：queued（依赖 T-107 真实端点证据）
+- [ ] T-1221 v0.19 第三方组件端到端样例
+  - 验收执行：见 `docs/acceptance-runbook.md` 对应分组
+  - 目标：以一个真实插件完成注册、配置、跨表面布局、失效/恢复和商店展示全链路
+  - 状态：queued
+- [x] T-1222 v0.20 数据连续性与性能硬门禁评估
+  - 目标：完成存储迁移/恢复演练并评估将搜索与首页 p95 从告警升级为发布硬门禁
+  - 结论（2026-09-16）：两半均已落地。**存储迁移/恢复演练**由 T-6259~T-6274 六批完成——`src/storage-migration.js` 演练管道（`runStorageMigration` 纯函数 + 有界恢复报告）、`sw_thumb_cache` 从 inspect 毕业为读取侧归一化、其余 6 个 key 的 per-key 迁移契约与宿主同源闭环、版本兼容矩阵文档化（`docs/storage-compatibility-matrix.md`）。**性能侧改以复杂度比值升级为发布硬门禁**（D-388/T-6262）：`tests/perf-complexity-gate.test.cjs` 锁 4 个核心纯算子的输入倍增耗时比 ≤3（`sortItems` 给 4.5），已随 `pnpm test` 进入 `verify:release`；**未**采用绝对 p95 阈值——ROADMAP 明确空查询 p95 存在 48ms 环境长尾，绝对耗时门禁会被偶发抖动阻断开发（本机实测该门禁即因未独占运行假失败 3.42x，见 D-393），机器速度差异由比值消去。**诚实边界**：绝对渲染耗时（DOM 计时）仍归 UI smoke 与真机验收，不在本门禁范围。
+  - 状态：done（2026-09-16）
+
+**v0.20 收官小结（2026-09-16）**：路线图 v0.20 三项的落点——① **文档集/工作区恢复健壮性**（迁移工具、损坏数据降级、恢复报告导出）：T-6259~T-6274 六批完成（`runStorageMigration` 演练管道、`sw_thumb_cache` 读取侧归一化、文档集恢复报告导出、存储兼容矩阵文档）；② **存储版本统一审计**：本批完成（`docs/storage-compatibility-matrix.md`，以代码为准 13 key，附跨版本迁移时间线）；③ **Agent session registry 从契约层转入真实用例**：**未做，判定暂缓**（D-391）——契约层本身早已实现（`createWorkspaceCapabilityRuntimeSessionRegistry` 等符号在 `src/agent-workspace-capability-definitions.js` 有实现、`tests/agent-outline.test.cjs` 有覆盖），但"转入真实用例"的前提不成立：生产路径**从未调用** `registry.create()`，真实运行中 `registry` 恒为空，只读快照没有消费者。剩余工作 = 先补出真实会话产生方（跨端会话采集通道），再谈暴露。
+
+> **关于下方 71 项 `in-progress` 的说明（勿误判为台账滞后）**：T-122~T-194 的 Agent 系列标 `in-progress` 是**准确**状态，而非"已实现未勾选"。`tests/production-graph-isolation.test.cjs` 的 `UNWIRED_CONTRACT_MODULES` 明确列出 14 个 agent 契约模块**不在生产依赖图内**（`agent-workspace-session`、`agent-workspace-registry`、`agent-workspace-plan` 等），生产接线受 D-111「写入动作待独立审批与宿主验证」约束；`WIRED_SANITY_MODULES` 一侧只有 `agent-capabilities` / `agent-document-context` / `agent-workspace-diagnostics` / `agent-workspace-runtime` 四个已接入。故这批条目**保持未勾选是正确的**。（与之相对的 D-351 才是台账滞后：那次是"标题标已完成、条目全未勾"但功能真实交付。判据是**生产图是否可达**，不是"代码是否存在"。）
+
+### T-1253~T-1282 Agent 只读审计模型（本轮 30 项）
+
+- [x] T-1253 能力名称归一化
+- [x] T-1254 设备枚举归一化
+- [x] T-1255 状态枚举归一化
+- [x] T-1256 原因枚举归一化
+- [x] T-1257 effects 白名单
+- [x] T-1258 设备列表去重
+- [x] T-1259 计数上限
+- [x] T-1260 布尔值归一化
+- [x] T-1261 只读 effects 判断
+- [x] T-1262 异常原因脱敏
+- [x] T-1263 结果状态归一化
+- [x] T-1264 单能力审计
+- [x] T-1265 缺失名称检测
+- [x] T-1266 写入 effects 检测
+- [x] T-1267 wrapper spec 审计
+- [x] T-1268 批量能力审计
+- [x] T-1269 重复能力检测
+- [x] T-1270 批量数量上限
+- [x] T-1271 审计摘要归一化
+- [x] T-1272 version=1 快照
+- [x] T-1273 disposed 快照降级
+- [x] T-1274 快照兼容性判断
+- [x] T-1275 稳定失败回执
+- [x] T-1276 设备能力矩阵
+- [x] T-1277 快照差异计算
+- [x] T-1278 状态变化事件
+- [x] T-1279 事件类型归一化
+- [x] T-1280 事件去重
+- [x] T-1281 事件数量上限
+- [x] T-1282 生产注册前审计接线
+  - 证据：`src/agent-readonly-audit.js`、`src/index.ts`、`tests/agent-readonly-audit.test.cjs`（40 项审计测试）
+  - 状态：done（2026-09-14）
+
+### T-1283~T-1312 Agent 只读审计生命周期历史（本轮 30 项）
+
+- [x] T-1283 历史容量归一化
+- [x] T-1284 历史容量上下限
+- [x] T-1285 初始空历史
+- [x] T-1286 record 接受快照
+- [x] T-1287 record 拒绝销毁态
+- [x] T-1288 sequence 单调递增
+- [x] T-1289 历史超限淘汰旧项
+- [x] T-1290 list 返回副本
+- [x] T-1291 latest 读取最新项
+- [x] T-1292 latest 空态
+- [x] T-1293 since 游标读取
+- [x] T-1294 since 非法游标降级
+- [x] T-1295 since 结果上限
+- [x] T-1296 status 返回容量
+- [x] T-1297 status 返回 disposed
+- [x] T-1298 dispose 清空历史
+- [x] T-1299 dispose 幂等
+- [x] T-1300 dispose 后 record 拒绝
+- [x] T-1301 快照深层归一化
+- [x] T-1302 生命周期事件构建
+- [x] T-1303 unchanged 事件
+- [x] T-1304 事件数量上限
+- [x] T-1305 cursor 归一化
+- [x] T-1306 重复快照独立 sequence
+- [x] T-1307 设备字段保留
+- [x] T-1308 status 字段保留
+- [x] T-1309 reason 字段脱敏
+- [x] T-1310 审计摘要不泄漏 item 详情
+- [x] T-1311 插件注册前写入初始快照
+- [x] T-1312 插件卸载前写入 disposed 快照
+  - 证据：`src/agent-readonly-audit.js`、`src/index.ts`、`tests/agent-readonly-audit.test.cjs`（79 项专项测试）
+  - 状态：done（2026-09-14）
+
+### T-1313~T-1342 Agent 审计历史摘要与回放契约（本轮 30 项）
+
+- [x] T-1313 历史事件容量常量
+- [x] T-1314 初始事件标记
+- [x] T-1315 状态变化事件记录
+- [x] T-1316 事件序列单调性
+- [x] T-1317 事件游标过滤
+- [x] T-1318 事件数量上限
+- [x] T-1319 事件副本隔离
+- [x] T-1320 dispose 清理事件
+- [x] T-1321 事件类型白名单
+- [x] T-1322 disposed 事件类型
+- [x] T-1323 初始事件构建器
+- [x] T-1324 事件 sequence 归一化
+- [x] T-1325 事件 count 归一化
+- [x] T-1326 固定事件字段
+- [x] T-1327 事件文本降级
+- [x] T-1328 历史空摘要
+- [x] T-1329 历史最新摘要
+- [x] T-1330 hostile history 安全隔离
+- [x] T-1331 摘要 version=1
+- [x] T-1332 摘要 size 上限
+- [x] T-1333 摘要 capacity 上限
+- [x] T-1334 摘要布尔归一化
+- [x] T-1335 摘要兼容性通过
+- [x] T-1336 摘要容量溢出拒绝
+- [x] T-1337 摘要未知版本拒绝
+- [x] T-1338 摘要稳定序列化
+- [x] T-1339 摘要安全解析
+- [x] T-1340 摘要载荷上限
+- [x] T-1341 历史事件选择器
+- [x] T-1342 恶意历史输入降级
+  - 证据：`src/agent-readonly-audit.js`、`tests/agent-readonly-audit.test.cjs`（110 项专项测试）
+  - 状态：done（2026-09-14）
+
+### T-1343~T-1372 Agent 审计健康报告契约（本轮 30 项）
+
+- [x] T-1343 健康状态常量
+- [x] T-1344 健康状态归一化
+- [x] T-1345 healthy 状态保留
+- [x] T-1346 空历史健康判定
+- [x] T-1347 正常历史健康判定
+- [x] T-1348 销毁历史不可用判定
+- [x] T-1349 事件计数固定字段
+- [x] T-1350 初始事件计数
+- [x] T-1351 事件总数上限
+- [x] T-1352 最新事件类型
+- [x] T-1353 空事件稳定类型
+- [x] T-1354 未知事件安全降级
+- [x] T-1355 事件计数归一化
+- [x] T-1356 事件摘要固定键
+- [x] T-1357 事件总数归一化
+- [x] T-1358 history eventSummary 接口
+- [x] T-1359 history health 接口
+- [x] T-1360 报告 version=1
+- [x] T-1361 报告 empty 健康态
+- [x] T-1362 报告摘要与事件
+- [x] T-1363 报告固定顶层结构
+- [x] T-1364 报告安全归一化
+- [x] T-1365 报告未知字段隔离
+- [x] T-1366 报告兼容性通过
+- [x] T-1367 报告未知版本拒绝
+- [x] T-1368 报告摘要关系校验
+- [x] T-1369 报告稳定序列化
+- [x] T-1370 报告安全解析
+- [x] T-1371 报告载荷上限
+- [x] T-1372 hostile history 错误隔离
+  - 证据：`src/agent-readonly-audit.js`、`tests/agent-readonly-audit.test.cjs`（141 项专项测试）
+  - 状态：done（2026-09-14）
+
+### T-1373~T-1402 Agent 审计报告差异与趋势窗口（本轮 30 项）
+
+- [x] T-1373 趋势状态常量
+- [x] T-1374 趋势未知值降级
+- [x] T-1375 improving 状态保留
+- [x] T-1376 健康等级排序
+- [x] T-1377 unavailable 最低等级
+- [x] T-1378 健康状态差异
+- [x] T-1379 improving 趋势计算
+- [x] T-1380 degrading 趋势计算
+- [x] T-1381 stable 趋势计算
+- [x] T-1382 size 差异计算
+- [x] T-1383 sequence 差异计算
+- [x] T-1384 events 差异计算
+- [x] T-1385 health_changed 事件
+- [x] T-1386 size_changed 事件
+- [x] T-1387 差异事件上限
+- [x] T-1388 差异事件类型归一化
+- [x] T-1389 差异事件趋势归一化
+- [x] T-1390 差异事件去重
+- [x] T-1391 趋势计数摘要
+- [x] T-1392 趋势摘要上限
+- [x] T-1393 历史窗口空态
+- [x] T-1394 历史窗口保留最新
+- [x] T-1395 历史窗口容量上限
+- [x] T-1396 窗口 version=1
+- [x] T-1397 窗口未知字段隔离
+- [x] T-1398 窗口兼容性检查
+- [x] T-1399 窗口未知版本拒绝
+- [x] T-1400 窗口序列化往返
+- [x] T-1401 窗口非法 JSON 隔离
+- [x] T-1402 窗口趋势摘要
+  - 证据：`src/agent-readonly-audit.js`、`tests/agent-readonly-audit.test.cjs`（172 项专项测试）
+  - 状态：done（2026-09-14）
+
+### T-1403~T-1432 Agent 审计窗口合并与恢复计划（本轮 30 项）
+
+- [x] T-1403 报告 sequence 归一化
+- [x] T-1404 报告 sequence 负值降级
+- [x] T-1405 报告 sequence 小数截断
+- [x] T-1406 重复 sequence 去重
+- [x] T-1407 不同 sequence 保留
+- [x] T-1408 零 sequence 回退去重
+- [x] T-1409 窗口合并
+- [x] T-1410 窗口合并去重
+- [x] T-1411 窗口合并排序
+- [x] T-1412 窗口合并容量上限
+- [x] T-1413 窗口裁剪保留最新
+- [x] T-1414 窗口裁剪容量
+- [x] T-1415 按健康状态筛选
+- [x] T-1416 健康筛选容量
+- [x] T-1417 未知健康筛选降级
+- [x] T-1418 健康计数固定字段
+- [x] T-1419 健康计数统计
+- [x] T-1420 最新健康状态
+- [x] T-1421 健康摘要计数上限
+- [x] T-1422 健康摘要固定键
+- [x] T-1423 健康摘要兼容性
+- [x] T-1424 健康摘要计数一致性
+- [x] T-1425 恢复计划 cursor
+- [x] T-1426 恢复计划增量筛选
+- [x] T-1427 恢复计划 nextCursor
+- [x] T-1428 无增量 cursor 保留
+- [x] T-1429 恢复计划 complete 标记
+- [x] T-1430 恢复计划 version=1
+- [x] T-1431 恢复计划兼容性
+- [x] T-1432 恢复计划稳定序列化与安全解析
+  - 证据：`src/agent-readonly-audit.js`、`tests/agent-readonly-audit.test.cjs`（204 项专项测试）
+  - 状态：done（2026-09-14）
+
+### T-1433~T-1462 Agent 审计传输封装与批量交换（本轮 30 项）
+
+- [x] T-1433 传输类型枚举
+- [x] T-1434 传输状态枚举
+- [x] T-1435 传输数量上限
+- [x] T-1436 类型未知值降级
+- [x] T-1437 状态未知值降级
+- [x] T-1438 requestId 清洗
+- [x] T-1439 requestId 长度上限
+- [x] T-1440 payload checksum
+- [x] T-1441 checksum 固定长度
+- [x] T-1442 envelope version=1
+- [x] T-1443 envelope type 保留
+- [x] T-1444 envelope requestId 保留
+- [x] T-1445 envelope 固定字段
+- [x] T-1446 envelope 兼容性校验
+- [x] T-1447 checksum 篡改检测
+- [x] T-1448 envelope 稳定序列化
+- [x] T-1449 envelope 非法 JSON 降级
+- [x] T-1450 envelope 载荷上限
+- [x] T-1451 envelope verification 回执
+- [x] T-1452 verification 篡改拒绝
+- [x] T-1453 batch version=1
+- [x] T-1454 batch 数量上限
+- [x] T-1455 batch total 归一化
+- [x] T-1456 batch 兼容性校验
+- [x] T-1457 batch total 一致性
+- [x] T-1458 batch 稳定序列化
+- [x] T-1459 batch 非法 JSON 降级
+- [x] T-1460 batch 状态计数
+- [x] T-1461 transport failure 回执
+- [x] T-1462 transport failure 重试判定
+  - 证据：`src/agent-readonly-audit.js`、`tests/agent-readonly-audit.test.cjs`（236 项专项测试）
+  - 状态：done（2026-09-14）
+
+### T-1463~T-1492 Agent 审计传输队列与恢复（本轮 30 项）
+
+- [x] T-1463 传输队列容量
+- [x] T-1464 传输 cursor 归一化
+- [x] T-1465 队列初始空态
+- [x] T-1466 enqueue 接受 envelope
+- [x] T-1467 enqueue sequence
+- [x] T-1468 sequence 单调递增
+- [x] T-1469 队列淘汰旧项
+- [x] T-1470 list cursor 过滤
+- [x] T-1471 list 副本隔离
+- [x] T-1472 latest 最新值
+- [x] T-1473 acknowledge 游标确认
+- [x] T-1474 acknowledge 数量
+- [x] T-1475 队列 status 固定字段
+- [x] T-1476 dispose 清理队列
+- [x] T-1477 dispose 后拒绝 enqueue
+- [x] T-1478 队列快照 version=1
+- [x] T-1479 队列快照兼容性
+- [x] T-1480 队列快照容量校验
+- [x] T-1481 队列快照序列化
+- [x] T-1482 队列快照安全解析
+- [x] T-1483 按类型筛选队列
+- [x] T-1484 类型筛选数量上限
+- [x] T-1485 队列 utilization 摘要
+- [x] T-1486 队列 hasLatest 标记
+- [x] T-1487 utilization 归一化
+- [x] T-1488 队列摘要兼容性
+- [x] T-1489 队列恢复 cursor
+- [x] T-1490 队列恢复 nextCursor
+- [x] T-1491 队列恢复 version/兼容性
+- [x] T-1492 队列恢复稳定序列化与安全解析
+  - 证据：`src/agent-readonly-audit.js`、`tests/agent-readonly-audit.test.cjs`（268 项专项测试）
+  - 状态：done（2026-09-14）
+
+### T-1493~T-1522 Agent 审计传输队列指标与检查点（本轮 30 项）
+
+- [x] T-1493 队列风险枚举
+- [x] T-1494 风险未知值降级
+- [x] T-1495 normal 风险判定
+- [x] T-1496 warning 阈值判定
+- [x] T-1497 critical 阈值判定
+- [x] T-1498 disposed 风险判定
+- [x] T-1499 队列 size 差异
+- [x] T-1500 sizeDelta 计算
+- [x] T-1501 capacity 差异
+- [x] T-1502 sequence 差异
+- [x] T-1503 disposed 差异
+- [x] T-1504 size_changed 事件
+- [x] T-1505 队列事件上限
+- [x] T-1506 队列事件固定字段
+- [x] T-1507 delta 数值边界
+- [x] T-1508 队列事件去重
+- [x] T-1509 队列事件统计固定字段
+- [x] T-1510 growth 统计
+- [x] T-1511 checkpoint version=1
+- [x] T-1512 checkpoint cursor
+- [x] T-1513 checkpoint 固定字段
+- [x] T-1514 checkpoint 兼容性
+- [x] T-1515 checkpoint 序列化
+- [x] T-1516 checkpoint 安全解析
+- [x] T-1517 replay result version=1
+- [x] T-1518 replay nextCursor
+- [x] T-1519 replay 兼容性
+- [x] T-1520 acknowledge result 归一化
+- [x] T-1521 replay 稳定序列化
+- [x] T-1522 replay 非法 JSON 隔离
+  - 证据：`src/agent-readonly-audit.js`、`tests/agent-readonly-audit.test.cjs`（298 项专项测试）
+  - 状态：done（2026-09-14）
+
+### T-1523~T-1552 Agent 传输队列维护与健康报告（本轮 30 项）
+
+- [x] T-1523 队列清理
+- [x] T-1524 清理数量
+- [x] T-1525 清理 cursor
+- [x] T-1526 异常队列安全清理
+- [x] T-1527 队列重置
+- [x] T-1528 重置 version=1
+- [x] T-1529 重置 previousCursor
+- [x] T-1530 只读 peek
+- [x] T-1531 peek 数量上限
+- [x] T-1532 队列健康报告
+- [x] T-1533 健康风险字段
+- [x] T-1534 健康固定字段
+- [x] T-1535 健康兼容性
+- [x] T-1536 健康序列化
+- [x] T-1537 健康安全解析
+- [x] T-1538 批量 envelope 合并
+- [x] T-1539 批量去重
+- [x] T-1540 批量容量上限
+- [x] T-1541 批量按状态筛选
+- [x] T-1542 状态筛选容量
+- [x] T-1543 cancellation version=1
+- [x] T-1544 cancellation 状态降级
+- [x] T-1545 cancellation requestId
+- [x] T-1546 cancellation 未确认标记
+- [x] T-1547 cancellation 固定字段
+- [x] T-1548 cancellation 序列化
+- [x] T-1549 cancellation 安全解析
+- [x] T-1550 timeout 回执
+- [x] T-1551 timeout requestId
+- [x] T-1552 队列健康与事件摘要边界
+  - 证据：`src/agent-readonly-audit.js`、`tests/agent-readonly-audit.test.cjs`（328 项专项测试）
+  - 状态：done（2026-09-14）
+
+### T-1553~T-1582 Agent 传输回放取消与协调器（本轮 30 项）
+
+- [x] T-1553 回放状态枚举
+- [x] T-1554 状态未知值降级
+- [x] T-1555 deadline 归一化
+- [x] T-1556 非法 deadline 处理
+- [x] T-1557 signal aborted 检测
+- [x] T-1558 deadline 过期检测
+- [x] T-1559 replay outcome version
+- [x] T-1560 replay outcome 固定字段
+- [x] T-1561 terminal 状态判断
+- [x] T-1562 队列不可用回执
+- [x] T-1563 取消前置检查
+- [x] T-1564 超时前置检查
+- [x] T-1565 回放数量统计
+- [x] T-1566 回放 cursor 推进
+- [x] T-1567 成功结果归一化
+- [x] T-1568 取消不读取队列
+- [x] T-1569 超时不读取队列
+- [x] T-1570 acknowledge 成功门面
+- [x] T-1571 cancelled 不确认
+- [x] T-1572 timeout 不确认
+- [x] T-1573 原子 replay/ack
+- [x] T-1574 unavailable 不确认
+- [x] T-1575 replay error version
+- [x] T-1576 timeout retryable
+- [x] T-1577 invalid nonretryable
+- [x] T-1578 replay error 固定字段
+- [x] T-1579 outcome 稳定序列化
+- [x] T-1580 outcome 安全解析
+- [x] T-1581 count 上限
+- [x] T-1582 cursor 边界保护
+  - 证据：`src/agent-readonly-audit.js`、`tests/agent-readonly-audit.test.cjs`（359 项专项测试）
+  - 状态：done（2026-09-14）
+
+### T-1583~T-1612 Agent 传输恢复协调器（本轮 30 项）
+
+- [x] T-1583 协调器状态枚举
+- [x] T-1584 状态未知值降级
+- [x] T-1585 协调器初始 ready
+- [x] T-1586 recover 成功提交
+- [x] T-1587 recover cursor 推进
+- [x] T-1588 commits 计数
+- [x] T-1589 取消保留队列
+- [x] T-1590 超时保留队列
+- [x] T-1591 disposed recover 安全
+- [x] T-1592 snapshot version=1
+- [x] T-1593 snapshot 固定字段
+- [x] T-1594 snapshot 兼容性
+- [x] T-1595 snapshot 序列化
+- [x] T-1596 snapshot 安全解析
+- [x] T-1597 status_changed 事件
+- [x] T-1598 cursor_changed 事件
+- [x] T-1599 commits_changed 事件
+- [x] T-1600 disposed_changed 事件
+- [x] T-1601 事件上限
+- [x] T-1602 事件类型归一化
+- [x] T-1603 事件去重
+- [x] T-1604 事件摘要固定字段
+- [x] T-1605 result version=1
+- [x] T-1606 committed terminal
+- [x] T-1607 ready 非 terminal
+- [x] T-1608 result 固定字段
+- [x] T-1609 result 序列化
+- [x] T-1610 result 安全解析
+- [x] T-1611 dispose 幂等
+- [x] T-1612 空队列不重复提交
+  - 证据：`src/agent-readonly-audit.js`、`tests/agent-readonly-audit.test.cjs`（390 项专项测试）
+  - 状态：done（2026-09-14）
+
+### T-1613~T-1642 Agent 协调器健康与批量结果（本轮 30 项）
+
+- [x] T-1613 协调器健康枚举
+- [x] T-1614 健康未知值降级
+- [x] T-1615 committed idle 判定
+- [x] T-1616 ready active 判定
+- [x] T-1617 cancelled blocked 判定
+- [x] T-1618 disposed 判定
+- [x] T-1619 协调器状态差异
+- [x] T-1620 cursorDelta 计算
+- [x] T-1621 commitDelta 计算
+- [x] T-1622 健康报告 version=1
+- [x] T-1623 健康报告固定字段
+- [x] T-1624 健康报告兼容性
+- [x] T-1625 健康报告序列化
+- [x] T-1626 健康报告安全解析
+- [x] T-1627 status_changed 差异事件
+- [x] T-1628 cursor_changed 差异事件
+- [x] T-1629 commits_changed 差异事件
+- [x] T-1630 disposed_changed 差异事件
+- [x] T-1631 差异事件数量上限
+- [x] T-1632 差异 delta 归一化
+- [x] T-1633 差异事件去重
+- [x] T-1634 差异事件统计摘要
+- [x] T-1635 commit window version=1
+- [x] T-1636 commit window cursor
+- [x] T-1637 commit window limit 上限
+- [x] T-1638 commit window 兼容性
+- [x] T-1639 commit window 序列化
+- [x] T-1640 commit window 安全解析
+- [x] T-1641 batch result committed 统计
+- [x] T-1642 recovery successRate 摘要
+  - 证据：`src/agent-readonly-audit.js`、`tests/agent-readonly-audit.test.cjs`（422 项专项测试）
+  - 状态：done（2026-09-14）
+
+### T-1643~T-1672 Agent 协调器联合恢复与聚合（本轮 30 项）
+
+- [x] T-1643 联合状态枚举
+- [x] T-1644 联合状态未知值降级
+- [x] T-1645 联合快照 version=1
+- [x] T-1646 联合快照总数统计
+- [x] T-1647 hostile coordinator 隔离
+- [x] T-1648 联合快照固定字段
+- [x] T-1649 联合快照兼容性
+- [x] T-1650 联合健康 idle
+- [x] T-1651 联合健康 blocked
+- [x] T-1652 联合健康 disposed
+- [x] T-1653 联合健康固定字段
+- [x] T-1654 联合健康兼容性
+- [x] T-1655 prepare 阶段
+- [x] T-1656 全部成功 commit
+- [x] T-1657 partial commit 拒绝
+- [x] T-1658 联合 cursor 推进
+- [x] T-1659 联合 coordinator 快照
+- [x] T-1660 联合 dispose 幂等
+- [x] T-1661 联合结果固定字段
+- [x] T-1662 联合结果兼容性
+- [x] T-1663 status_changed 事件
+- [x] T-1664 cursor_changed 事件
+- [x] T-1665 commits_changed 事件
+- [x] T-1666 acknowledged_changed 事件
+- [x] T-1667 联合事件去重
+- [x] T-1668 联合事件摘要
+- [x] T-1669 联合恢复计划 version=1
+- [x] T-1670 联合恢复计划 cursor
+- [x] T-1671 联合恢复计划兼容性
+- [x] T-1672 联合失败回执与安全序列化
+  - 证据：`src/agent-readonly-audit.js`、`tests/agent-readonly-audit.test.cjs`（455 项专项测试）
+  - 状态：done（2026-09-14）
+
+### T-1673~T-1702 Agent 联合快照与恢复结果（本轮 30 项）
+
+- [x] T-1673 联合 cursor 归一化
+- [x] T-1674 联合健康等级排序
+- [x] T-1675 联合 total 差异
+- [x] T-1676 联合 committed 差异
+- [x] T-1677 联合 disposed 差异
+- [x] T-1678 联合 cursorDelta
+- [x] T-1679 total_changed 事件
+- [x] T-1680 cursor_changed 事件
+- [x] T-1681 事件 delta 上限
+- [x] T-1682 事件固定字段
+- [x] T-1683 事件去重
+- [x] T-1684 事件摘要固定字段
+- [x] T-1685 checkpoint version=1
+- [x] T-1686 checkpoint cursor
+- [x] T-1687 checkpoint 固定字段
+- [x] T-1688 checkpoint 兼容性
+- [x] T-1689 checkpoint 序列化
+- [x] T-1690 checkpoint 安全解析
+- [x] T-1691 recovery committed 判定
+- [x] T-1692 recovery partial 判定
+- [x] T-1693 recovery acknowledgement
+- [x] T-1694 partial 不确认
+- [x] T-1695 recovery 固定字段
+- [x] T-1696 recovery 兼容性
+- [x] T-1697 recovery 序列化
+- [x] T-1698 recovery 安全解析
+- [x] T-1699 recovery 计数上限
+- [x] T-1700 联合失败回执
+- [x] T-1701 联合事件数量上限
+- [x] T-1702 恶意联合结果隔离
+  - 证据：`src/agent-readonly-audit.js`、`tests/agent-readonly-audit.test.cjs`（485 项专项测试）
+  - 状态：done（2026-09-14）
+
+### T-1703~T-1737 Agent 联合检查点窗口与一致性（本轮 35 项）
+
+- [x] T-1703 联合结果 version 兼容性
+- [x] T-1704 联合结果确认状态一致性
+- [x] T-1705 联合结果 committed 确认
+- [x] T-1706 联合快照 totalDelta
+- [x] T-1707 联合快照 committedDelta
+- [x] T-1708 联合快照事件 delta
+- [x] T-1709 checkpoint disposed 计数
+- [x] T-1710 checkpoint disposed 上限
+- [x] T-1711 检查点窗口 limit 上限
+- [x] T-1712 检查点 cursor 去重
+- [x] T-1713 检查点 cursor 排序
+- [x] T-1714 检查点窗口尾部裁剪
+- [x] T-1715 检查点窗口 version=1
+- [x] T-1716 检查点窗口规范兼容性
+- [x] T-1717 重复 cursor 兼容性拒绝
+- [x] T-1718 检查点窗口序列化
+- [x] T-1719 检查点窗口恶意解析隔离
+- [x] T-1720 检查点窗口空状态
+- [x] T-1721 检查点窗口 advancing 状态
+- [x] T-1722 检查点窗口摘要固定字段
+- [x] T-1723 检查点窗口摘要计数一致性
+- [x] T-1724 检查点窗口差异 cursorDelta
+- [x] T-1725 cursor advanced 事件
+- [x] T-1726 cursor regressed 事件
+- [x] T-1727 检查点事件 delta 脱敏上限
+- [x] T-1728 检查点事件去重
+- [x] T-1729 检查点事件摘要固定字段
+- [x] T-1730 cursor 增量选择
+- [x] T-1731 检查点窗口合并
+- [x] T-1732 检查点窗口裁剪
+- [x] T-1733 检查点恢复计划 cursor
+- [x] T-1734 检查点恢复计划兼容性
+- [x] T-1735 检查点恢复计划序列化
+- [x] T-1736 恢复计划单调 cursor
+- [x] T-1737 联合一致性回归汇总
+  - 证据：`src/agent-readonly-audit.js`、`tests/agent-readonly-audit.test.cjs`（518 项专项测试）
+  - 状态：done（2026-09-14）
+
+### T-1738~T-1772 Agent 联合 diagnostics 投影与分页消费（本轮 35 项）
+
+- [x] T-1738 diagnostics 状态枚举
+- [x] T-1739 diagnostics 风险枚举
+- [x] T-1740 状态未知值降级
+- [x] T-1741 风险未知值降级
+- [x] T-1742 empty 状态推导
+- [x] T-1743 ready 状态推导
+- [x] T-1744 degraded 状态推导
+- [x] T-1745 blocked 状态推导
+- [x] T-1746 disposed 状态推导
+- [x] T-1747 critical 风险推导
+- [x] T-1748 warning 风险推导
+- [x] T-1749 diagnostics version=1
+- [x] T-1750 diagnostics 固定字段
+- [x] T-1751 diagnostics 脱敏未知字段
+- [x] T-1752 diagnostics 计数一致性
+- [x] T-1753 diagnostics acknowledgement 一致性
+- [x] T-1754 diagnostics 序列化
+- [x] T-1755 diagnostics 恶意解析隔离
+- [x] T-1756 diagnostics 风险差异
+- [x] T-1757 diagnostics cursor 差异
+- [x] T-1758 diagnostics 状态事件
+- [x] T-1759 diagnostics cursor 事件
+- [x] T-1760 diagnostics delta 上限
+- [x] T-1761 diagnostics 事件去重
+- [x] T-1762 diagnostics 事件摘要
+- [x] T-1763 diagnostics 分页 cursor
+- [x] T-1764 diagnostics 分页 nextCursor
+- [x] T-1765 diagnostics 分页数量上限
+- [x] T-1766 diagnostics 分页固定字段
+- [x] T-1767 diagnostics 分页兼容性
+- [x] T-1768 diagnostics 分页序列化
+- [x] T-1769 diagnostics 多源风险合并
+- [x] T-1770 diagnostics 多源 cursor 合并
+- [x] T-1771 diagnostics 批量有界
+- [x] T-1772 diagnostics 批量兼容与序列化
+  - 证据：`src/agent-readonly-audit.js`、`tests/agent-readonly-audit.test.cjs`（556 项专项测试）
+  - 状态：done（2026-09-14）
+
+### T-1223~T-1252 商店纯模型稳定化（本轮 30 项）
+
+- [x] T-1223 固定商店页签集合
+- [x] T-1224 固定设备枚举
+- [x] T-1225 固定可用性枚举
+- [x] T-1226 固定来源分类枚举
+- [x] T-1227 查询文本清洗
+- [x] T-1228 查询长度上限
+- [x] T-1229 页签值归一化
+- [x] T-1230 设备值归一化
+- [x] T-1231 分类值归一化
+- [x] T-1232 可用性值归一化
+- [x] T-1233 正交筛选模型
+- [x] T-1234 内置筛选回归
+- [x] T-1235 插件筛选回归
+- [x] T-1236 条件筛选回归
+- [x] T-1237 已添加筛选回归
+- [x] T-1238 卡片文本匹配
+- [x] T-1239 卡片状态匹配
+- [x] T-1240 卡片筛选安全降级
+- [x] T-1241 结果数量摘要
+- [x] T-1242 搜索文本构建
+- [x] T-1243 语义预览类型映射
+- [x] T-1244 预览类型安全归一化
+- [x] T-1245 卡片状态摘要
+- [x] T-1246 尺寸选择归一化
+- [x] T-1247 尺寸支持判断
+- [x] T-1248 支持表面去重
+- [x] T-1249 条件/外部状态判断
+- [x] T-1250 分组可见性判断
+- [x] T-1251 分组标签与排序
+- [x] T-1252 折叠分组与操作决策模型
+  - 证据：`src/home-store-model.js`、`tests/home-store-model.test.cjs`（63 项商店模型/契约测试），`src/index.ts` 已接入查询、筛选、摘要、预览和状态模型
+  - 状态：done（2026-09-14）
+
+- [x] T-281 商店与面板重渲染生命周期
+  - 目标：provider 注册变化即时刷新已打开的商店和组件面板；重渲染前回收旧 observer、idle timer 和事件订阅；商店保留搜索/页签并提供无结果提示
+  - 证据：`src/index.ts`、`src/index.scss`、`tests/home-store-contract.test.cjs`
+  - 状态：done（2026-09-13）
+
+- [x] T-282 声明式日期与文档配置字段
+  - 目标：为倒数日和指定文档提供原生日期控件、文档 ID 建议列表及严格值校验
+  - 证据：`src/home-model.js`、`src/agent-capabilities.js`、`src/index.ts`、`tests/home-protocol-v2.test.cjs`、`tests/agent-capabilities.test.cjs`
+  - 状态：done（2026-09-13）
+
+- [x] T-283 配置表单空值与失效值体验
+  - 目标：笔记本配置保留明确空选项；已删除笔记本以“当前不可用”保留原值；配置控件具备 label 关联、日期范围和保存前原生校验
+  - 证据：`src/index.ts`、`src/i18n/zh-CN.json`、`src/i18n/en.json`、`tests/home-store-contract.test.cjs`
+  - 状态：done（2026-09-13）
+
+- [x] T-284 空面板组件商店引导
+  - 目标：组件面板为空时提供独立、可聚焦的“打开组件商店”入口，减少用户寻找添加入口的成本
+  - 证据：`src/index.ts`、`src/index.scss`、双语 i18n、`tests/home-store-contract.test.cjs`
+  - 状态：done（2026-09-13）
+
+- [x] T-285 配置表单恢复默认值
+  - 目标：允许用户一键恢复 schema 声明的默认值，同时保留第三方组件未知配置字段；兼容异步笔记本选项加载
+  - 证据：`src/index.ts`、双语 i18n、`tests/home-store-contract.test.cjs`
+  - 状态：done（2026-09-13）
+
+- [x] T-286 商店无结果恢复入口
+  - 目标：无结果时一键清除搜索、分类、可用性和已添加筛选，并把焦点返回搜索框
+  - 证据：`src/index.ts`、`src/index.scss`、双语 i18n、`tests/home-store-contract.test.cjs`
+  - 状态：done（2026-09-13）
+
+- [x] T-287 商店选择状态可访问性
+  - 目标：为商店页签和尺寸选择补齐标准 ARIA 状态，保持重渲染和筛选后的状态同步
+  - 证据：`src/index.ts`、`tests/home-store-contract.test.cjs`
+  - 状态：done（2026-09-13）
+
+- [x] T-288 Agent 组件发现状态
+  - 目标：让 `home-widget-snapshot` 发现模式返回当前设备的已添加、启用和尺寸状态，帮助智能体理解工作区布局
+  - 证据：`src/agent-capabilities.js`、`src/index.ts`、`tests/agent-capabilities.test.cjs`
+  - 状态：done（2026-09-13）
+
+- [x] T-289 跨平台发布归档一致性
+  - 目标：消除 Windows 与 Ubuntu 构建时 README/ROADMAP 换行差异，确保 package.zip 体积与内容一致
+  - 证据：`webpack.config.js`、`docs/release-readiness.md`、`pnpm verify:release`
+  - 状态：done（2026-09-13）
+
+- [x] T-290 跨平台 ZIP 微差门禁
+  - 目标：允许不同平台压缩器产生的几十字节归档差异，同时保持严格 bundle 与硬体积门禁
+  - 证据：`tests/host/release-quality.test.cjs`、`docs/release-readiness.md`
+  - 状态：done（2026-09-13）
+
+- [x] T-291 Chromium 烟测浏览器回退
+  - 目标：本机 Edge 自动更新后 headless 输出为空时，烟测自动回退到下一个已安装 Chromium，而不是直接失败
+  - 证据：`tests/chromium-style-smoke.cjs` 逐候选尝试、独立 profile 目录、尽力而为的临时目录清理；本机 Edge 153 失败回退 Chrome 152 通过
+  - 状态：done（2026-09-14）
+
+- [x] T-292 移动烟测源码契约行尾无关
+  - 目标：源码契约断言统一以 LF 归一化读取，Windows CRLF 工作树不再产生假失败
+  - 证据：`tests/mobile-card-smoke.cjs` 的 `readSource` 归一化；三端 smoke 与全量测试通过
+  - 状态：done（2026-09-14）
+
+- [x] T-293 生产依赖图契约层隔离门禁
+  - 目标：自动断言 16 个未接入的 v0.17 契约模块不出现在生产 import 闭包，防止包体预算被无声突破
+  - 证据：`tests/production-graph-isolation.test.cjs`（闭包遍历 23 模块、16 模块图外断言、规模上限断言）
+  - 状态：done（2026-09-14）
+
+- [x] T-294 i18n 死 key 清理
+  - 目标：删除源码零引用的 `homeCountdownTarget`、`homeStoreAdded`（中英同步）
+  - 证据：`src/i18n/*.json` 各 460→458 key；动态访问禁令使"未引用=死 key"成立
+  - 状态：done（2026-09-14）
+
+- [x] T-295 i18n 死 key 硬门禁
+  - 目标：把原信息性未用 key 报告升级为失败断言，预留 key 必须显式白名单登记
+  - 证据：`tests/i18n.test.cjs` 11/11 通过
+  - 状态：done（2026-09-14）
+
+- [x] T-296 CSS 死类审计门禁
+  - 目标：断言编译产物中每个 sw 类都有源码消费方（含动态前缀家族），阻止归档 CSS 无声膨胀
+  - 证据：`tests/css-usage-audit.test.cjs`；基线 343/343 全在用
+  - 状态：done（2026-09-14）
+
+- [x] T-297 本地页签过滤性能基准与 6 倍优化
+  - 目标：固化 ROADMAP 3.5 性能预算为可执行基准；修复 `firstText`→`Intl.Segmenter` 每击键数千次切分的热点
+  - 实现：`filterOpenTabs` 轻量门禁 + 命中条目重型产出（行为一致，D-217）；300 页签关键词路径 8.9ms→1.4ms
+  - 证据：`tests/search-filter-perf.test.cjs` 两路径基准、`tests/search-model.test.cjs` 41/41 含新增一致性回归
+  - 状态：done（2026-09-14）
+
+- [x] T-298 包体瘦身审计结论固化
+  - 目标：CSS/资产/重复代码/契约层四条路线的审计结论落入决策记录，避免后续重复试错
+  - 证据：DECISIONS D-216；生产闭包 23 模块、CSS 零死类、PNG 无安全收益、无安全合并
+  - 状态：done（2026-09-14）
+
+- [x] T-299 widget-protocol 生命周期文档
+  - 目标：向第三方开发者文档化 provider 失效恢复、热替换覆盖、注销 token 语义与可用性徽标
+  - 证据：`docs/widget-protocol.md` 新增"生命周期与失效恢复"一节（D-197~D-203、D-192 语义）
+  - 状态：done（2026-09-14）
+
+- [x] T-300 三端输入框可访问性标签
+  - 目标：桌面弹窗/侧栏/手机搜索框与收藏分组输入补 `aria-label`，不再仅依赖 placeholder
+  - 证据：`src/index.ts` 5 处补齐；aria-label 总数 72→77
+  - 状态：done（2026-09-14）
+
+- [x] T-301 v0.17 预算前置条件更新
+  - 目标：把审计结论写入 ROADMAP 8.0.1，v0.17 接入前必须先完成归档内容决策
+  - 证据：ROADMAP v0.17 小节；候选项（README 变更链裁剪、ROADMAP/docs SVG 移出归档）待维护者决策
+  - 状态：done（2026-09-14）
+
+- [x] T-302 归档 i18n 构建期最小化与尺寸校准
+  - 目标：源文件保持可读缩进、归档输出 `JSON.stringify` 最小形态；readiness/README 计数同步实际产物
+  - 证据：`webpack.config.js` CopyPlugin transform；zip 307337→307150（余量 50 bytes）；`docs/release-readiness.md`、README.en-US 92 文件/682 测试
+  - 状态：done（2026-09-14）
+
+- [x] T-303 决策与预警记录
+  - 目标：D-216 审计结论、D-217 过滤优化语义、D-218 i18n 最小化与硬上限余量预警落档
+  - 证据：`DECISIONS.md`
+  - 状态：done（2026-09-14）
+
+- [x] T-304 全门禁复跑与本轮提交
+  - 目标：类型检查、全量测试、生产构建与三类 smoke 全绿后按协议本地提交
+  - 证据：682/682 测试、TSC 通过、移动烟测 68 PASS、Chromium 烟测 3 PASS
+  - 状态：done（2026-09-14）
+
+- [x] T-305 中文 README 更新日志裁剪
+  - 目标：更新日志保留最近两个版本，历史指向 GitHub Releases，压缩市场载入体积
+  - 证据：80253→27772 bytes；`verify:release`、发布前检查、当前开发策略等门禁断言内容全部保留
+  - 状态：done（2026-09-14）
+
+- [x] T-306 英文 README 更新日志裁剪
+  - 目标：与 T-305 对称的英文侧裁剪
+  - 证据：84509→27100 bytes；Release Checklist/verify:release/Android 断言保留
+  - 状态：done（2026-09-14）
+
+- [x] T-307 ROADMAP 移出发布归档
+  - 目标：执行 D-219——ROADMAP 为纯开发文档不再随包分发，仓库边界继续把关内容
+  - 证据：`webpack.config.js` 复制模式移除；`final-package-audit` 改为仓库校验 R7 + 断言归档不含 ROADMAP；`package-integrity` 白名单收窄；docs SVG 保留（市场渲染需要）
+  - 状态：done（2026-09-14）
+
+- [x] T-308 资源基线再生与余量重测
+  - 目标：基线随归档决策同步，量化预算解锁效果
+  - 证据：`package.zip` 307150→252683 bytes，余量 50→54517 bytes；`tests/host/package-resource-baseline.json` 11 条目
+  - 状态：done（2026-09-14）
+
+- [x] T-309 归档 i18n 逐值一致性门禁
+  - 目标：锁定 D-218 最小化仅为排版变换——包内 JSON 与 src/i18n 源文件 key/value 完全一致
+  - 证据：`tests/shipped-i18n-parity.test.cjs`
+  - 状态：done（2026-09-14）
+
+- [x] T-310 决策记录 D-219
+  - 目标：归档内容决策的执行细节、取舍（SVG 留档原因）与结果量化落档
+  - 证据：`DECISIONS.md` D-219
+  - 状态：done（2026-09-14）
+
+- [x] T-311 v0.17 前置条件解除与接入顺序建议
+  - 目标：ROADMAP 8.0.1 更新为"预算已解锁"，并给出无宿主审计依赖模块的接入顺序
+  - 证据：ROADMAP v0.17 小节（先 diagnostics → document-context 待审计 → 执行链待真机验证）
+  - 状态：done（2026-09-14）
+
+- [x] T-312 文档计数与尺寸同步
+  - 目标：readiness/README 同步 93 个测试文件、683 项测试与新产物尺寸
+  - 证据：`docs/release-readiness.md`、`README.en-US.md`
+  - 状态：done（2026-09-14）
+
+- [x] T-313 全门禁复跑与本轮提交
+  - 目标：终验后按协议本地提交
+  - 证据：683/683 测试、TSC 通过、三类 smoke 全绿
+  - 状态：done（2026-09-14）
+
+- [x] T-314 ARIA 标签烟测防回归锁
+  - 目标：把 T-300 的 5 处输入框 aria-label 固化为移动烟测源码契约断言
+  - 证据：`tests/mobile-card-smoke.cjs` 新增断言（搜索框 ×3、分组输入 ×2）；烟测 0 FAIL
+  - 状态：done（2026-09-14）
+
+- [x] T-315 v0.17 生产接入计划研究
+  - 目标：以真实体积与生产注册模式为基础，给出三阶段接入顺序、前置条件与预算预估
+  - 证据：`docs/workspace-capability-wiring-plan.md`（小型只读簇 +2 KiB zip、执行链 +7 KiB、definitions 全量 +20 KiB，硬上限内可容纳）
+  - 状态：done（2026-09-14）
+
+- [x] T-316 runtime 簇机械搬移
+  - 目标：把 diagnostics 运行时簇（事件队列/恢复协调器/会话/registry/diff 队列/diagnostics handler，33 符号）逐字节搬出 definitions，未启用的 plan/execute 矩阵留在图外
+  - 证据：`src/agent-workspace-runtime.js`（38 KiB）；definitions 100268→66912 bytes 改为同名 re-export；agent-outline 84/84 不变
+  - 状态：done（2026-09-14）
+
+- [x] T-317 diagnostics 专用校验器
+  - 目标：spec 身份/schema 形状/effects 一致性校验不引用 bridge 常量
+  - 证据：`validateWorkspaceRuntimeDiagnosticsDefinition`；wrapper validation ok
+  - 状态：done（2026-09-14）
+
+- [x] T-318 wrapper 定义构造与冒烟
+  - 目标：wrapper 内联 canonical 定义（SPEC/EFFECTS 身份 + handler 工厂），全链路冒烟（创建→查询→dispose→再查询）
+  - 证据：`src/agent-workspace-diagnostics.js`；summary ready/size 0/maxSessions 8
+  - 状态：done（2026-09-14）
+
+- [x] T-319 index.ts 生产接线
+  - 目标：import、生命周期字段、只读注册通道 push、onunload 销毁四处接线；校验失败时安全跳过注册并销毁运行时
+  - 证据：`src/index.ts`；TSC 通过
+  - 状态：done（2026-09-14）
+
+- [x] T-320 隔离门禁更新
+  - 目标：WIRED 清单 +runtime/+diagnostics；UNWIRED 16 项保持图外；闭包上限 25/29
+  - 证据：`tests/production-graph-isolation.test.cjs` 3/3
+  - 状态：done（2026-09-14）
+
+- [x] T-321 生产契约测试
+  - 目标：canonical spec/effects、有界快照、会话生命周期反映、宿主异常不外泄、接线事实三处、注册面无执行链
+  - 证据：`tests/workspace-diagnostics-wiring.test.cjs` 6/6
+  - 状态：done（2026-09-14）
+
+- [x] T-322 包体校准
+  - 目标：raw 自律线按协议校准，基线随 zip 同步
+  - 证据：raw 363569→384081（376 KiB 线）；zip 252683→257760（余量 49440 bytes）；resource baseline 11 条目
+  - 状态：done（2026-09-14）
+
+- [x] T-323 文档计数同步
+  - 目标：README/readiness 同步 94 个测试文件、689 项测试与新产物尺寸
+  - 证据：`README.en-US.md`、`docs/release-readiness.md`
+  - 状态：done（2026-09-14）
+
+- [x] T-324 决策 D-220 落档
+  - 目标：诚实搬移决策、预算数字与图外保证落档
+  - 证据：`DECISIONS.md` D-220
+  - 状态：done（2026-09-14）
+
+- [x] T-325 wiring plan 阶段 1 收口
+  - 目标：接入计划标记阶段 1 完成，更新 ROADMAP 8.0.1 与 PROGRESS
+  - 证据：`docs/workspace-capability-wiring-plan.md`、ROADMAP、PROGRESS
+  - 状态：done（2026-09-14）
+
+- [x] T-326 存储契约清单门禁
+  - 目标：固化 13 个 sw_* key 的唯一登记处与注释、loadData/saveData 仅允许 *_KEY 常量
+  - 证据：`tests/storage-key-audit.test.cjs`；防抖链传递点显式豁免
+  - 状态：done（2026-09-14）
+
+- [x] T-327 存储降级路径白名单
+  - 目标：每个持久化 key 必须登记 sanitize/normalize 降级函数，新增 key 未登记即失败
+  - 证据：同上 3/3；v0.20 存储审计静态前置
+  - 状态：done（2026-09-14）
+
+- [x] T-328 搜索编排基准与 scope 复用优化
+  - 目标：固化第二层扇出/全文请求/三层合并基准；buildOpenedDocumentSearchRequest 支持外部 scope 避免重复解析
+  - 证据：`tests/search-orchestration-perf.test.cjs` 4/4（200 页签 0.14ms、病态上限 2.0ms）；`tests/search-model.test.cjs` 42/42
+  - 状态：done（2026-09-14）
+
+- [x] T-329 第三方组件最小示例
+  - 目标：提供可复制模板并锁定协议白名单，防示例与生产漂移
+  - 证据：`docs/widget-example/`（example-module.js + README）；`tests/widget-example-contract.test.cjs` 4/4
+  - 状态：done（2026-09-14）
+
+- [x] T-330 协议文档补记阶段 1 能力
+  - 目标：workspace-runtime-registry-diagnostics 进入第三方可见的 Agent 章节
+  - 证据：`docs/widget-protocol.md`
+  - 状态：done（2026-09-14）
+
+- [x] T-331 home items 键盘语义审计
+  - 目标：确认组件条目/日历格渲染语义；结论：button 语义已达标，方向键网格导航列后续增强
+  - 证据：`src/home-view.js` items 渲染（button.type=button + focusKey 去重）
+  - 状态：done（2026-09-14）
+
+- [x] T-332 决策 D-221 落档
+  - 证据：`DECISIONS.md`
+  - 状态：done（2026-09-14）
+
+- [x] T-333 状态文档收口
+  - 目标：TODO/PROGRESS/readiness/README 计数同步（97 文件、701 测试、zip 余量 49431 bytes）
+  - 证据：本轮状态文件
+  - 状态：done（2026-09-14）
+
+- [x] T-334 全门禁复跑与本轮提交
+  - 目标：终验后按协议本地提交
+  - 证据：701/701 测试、TSC、移动烟测 69 PASS、Chromium 烟测 3 PASS
+  - 状态：done（2026-09-14）
+
+- [x] T-335 容量契约：MRU 与 capMru 修复
+  - 目标：固化 MRU 200 上限（首条存活/去重）；修复 capMru 对非数组 truthy 输入抛 TypeError 的缺口
+  - 证据：`tests/storage-capacity-limits.test.cjs`；`src/util.js` 安全降级
+  - 状态：done（2026-09-14）
+
+- [x] T-336 容量契约：历史/文档集/布局
+  - 目标：最近打开 50、文档集 24（envelope+changed）、home 布局每设备 64 且丢幽灵实例
+  - 证据：同上 6/6
+  - 状态：done（2026-09-14）
+
+- [x] T-337 容量契约：常量锁定
+  - 目标：THUMB_CACHE 40/30、MRU 200、QUICK_ACTIONS 12 常量值锁定防漂移
+  - 证据：同上
+  - 状态：done（2026-09-14）
+
+- [x] T-338 favorites 无上限事实固化
+  - 目标：收藏/置顶/分组列表无上限为已知事实（用户主动行为），上限值待维护者决策；事实断言防误解
+  - 证据：同上 + TODO 候选 T-350
+  - 状态：done（2026-09-14）
+
+- [x] T-339 农历开关持久化审计
+  - 目标：确认 journal-calendar 的 showLunar/monthOffset 已由 configSchema 声明并经声明式配置持久化
+  - 证据：`src/home-model.js` configSchema（select/number 字段）
+  - 状态：done（2026-09-14）
+
+- [x] T-340 焦点恢复机制审计
+  - 目标：确认面板重渲染后焦点恢复已实现（controller focusKey 保存与找回）
+  - 证据：`src/home-controller.js` pendingFocusKey 链路
+  - 状态：done（2026-09-14）
+
+- [x] T-341 计数与尺寸同步
+  - 目标：README 98 文件/707 测试、readiness 尺寸、资源基线同步
+  - 证据：`README.en-US.md`、`docs/release-readiness.md`、baseline
+  - 状态：done（2026-09-14）
+
+- [x] T-342 决策 D-222 落档
+  - 证据：`DECISIONS.md`
+  - 状态：done（2026-09-14）
+
+- [x] T-343 状态收口与提交
+  - 目标：TODO/PROGRESS 更新并按协议提交
+  - 证据：本轮状态文件；全门禁 707/707 + 三 smoke 全绿
+  - 状态：done（2026-09-14）
+
+- [x] T-351 面板条目方向键导航
+  - 目标：↑/↓ 在组件面板条目间循环移动焦点，Home/End 跳首尾
+  - 实现：`src/home-panel.js` keydown 委托挂面板容器（随 DOM 释放），仅条目按钮上接管，与其他控件/外层键盘语义正交
+  - 状态：done（2026-09-14）
+
+- [x] T-352 导航契约测试
+  - 目标：jsdom 真实键盘事件断言循环边界与焦点转移
+  - 证据：`tests/home-panel.test.cjs` 10/10
+  - 状态：done（2026-09-14）
+
+- [x] T-353 会话并发隔离扩展
+  - 目标：双会话同 key 缓存互不污染、防抖计时器互不影响、dispose 对称
+  - 证据：`tests/search-session.test.cjs` 10/10
+  - 状态：done（2026-09-14）
+
+- [x] T-354 缓存查找基准
+  - 目标：10k 次缓存查找 <50ms，锁定 Map 命中路径
+  - 证据：同上
+  - 状态：done（2026-09-14）
+
+- [x] T-355 既有覆盖确认三件
+  - 目标：pruneIdle 孤儿回收（agent-outline 已覆盖）、store provider 双订阅（store-contract 已覆盖）、moduleId 归一化（trim/截断/白名单达标，大小写敏感合理）
+  - 证据：`tests/agent-outline.test.cjs`、`tests/home-store-contract.test.cjs`、`src/home-adapters.js`
+  - 状态：done（2026-09-14）
+
+- [x] T-356 wiring plan 阶段 2 状态记录
+  - 目标：明确 document-context 接入等待维护者授权（是否不等真实桌面审计）
+  - 证据：`docs/workspace-capability-wiring-plan.md`
+  - 状态：done（2026-09-14）
+
+- [x] T-357 决策 D-223 落档
+  - 证据：`DECISIONS.md`
+  - 状态：done（2026-09-14）
+
+- [x] T-358 状态收口与提交
+  - 目标：TODO/PROGRESS/readiness/README 计数同步并按协议提交
+  - 证据：全门禁 710/710 + 三 smoke 全绿；zip 257991（余量 49209 bytes）
+  - 状态：done（2026-09-14）
+
+- [x] T-359 三端搜索 IME 守卫
+  - 目标：composition（拼音候选中）期间不触发搜索，杜绝中间态请求与错误结果闪现
+  - 实现：`bindSearchInputComposition` 统一接线桌面弹窗/侧栏/手机端三处搜索框；商店过滤为纯前端不接守卫
+  - 证据：移动烟测新增三端接线契约断言；TSC 通过
+  - 状态：done（2026-09-14）
+
+- [x] T-360 焦点可见性审计
+  - 目标：确认 outline:none 处均有替代样式；结论：focus-visible 均配主色边框，达标
+  - 证据：`src/index.scss` 459/594/952 等处
+  - 状态：done（2026-09-14）
+
+- [x] T-361 块 ID 校验单一事实来源
+  - 目标：agent-capabilities 内 4 处 schema pattern 与 2 处运行时正则提取共享常量
+  - 证据：AGENT_BLOCK_ID_PATTERN/RE；agent-outline 84/84 + agent-capabilities 33/33 不变
+  - 状态：done（2026-09-14）
+
+- [x] T-362 runtime dispose 幂等断言
+  - 目标：二次 dispose 无害、dispose 后 handler 仍返回结构完整快照
+  - 证据：`tests/workspace-diagnostics-wiring.test.cjs` 8/8
+  - 状态：done（2026-09-14）
+
+- [x] T-363 runtime 直载自检
+  - 目标：防 re-export 断链——关键导出存在性 + canonical spec 对象身份跨模块共享
+  - 证据：同上
+  - 状态：done（2026-09-14）
+
+- [x] T-364 筛选按钮激活态初始化排查
+  - 目标：排除"打开面板时激活态未初始化"疑点；结论：bindDocSearchFilter 绑定时立即调用 updateButton
+  - 证据：`src/index.ts` 6089
+  - 状态：done（2026-09-14）
+
+- [x] T-365 商店对话框 aria 审计
+  - 目标：确认商店对话框可访问性；结论：走思源 Dialog 标准结构，宿主管 aria，无需重复声明
+  - 证据：`src/index.ts` openHomeWidgetStore
+  - 状态：done（2026-09-14）
+
+- [x] T-366 决策 D-224 落档
+  - 证据：`DECISIONS.md`
+  - 状态：done（2026-09-14）
+
+- [x] T-367 状态收口与提交
+  - 目标：TODO/PROGRESS/readiness/README 同步（712 项测试）并按协议提交
+  - 证据：全门禁 712/712 + 三 smoke 全绿；zip 258125（余量 49075 bytes）
+  - 状态：done（2026-09-14）
+
+- [x] T-368 document-context 请求归一化
+  - 目标：统一文档 ID 与 limit 边界，非法输入稳定降级
+  - 证据：`normalizeDocumentContextRequest`；契约测试
+  - 状态：done（2026-09-14）
+- [x] T-369 document-context 路径归一化
+  - 目标：统一斜杠、控制字符和长度上限
+  - 状态：done（2026-09-14）
+- [x] T-370 document-context 元数据 envelope 解包
+  - 目标：兼容 `data`、`root_id`、`box`、`hPath` 等已知字段
+  - 状态：done（2026-09-14）
+- [x] T-371 document-context 标题清洗
+  - 目标：去控制字符、合并空白并限制 256 字符
+  - 状态：done（2026-09-14）
+- [x] T-372 document-context 大纲上限
+  - 目标：复用 flattenOutline 并限制最多 24 个标题
+  - 状态：done（2026-09-14）
+- [x] T-373 document-context 输出字段白名单
+  - 目标：不回显 markdown、异常对象和未知字段
+  - 状态：done（2026-09-14）
+- [x] T-374 document-context 活动状态判定
+  - 目标：按稳定 root id 标记当前活动文档
+  - 状态：done（2026-09-14）
+- [x] T-375 document-context 活动页签优先
+  - 目标：打开文档优先复用页签标题/笔记本/路径元数据
+  - 状态：done（2026-09-14）
+- [x] T-376 document-context 关闭文档 SQL 回退
+  - 目标：对未打开文档执行受限单行 SQL 元数据查询
+  - 状态：done（2026-09-14）
+- [x] T-377 document-context 大纲接线
+  - 目标：复用 `/api/outline/getDocOutline`，保持只读
+  - 状态：done（2026-09-14）
+- [x] T-378 document-context 端点白名单复核
+  - 目标：仅使用现有 query/sql 与 outline 白名单端点
+  - 状态：done（2026-09-14）
+- [x] T-379 document-context 结构化回执
+  - 目标：统一 structuredContent/result 双通道输出
+  - 状态：done（2026-09-14）
+- [x] T-380 document-context 稳定错误语义
+  - 目标：异常统一为 `document context unavailable`，不泄漏宿主文本
+  - 状态：done（2026-09-14）
+- [x] T-381 document-context 旧宿主兼容
+  - 目标：沿用 addAgentCapability 缺失时的安全跳过行为
+  - 状态：done（2026-09-14）
+- [x] T-382 document-context schema 边界测试
+  - 目标：锁定标题、路径、笔记本 ID 和标题数组边界
+  - 状态：done（2026-09-14）
+- [x] T-383 document-context 输入污染测试
+  - 目标：覆盖循环/未知 envelope、控制字符和超长载荷
+  - 状态：done（2026-09-14）
+- [x] T-384 document-context wiring 静态门禁
+  - 目标：锁定生产入口、活动页签、SQL 回退和 outline 接线
+  - 证据：`tests/document-context-wiring.test.cjs`
+  - 状态：done（2026-09-14）
+- [x] T-385 document-context 生产注册审计
+  - 目标：确认只读 effects 与既有注册器一致
+  - 状态：done（2026-09-14）
+- [x] T-386 document-context 双语协议文档
+  - 目标：补充能力用途、输出边界和未返回正文声明
+  - 状态：done（2026-09-14）
+- [x] T-387 document-context 真实宿主前置记录
+  - 目标：记录取消/权限真实桌面验收仍为后续证据，不以 mock 替代
+  - 状态：done（2026-09-14）
+- [x] T-388 document-context 计数与 readiness 同步
+  - 目标：同步测试数、产物大小和 v0.17 阶段状态
+  - 证据：`PROGRESS.md`、`docs/release-readiness.md`、中英文 README
+  - 状态：done（2026-09-14）
+- [x] T-389 document-context 全门禁复跑
+  - 目标：通过 TypeScript、完整测试、移动与 Chromium smoke
+  - 证据：`pnpm verify:release`；745/745、smoke 全绿
+  - 状态：done（2026-09-14）
+- [x] T-390 document-context 里程碑提交
+  - 目标：按协议提交本轮 23 项契约测试与生产接线
+  - 证据：本地里程碑提交
+  - 状态：done（2026-09-14）
+
+## 待维护者决策
+- [x] T-1186 发布候选版本 bump
+- [x] T-1187 双语 changelog 同步
+- [x] T-1188 release-readiness 产物同步
+- [x] T-1189 版本元数据一致性
+- [x] T-1190 本地发布门禁复跑
+- [x] T-1191 GitHub SSH 推送
+- [x] T-1192 GitHub tag 创建
+- [x] T-1193 CI 性能阈值抖动诊断
+- [x] T-1194 关键词性能阈值校准
+- [x] T-1195 空查询性能阈值校准
+- [x] T-1196 打开文档性能阈值校准
+- [x] T-1197 CI 回归门禁保留
+- [x] T-1198 发布 workflow 失败定位
+- [x] T-1199 修复提交准备
+- [x] T-1200 发布 tag 重建准备
+- [x] T-1201 Release runner 第二次性能抖动定位
+- [x] T-1202 关键词 p95 门槛复校准
+- [x] T-1203 空查询 p95 门槛复校准
+- [x] T-1204 发布修复提交
+- [x] T-1205 tag 重建与 workflow 重触发
+- [x] T-1206 Release runner 第三次抖动定位
+- [x] T-1207 空查询平均值门槛复校准
+- [x] T-1208 50ms 告警线余量保留
+- [x] T-1209 最终发布修复提交
+- [x] T-1210 最终 tag 重建
+- [x] T-1211 第四次 runner 长尾定位
+- [x] T-1212 CI 与本地性能门禁分层
+- [x] T-1213 平均值预算保留
+- [x] T-1214 本地 p95 严格校验保留
+- [x] T-1215 最终 workflow 修复
+- [x] T-1155 摘要差异计算
+- [x] T-1156 sizeDelta 输出
+- [x] T-1157 utilizationDelta 输出
+- [x] T-1158 风险变化检测
+- [x] T-1159 生命周期变化检测
+- [x] T-1160 摘要变化事件
+- [x] T-1161 size_changed 事件
+- [x] T-1162 risk_changed 事件
+- [x] T-1163 lifecycle_changed 事件
+- [x] T-1164 变化事件数量上限
+- [x] T-1165 摘要历史归一化
+- [x] T-1166 历史最新样本裁剪
+- [x] T-1167 历史样本数量上限
+- [x] T-1168 历史 warning 统计
+- [x] T-1169 历史峰值利用率
+- [x] T-1170 历史最新风险
+- [x] T-1171 历史最新生命周期
+- [x] T-1172 历史序列化
+- [x] T-1173 历史解析
+- [x] T-1174 历史异常降级
+- [x] T-1175 摘要结构校验
+- [x] T-1176 摘要派生字段一致性
+- [x] T-1177 摘要非法输入 reason
+- [x] T-1178 摘要固定字段回归
+- [x] T-1179 摘要专项测试
+- [x] T-1180 TypeScript 门禁
+- [x] T-1181 完整测试门禁
+- [x] T-1182 生产构建门禁
+- [x] T-1183 发布矩阵产物同步
+- [x] T-1184 里程碑提交
+- [x] T-1185 决策 D-274 落档
+- [x] T-1135 队列利用率摘要
+- [x] T-1136 size 摘要
+- [x] T-1137 capacity 摘要
+- [x] T-1138 utilization 计算
+- [x] T-1139 利用率精度
+- [x] T-1140 normal 风险
+- [x] T-1141 warning 风险
+- [x] T-1142 disposed 摘要
+- [x] T-1143 缺失队列降级
+- [x] T-1144 固定摘要字段
+- [x] T-1145 容量边界
+- [x] T-1146 0.9 阈值
+- [x] T-1147 摘要只读
+- [x] T-1148 摘要回归
+- [x] T-1149 生命周期回归
+- [x] T-1150 容量专项
+- [x] T-1151 非法输入回归
+- [x] T-1152 决策 D-273 落档
+- [x] T-1153 状态文档同步
+- [x] T-1154 发布矩阵同步
+  - 状态：done（2026-09-14）
+- [x] T-1115 队列 peek
+- [x] T-1116 peek 只读
+- [x] T-1117 peek 数量上限
+- [x] T-1118 peek 游标保持
+- [x] T-1119 peek 不确认
+- [x] T-1120 peek 不消费
+- [x] T-1121 peek 销毁隔离
+- [x] T-1122 peek 非法上限
+- [x] T-1123 peek 结果固定
+- [x] T-1124 peek 回归
+- [x] T-1125 peek 容量专项
+- [x] T-1126 peek 空队列
+- [x] T-1127 peek 事件归一化
+- [x] T-1128 peek 生命周期
+- [x] T-1129 peek 游标回归
+- [x] T-1130 peek 不变异回归
+- [x] T-1131 peek 8 条边界
+- [x] T-1132 peek reason
+- [x] T-1133 决策 D-272 落档
+- [x] T-1134 状态文档同步
+  - 状态：done（2026-09-14）
+- [x] T-1095 队列 reset
+- [x] T-1096 reset 游标
+- [x] T-1097 reset 事件
+- [x] T-1098 reset 计数
+- [x] T-1099 reset 可用性
+- [x] T-1100 reset 销毁隔离
+- [x] T-1101 reset 旧游标回显
+- [x] T-1102 reset 结果固定
+- [x] T-1103 reset 回归
+- [x] T-1104 reset 生命周期
+- [x] T-1105 reset 容量
+- [x] T-1106 reset 读取
+- [x] T-1107 reset 入队
+- [x] T-1108 reset 确认
+- [x] T-1109 reset 污染隔离
+- [x] T-1110 reset 空队列
+- [x] T-1111 reset reason
+- [x] T-1112 reset 专项测试
+- [x] T-1113 决策 D-271 落档
+- [x] T-1114 状态文档同步
+  - 状态：done（2026-09-14）
+- [x] T-1075 队列显式清理
+- [x] T-1076 清理计数
+- [x] T-1077 清理后可用
+- [x] T-1078 清理后续入队
+- [x] T-1079 清理与销毁区分
+- [x] T-1080 销毁后清理安全
+- [x] T-1081 清理状态字段
+- [x] T-1082 清理回归
+- [x] T-1083 生命周期回归
+- [x] T-1084 容量回归
+- [x] T-1085 清理不改游标
+- [x] T-1086 清理不改容量
+- [x] T-1087 清理空队列
+- [x] T-1088 清理污染输入
+- [x] T-1089 清理结果固定
+- [x] T-1090 清理后读取
+- [x] T-1091 清理后确认
+- [x] T-1092 专项测试
+- [x] T-1093 决策 D-270 落档
+- [x] T-1094 状态文档同步
+  - 状态：done（2026-09-14）
+- [x] T-1055 队列状态归一化
+- [x] T-1056 cursor 上限
+- [x] T-1057 size 上限
+- [x] T-1058 capacity 上限
+- [x] T-1059 disposed 标记
+- [x] T-1060 truncated 标记
+- [x] T-1061 缺失队列降级
+- [x] T-1062 队列快照读取
+- [x] T-1063 状态字段固定
+- [x] T-1064 状态回归测试
+- [x] T-1065 生命周期回归
+- [x] T-1066 容量回归
+- [x] T-1067 非法输入回归
+- [x] T-1068 cursor 数值化
+- [x] T-1069 size 数值化
+- [x] T-1070 capacity 数值化
+- [x] T-1071 默认容量 8
+- [x] T-1072 最大容量 32
+- [x] T-1073 决策 D-269 落档
+- [x] T-1074 状态文档同步
+  - 状态：done（2026-09-14）
+- [x] T-1035 signal 读取门面
+- [x] T-1036 deadline 读取门面
+- [x] T-1037 signal 取消 reason
+- [x] T-1038 deadline 超时 reason
+- [x] T-1039 队列可用性校验
+- [x] T-1040 游标读取复用
+- [x] T-1041 成功事件读取
+- [x] T-1042 取消不消费
+- [x] T-1043 超时不消费
+- [x] T-1044 读取不确认
+- [x] T-1045 非法 signal 安全
+- [x] T-1046 非法 deadline 安全
+- [x] T-1047 稳定失败 reason
+- [x] T-1048 读取回归测试
+- [x] T-1049 取消回归测试
+- [x] T-1050 超时回归测试
+- [x] T-1051 容量专项测试
+- [x] T-1052 决策 D-268 落档
+- [x] T-1053 状态文档同步
+- [x] T-1054 发布矩阵同步
+  - 状态：done（2026-09-14）
+- [x] T-1015 原子恢复提交
+- [x] T-1016 成功提交路径
+- [x] T-1017 signal 原子路径
+- [x] T-1018 deadline 原子路径
+- [x] T-1019 成功确认事件
+- [x] T-1020 失败不确认
+- [x] T-1021 取消不确认
+- [x] T-1022 超时不确认
+- [x] T-1023 游标单调提交
+- [x] T-1024 committed 标记
+- [x] T-1025 原子 reason
+- [x] T-1026 队列状态保持
+- [x] T-1027 signal 回归
+- [x] T-1028 deadline 回归
+- [x] T-1029 成功回归
+- [x] T-1030 原子语义测试
+- [x] T-1031 容量专项测试
+- [x] T-1032 决策 D-267 落档
+- [x] T-1033 状态文档同步
+- [x] T-1034 发布矩阵同步
+  - 状态：done（2026-09-14）
+- [x] T-995 协调器 signal 恢复
+- [x] T-996 协调器 deadline 恢复
+- [x] T-997 signal 取消检测
+- [x] T-998 deadline 超时检测
+- [x] T-999 取消 reason
+- [x] T-1000 超时 reason
+- [x] T-1001 成功恢复复用
+- [x] T-1002 队列不消费
+- [x] T-1003 游标保持
+- [x] T-1004 销毁态兼容
+- [x] T-1005 signal 回归
+- [x] T-1006 deadline 回归
+- [x] T-1007 队列边界回归
+- [x] T-1008 reason 固定
+- [x] T-1009 协调器快照
+- [x] T-1010 非法 signal 安全
+- [x] T-1011 非法 deadline 安全
+- [x] T-1012 容量专项
+- [x] T-1013 决策 D-265 落档
+- [x] T-1014 状态文档同步
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-975 事件协调器
+- [x] T-976 协调器恢复入口
+- [x] T-977 协调器提交入口
+- [x] T-978 提交游标单调性
+- [x] T-979 stale_cursor reason
+- [x] T-980 协调器快照
+- [x] T-981 协调器销毁
+- [x] T-982 销毁态恢复
+- [x] T-983 销毁态提交
+- [x] T-984 队列恢复复用
+- [x] T-985 事件确认复用
+- [x] T-986 恢复结果透传
+- [x] T-987 游标安全边界
+- [x] T-988 协调器字段固定
+- [x] T-989 协调器回归测试
+- [x] T-990 stale 回归测试
+- [x] T-991 dispose 回归测试
+- [x] T-992 容量专项测试
+- [x] T-993 决策 D-264 落档
+- [x] T-994 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-955 队列恢复函数
+- [x] T-956 队列恢复可用性
+- [x] T-957 事件模式恢复
+- [x] T-958 snapshot_required 模式
+- [x] T-959 snapshot 回退模式
+- [x] T-960 队列销毁模式
+- [x] T-961 队列溢出检测
+- [x] T-962 恢复快照归一化
+- [x] T-963 恢复游标输出
+- [x] T-964 恢复事件上限
+- [x] T-965 恢复 reason 稳定化
+- [x] T-966 非对象快照隔离
+- [x] T-967 缺失队列安全降级
+- [x] T-968 销毁队列安全降级
+- [x] T-969 恢复不消费队列
+- [x] T-970 恢复回归测试
+- [x] T-971 溢出回归测试
+- [x] T-972 快照回归测试
+- [x] T-973 决策 D-263 落档
+- [x] T-974 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-935 事件回放门面
+- [x] T-936 回放队列可用性校验
+- [x] T-937 回放取消保护
+- [x] T-938 回放超时保护
+- [x] T-939 回放销毁保护
+- [x] T-940 回放游标输入
+- [x] T-941 回放数量上限
+- [x] T-942 回放溢出模式
+- [x] T-943 回放事件模式
+- [x] T-944 回放失败模式
+- [x] T-945 回放确认开关
+- [x] T-946 回放确认计数
+- [x] T-947 回放结果游标
+- [x] T-948 回放 reason 稳定化
+- [x] T-949 回放队列非破坏取消
+- [x] T-950 回放队列非破坏超时
+- [x] T-951 回放上限 8
+- [x] T-952 回放回归测试
+- [x] T-953 决策 D-261 落档
+- [x] T-954 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-915 事件队列构建
+- [x] T-916 队列容量上限
+- [x] T-917 事件入队
+- [x] T-918 事件归一化入队
+- [x] T-919 游标递增
+- [x] T-920 有界裁剪
+- [x] T-921 游标读取
+- [x] T-922 溢出标记
+- [x] T-923 事件确认
+- [x] T-924 队列快照
+- [x] T-925 队列销毁
+- [x] T-926 销毁态读取
+- [x] T-927 销毁态入队
+- [x] T-928 非法游标回退
+- [x] T-929 事件数量上限
+- [x] T-930 事件类型白名单
+- [x] T-931 队列回归测试
+- [x] T-932 容量专项测试
+- [x] T-933 决策 D-259 落档
+- [x] T-934 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-895 事件序列化函数
+- [x] T-896 事件解析函数
+- [x] T-897 事件 JSON 类型校验
+- [x] T-898 事件 payload 长度上限
+- [x] T-899 事件异常捕获
+- [x] T-900 事件空输入降级
+- [x] T-901 事件类型归一化
+- [x] T-902 事件风险字段归一化
+- [x] T-903 事件趋势字段归一化
+- [x] T-904 事件桶字段归一化
+- [x] T-905 事件数量上限
+- [x] T-906 事件字段顺序
+- [x] T-907 事件桶顺序
+- [x] T-908 事件未知字段隔离
+- [x] T-909 事件未知类型隔离
+- [x] T-910 事件往返测试
+- [x] T-911 事件异常测试
+- [x] T-912 事件长度测试
+- [x] T-913 决策 D-257 落档
+- [x] T-914 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-875 报告事件构建函数
+- [x] T-876 风险变化事件
+- [x] T-877 使用趋势事件
+- [x] T-878 超限新增事件
+- [x] T-879 超限清除事件
+- [x] T-880 临界新增事件
+- [x] T-881 临界清除事件
+- [x] T-882 事件数量上限
+- [x] T-883 事件类型白名单
+- [x] T-884 事件风险字段归一化
+- [x] T-885 事件趋势字段归一化
+- [x] T-886 事件桶字段归一化
+- [x] T-887 事件未知类型隔离
+- [x] T-888 事件桶去重
+- [x] T-889 事件输出固定形状
+- [x] T-890 事件构建回归
+- [x] T-891 事件归一化回归
+- [x] T-892 事件容量专项
+- [x] T-893 决策 D-255 落档
+- [x] T-894 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-855 报告一致性修复函数
+- [x] T-856 报告版本修复
+- [x] T-857 health 区段修复
+- [x] T-858 trend 区段修复
+- [x] T-859 summary 区段修复
+- [x] T-860 changedCount 重算
+- [x] T-861 changed 重算
+- [x] T-862 trend action 对齐
+- [x] T-863 风险建议一致性
+- [x] T-864 摘要桶重用归一化
+- [x] T-865 固定顶层字段
+- [x] T-866 固定嵌套字段
+- [x] T-867 恶意字段隔离
+- [x] T-868 空报告降级
+- [x] T-869 异常输入安全
+- [x] T-870 一致性回归测试
+- [x] T-871 修复动作回归测试
+- [x] T-872 版本回归测试
+- [x] T-873 决策 D-253 落档
+- [x] T-874 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-835 报告验证函数
+- [x] T-836 version 校验
+- [x] T-837 health 区段校验
+- [x] T-838 trend 区段校验
+- [x] T-839 summary 区段校验
+- [x] T-840 invalid_input reason
+- [x] T-841 invalid_version reason
+- [x] T-842 health_missing reason
+- [x] T-843 trend_missing reason
+- [x] T-844 summary_missing reason
+- [x] T-845 invalid_trend reason
+- [x] T-846 invalid_summary reason
+- [x] T-847 报告样本白名单
+- [x] T-848 报告字段固定
+- [x] T-849 报告验证纯函数
+- [x] T-850 完整报告回归
+- [x] T-851 缺失区段回归
+- [x] T-852 版本边界回归
+- [x] T-853 决策 D-251 落档
+- [x] T-854 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-815 窗口验证函数
+- [x] T-816 输入对象校验
+- [x] T-817 reports 字段校验
+- [x] T-818 reports 容量校验
+- [x] T-819 start 边界校验
+- [x] T-820 end 边界校验
+- [x] T-821 total 边界校验
+- [x] T-822 索引单调性校验
+- [x] T-823 truncated 布尔校验
+- [x] T-824 invalid_input reason
+- [x] T-825 reports_missing reason
+- [x] T-826 reports_overflow reason
+- [x] T-827 invalid_bounds reason
+- [x] T-828 bounds_order reason
+- [x] T-829 invalid_truncated reason
+- [x] T-830 ok reason
+- [x] T-831 size 元数据
+- [x] T-832 验证回归测试
+- [x] T-833 决策 D-250 落档
+- [x] T-834 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-795 窗口归一化函数
+- [x] T-796 窗口报告数组校验
+- [x] T-797 窗口样本容量上限
+- [x] T-798 窗口 start 归一化
+- [x] T-799 窗口 end 归一化
+- [x] T-800 窗口 total 归一化
+- [x] T-801 窗口 truncated 归一化
+- [x] T-802 窗口报告去重
+- [x] T-803 窗口报告归一化
+- [x] T-804 窗口序列化
+- [x] T-805 窗口解析
+- [x] T-806 窗口解析长度上限
+- [x] T-807 窗口非法输入降级
+- [x] T-808 窗口固定字段
+- [x] T-809 窗口固定顺序
+- [x] T-810 窗口往返测试
+- [x] T-811 窗口污染测试
+- [x] T-812 窗口边界测试
+- [x] T-813 决策 D-248 落档
+- [x] T-814 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-775 窗口摘要函数
+- [x] T-776 窗口样本计数
+- [x] T-777 窗口最新风险
+- [x] T-778 窗口最新趋势
+- [x] T-779 窗口起始元数据
+- [x] T-780 窗口结束元数据
+- [x] T-781 窗口总量元数据
+- [x] T-782 窗口截断元数据
+- [x] T-783 critical 样本计数
+- [x] T-784 degrading 样本计数
+- [x] T-785 improving 样本计数
+- [x] T-786 元数据非负约束
+- [x] T-787 元数据上限约束
+- [x] T-788 空窗口降级
+- [x] T-789 污染窗口隔离
+- [x] T-790 固定摘要字段
+- [x] T-791 窗口摘要回归
+- [x] T-792 窗口元数据回归
+- [x] T-793 决策 D-247 落档
+- [x] T-794 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-755 报告窗口选择函数
+- [x] T-756 窗口默认上限
+- [x] T-757 窗口自定义上限
+- [x] T-758 最近报告优先
+- [x] T-759 窗口起始索引
+- [x] T-760 窗口结束索引
+- [x] T-761 窗口总数
+- [x] T-762 窗口截断标记
+- [x] T-763 历史预裁剪
+- [x] T-764 历史归一化
+- [x] T-765 历史去重
+- [x] T-766 非数组降级
+- [x] T-767 非法上限回退
+- [x] T-768 窗口顺序稳定
+- [x] T-769 窗口输出固定字段
+- [x] T-770 窗口回归测试
+- [x] T-771 窗口边界测试
+- [x] T-772 窗口元数据测试
+- [x] T-773 决策 D-246 落档
+- [x] T-774 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-735 报告历史裁剪函数
+- [x] T-736 报告历史数组校验
+- [x] T-737 报告历史容量上限
+- [x] T-738 报告历史默认上限
+- [x] T-739 报告归一化回放
+- [x] T-740 报告重复检测
+- [x] T-741 重复报告去除
+- [x] T-742 最新报告保留
+- [x] T-743 历史顺序恢复
+- [x] T-744 changed 标记
+- [x] T-745 非数组安全降级
+- [x] T-746 非法上限回退
+- [x] T-747 污染报告隔离
+- [x] T-748 版本字段固定
+- [x] T-749 报告桶顺序固定
+- [x] T-750 历史裁剪回归
+- [x] T-751 历史去重回归
+- [x] T-752 历史边界回归
+- [x] T-753 决策 D-244 落档
+- [x] T-754 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-715 报告历史汇总函数
+- [x] T-716 报告样本上限
+- [x] T-717 最新风险提取
+- [x] T-718 最新趋势提取
+- [x] T-719 风险计数 normal
+- [x] T-720 风险计数 warning
+- [x] T-721 风险计数 critical
+- [x] T-722 趋势计数 stable
+- [x] T-723 趋势计数 improving
+- [x] T-724 趋势计数 degrading
+- [x] T-725 critical 样本计数
+- [x] T-726 degrading 样本计数
+- [x] T-727 improving 样本计数
+- [x] T-728 污染报告归一化
+- [x] T-729 空历史安全降级
+- [x] T-730 固定汇总字段
+- [x] T-731 汇总桶顺序固定
+- [x] T-732 历史汇总回归测试
+- [x] T-733 决策 D-243 落档
+- [x] T-734 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-695 容量报告构建函数
+- [x] T-696 报告版本字段
+- [x] T-697 报告健康区段
+- [x] T-698 报告趋势区段
+- [x] T-699 报告摘要区段
+- [x] T-700 报告归一化
+- [x] T-701 报告序列化
+- [x] T-702 报告解析
+- [x] T-703 摘要桶白名单
+- [x] T-704 摘要桶去重
+- [x] T-705 摘要计数上限
+- [x] T-706 报告版本固定
+- [x] T-707 报告输入归一化
+- [x] T-708 报告异常安全
+- [x] T-709 报告长度上限
+- [x] T-710 报告往返测试
+- [x] T-711 报告字段顺序测试
+- [x] T-712 报告污染输入测试
+- [x] T-713 决策 D-241 落档
+- [x] T-714 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-675 趋势结果归一化
+- [x] T-676 趋势枚举白名单
+- [x] T-677 动作枚举白名单
+- [x] T-678 风险差值整数化
+- [x] T-679 风险差值范围约束
+- [x] T-680 压力差值数字化
+- [x] T-681 压力差值范围约束
+- [x] T-682 压力差值精度约束
+- [x] T-683 趋势序列化
+- [x] T-684 趋势解析
+- [x] T-685 趋势解析长度上限
+- [x] T-686 非法趋势安全降级
+- [x] T-687 缺失趋势安全降级
+- [x] T-688 固定趋势字段顺序
+- [x] T-689 归一化回归测试
+- [x] T-690 序列化回归测试
+- [x] T-691 解析回归测试
+- [x] T-692 趋势容量专项
+- [x] T-693 决策 D-240 落档
+- [x] T-694 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-655 健康趋势评估函数
+- [x] T-656 风险等级差值
+- [x] T-657 压力比计算
+- [x] T-658 压力差值
+- [x] T-659 degrading 趋势
+- [x] T-660 improving 趋势
+- [x] T-661 stable 趋势
+- [x] T-662 风险升级判定
+- [x] T-663 风险降级判定
+- [x] T-664 压力阈值判定
+- [x] T-665 当前建议动作
+- [x] T-666 归一化输入
+- [x] T-667 数值差值封顶
+- [x] T-668 趋势枚举固定
+- [x] T-669 趋势输出固定字段
+- [x] T-670 趋势精度稳定化
+- [x] T-671 趋势退化测试
+- [x] T-672 趋势改善测试
+- [x] T-673 决策 D-239 落档
+- [x] T-674 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-635 健康摘要差异函数
+- [x] T-636 风险变化字段
+- [x] T-637 原风险字段
+- [x] T-638 新风险字段
+- [x] T-639 建议动作变化字段
+- [x] T-640 使用量增量字段
+- [x] T-641 上限增量字段
+- [x] T-642 上升趋势判定
+- [x] T-643 下降趋势判定
+- [x] T-644 稳定趋势判定
+- [x] T-645 新增超限桶
+- [x] T-646 移除超限桶
+- [x] T-647 新增临界桶
+- [x] T-648 移除临界桶
+- [x] T-649 桶变化白名单
+- [x] T-650 差异输入归一化
+- [x] T-651 稳定零差异输出
+- [x] T-652 健康差异回归测试
+- [x] T-653 决策 D-238 落档
+- [x] T-654 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-615 健康摘要归一化
+- [x] T-616 健康风险重算
+- [x] T-617 健康建议重算
+- [x] T-618 超限桶白名单
+- [x] T-619 临界桶白名单
+- [x] T-620 超限桶去重
+- [x] T-621 临界桶去重
+- [x] T-622 超限临界互斥
+- [x] T-623 使用量数字化
+- [x] T-624 使用量非负约束
+- [x] T-625 使用量封顶
+- [x] T-626 总容量数字化
+- [x] T-627 总容量非负约束
+- [x] T-628 总容量封顶
+- [x] T-629 健康摘要序列化
+- [x] T-630 健康摘要解析
+- [x] T-631 解析长度上限
+- [x] T-632 健康摘要往返测试
+- [x] T-633 决策 D-237 落档
+- [x] T-634 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-595 容量健康摘要函数
+- [x] T-596 总使用量统计
+- [x] T-597 总容量统计
+- [x] T-598 超限桶列表
+- [x] T-599 临界桶列表
+- [x] T-600 风险等级汇总
+- [x] T-601 trim 建议动作
+- [x] T-602 monitor 建议动作
+- [x] T-603 none 建议动作
+- [x] T-604 收藏健康摘要
+- [x] T-605 置顶健康摘要
+- [x] T-606 分组健康摘要
+- [x] T-607 三桶聚合健康
+- [x] T-608 健康输入归一化
+- [x] T-609 健康输出固定字段
+- [x] T-610 健康输出封顶
+- [x] T-611 健康风险回归测试
+- [x] T-612 健康建议回归测试
+- [x] T-613 决策 D-236 落档
+- [x] T-614 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-575 容量风险分类函数
+- [x] T-576 收藏桶风险判定
+- [x] T-577 置顶桶风险判定
+- [x] T-578 分组桶风险判定
+- [x] T-579 normal 状态
+- [x] T-580 warning 状态
+- [x] T-581 critical 状态
+- [x] T-582 over 优先级
+- [x] T-583 near 优先级
+- [x] T-584 多桶聚合
+- [x] T-585 状态字段不可信隔离
+- [x] T-586 风险输入归一化
+- [x] T-587 缺失桶安全降级
+- [x] T-588 风险输出固定枚举
+- [x] T-589 风险纯函数测试
+- [x] T-590 normal 回归测试
+- [x] T-591 warning 回归测试
+- [x] T-592 critical 回归测试
+- [x] T-593 决策 D-235 落档
+- [x] T-594 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-555 容量差异摘要函数
+- [x] T-556 变化桶列表
+- [x] T-557 变化数量统计
+- [x] T-558 增长桶计数
+- [x] T-559 缩减桶计数
+- [x] T-560 状态变化计数
+- [x] T-561 截断变化计数纳入摘要
+- [x] T-562 收藏变化摘要
+- [x] T-563 置顶变化摘要
+- [x] T-564 分组变化摘要
+- [x] T-565 空摘要稳定输出
+- [x] T-566 摘要字段固定顺序
+- [x] T-567 摘要桶顺序固定
+- [x] T-568 摘要输入复用归一化
+- [x] T-569 摘要异常安全
+- [x] T-570 摘要方向回归
+- [x] T-571 摘要状态回归
+- [x] T-572 摘要容量专项回归
+- [x] T-573 决策 D-234 落档
+- [x] T-574 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-535 容量快照差异函数
+- [x] T-536 收藏桶差异
+- [x] T-537 置顶桶差异
+- [x] T-538 分组桶差异
+- [x] T-539 使用量增量
+- [x] T-540 上限增量
+- [x] T-541 状态变化标记
+- [x] T-542 截断变化标记
+- [x] T-543 差异输入归一化
+- [x] T-544 差异输出固定形状
+- [x] T-545 差异桶顺序固定
+- [x] T-546 差异负增量支持
+- [x] T-547 差异上限变化支持
+- [x] T-548 缺失快照降级
+- [x] T-549 污染快照隔离
+- [x] T-550 差异确定性测试
+- [x] T-551 差异布尔字段测试
+- [x] T-552 容量差异专项回归
+- [x] T-553 决策 D-233 落档
+- [x] T-554 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-515 容量快照合并函数
+- [x] T-516 多来源快照输入
+- [x] T-517 收藏桶最大值合并
+- [x] T-518 置顶桶最大值合并
+- [x] T-519 分组桶最大值合并
+- [x] T-520 上限最大值合并
+- [x] T-521 使用量最大值合并
+- [x] T-522 合并后状态重算
+- [x] T-523 合并后截断重算
+- [x] T-524 缺失来源降级
+- [x] T-525 污染来源隔离
+- [x] T-526 空来源兼容
+- [x] T-527 合并结果固定桶顺序
+- [x] T-528 合并结果固定字段形状
+- [x] T-529 多端汇总回归测试
+- [x] T-530 确定性合并测试
+- [x] T-531 超限合并测试
+- [x] T-532 容量专项回归
+- [x] T-533 决策 D-232 落档
+- [x] T-534 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-495 容量快照解析函数
+- [x] T-496 JSON 字符串类型校验
+- [x] T-497 JSON 长度上限
+- [x] T-498 解析异常捕获
+- [x] T-499 解析空值降级
+- [x] T-500 解析非字符串降级
+- [x] T-501 解析收藏桶归一化
+- [x] T-502 解析置顶桶归一化
+- [x] T-503 解析分组桶归一化
+- [x] T-504 解析状态重算
+- [x] T-505 解析截断重算
+- [x] T-506 解析未知字段隔离
+- [x] T-507 解析字段顺序固定
+- [x] T-508 序列化解析往返测试
+- [x] T-509 非法 JSON 回归测试
+- [x] T-510 超大 payload 回归测试
+- [x] T-511 非变异语义回归测试
+- [x] T-512 容量边界解析专项
+- [x] T-513 决策 D-231 落档
+- [x] T-514 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-475 容量快照序列化函数
+- [x] T-476 序列化前归一化
+- [x] T-477 收藏桶稳定序列化
+- [x] T-478 置顶桶稳定序列化
+- [x] T-479 分组桶稳定序列化
+- [x] T-480 固定字段顺序
+- [x] T-481 固定桶顺序
+- [x] T-482 JSON 布尔字段稳定化
+- [x] T-483 JSON 数值字段稳定化
+- [x] T-484 JSON 状态字段稳定化
+- [x] T-485 空输入安全序列化
+- [x] T-486 字符串污染输入隔离
+- [x] T-487 数组污染输入隔离
+- [x] T-488 序列化不抛异常
+- [x] T-489 序列化不修改输入
+- [x] T-490 序列化确定性回归
+- [x] T-491 序列化字段顺序回归
+- [x] T-492 序列化容量专项回归
+- [x] T-493 决策 D-230 落档
+- [x] T-494 状态文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-455 容量快照消费端归一化
+- [x] T-456 收藏快照字段归一化
+- [x] T-457 置顶快照字段归一化
+- [x] T-458 分组快照字段归一化
+- [x] T-459 使用量数字转换
+- [x] T-460 使用量非负约束
+- [x] T-461 使用量整数化
+- [x] T-462 使用量安全封顶
+- [x] T-463 上限统一解析
+- [x] T-464 截断标记重算
+- [x] T-465 状态字段重算
+- [x] T-466 未知字段隔离
+- [x] T-467 缺失桶安全补齐
+- [x] T-468 固定桶顺序
+- [x] T-469 快照确定性测试
+- [x] T-470 快照污染输入测试
+- [x] T-471 快照超大值测试
+- [x] T-472 快照状态阈值测试
+- [x] T-473 容量专项回归
+- [x] T-474 状态与决策文档同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-435 容量快照基础函数
+- [x] T-436 收藏容量摘要接入
+- [x] T-437 置顶容量摘要接入
+- [x] T-438 分组容量摘要接入
+- [x] T-439 容量使用量字段
+- [x] T-440 容量上限字段
+- [x] T-441 超限状态字段
+- [x] T-442 临界状态字段
+- [x] T-443 正常状态字段
+- [x] T-444 快照字段固定顺序
+- [x] T-445 快照输入非对象降级
+- [x] T-446 快照限制非对象降级
+- [x] T-447 快照使用量安全封顶
+- [x] T-448 容量快照纯函数测试
+- [x] T-449 容量状态临界测试
+- [x] T-450 容量状态超限测试
+- [x] T-451 容量状态正常测试
+- [x] T-452 存储容量专项回归
+- [x] T-453 决策 D-228 落档
+- [x] T-454 状态文档与门禁同步
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-415 容量上限解析函数抽取
+- [x] T-416 正数容量向下取整
+- [x] T-417 非有限容量安全回退
+- [x] T-418 字符串容量兼容解析
+- [x] T-419 MRU 复用统一容量解析
+- [x] T-420 字符串列表复用统一容量解析
+- [x] T-421 收藏列表复用统一容量解析
+- [x] T-422 容量摘要纯函数
+- [x] T-423 容量摘要使用量统计
+- [x] T-424 容量摘要截断标记
+- [x] T-425 收藏 getter 读取期防御清洗
+- [x] T-426 置顶 getter 读取期防御清洗
+- [x] T-427 分组 getter 读取期防御清洗
+- [x] T-428 getter 脏数据安全回写
+- [x] T-429 getter 干净数据零回写
+- [x] T-430 收藏运行时重复项隔离
+- [x] T-431 置顶运行时非法项隔离
+- [x] T-432 分组运行时非法项隔离
+- [x] T-433 容量归一化单元测试
+- [x] T-434 运行时防御回归测试
+
+  - 状态：done（2026-09-14）
+  - 证据：`src/util.js`、`src/index.ts`、`tests/util.test.cjs`、`tests/storage-capacity-limits.test.cjs`
+
+- [x] T-350 收藏/置顶/分组列表容量上限值
+  - 决策：收藏 512、置顶 64、分组 64；加载和写入统一裁剪，旧调用省略 max 时保持纯函数兼容
+  - 证据：`src/constants.ts`、`tests/storage-capacity-limits.test.cjs`
+  - 状态：done（2026-09-14）
+
+- [x] T-391 收藏容量常量登记
+  - 目标：集中声明 FAVORITES_MAX=512，避免业务侧散落魔数
+  - 状态：done（2026-09-14）
+- [x] T-392 置顶容量常量登记
+  - 目标：集中声明 PINNED_MAX=64
+  - 状态：done（2026-09-14）
+- [x] T-393 分组容量常量登记
+  - 目标：集中声明 FAVORITE_GROUPS_MAX=64
+  - 状态：done（2026-09-14）
+- [x] T-394 字符串列表可选上限
+  - 目标：sanitizeStringList 支持 max 参数且默认兼容旧行为
+  - 状态：done（2026-09-14）
+- [x] T-395 字符串列表截断变更标记
+  - 目标：超限裁剪时 changed=true，触发一次回写
+  - 状态：done（2026-09-14）
+- [x] T-396 收藏列表可选上限
+  - 目标：sanitizeFavorites 支持 max 参数且默认兼容旧行为
+  - 状态：done（2026-09-14）
+- [x] T-397 收藏列表截断变更标记
+  - 目标：超限裁剪时 changed=true，保留首项优先
+  - 状态：done（2026-09-14）
+- [x] T-398 收藏加载期容量门禁
+  - 目标：initPersistentData 按 FAVORITES_MAX 清洗持久化数据
+  - 状态：done（2026-09-14）
+- [x] T-399 置顶加载期容量门禁
+  - 目标：initPersistentData 按 PINNED_MAX 清洗持久化数据
+  - 状态：done（2026-09-14）
+- [x] T-400 分组加载期容量门禁
+  - 目标：initPersistentData 按 FAVORITE_GROUPS_MAX 清洗持久化数据
+  - 状态：done（2026-09-14）
+- [x] T-401 收藏运行时写入门禁
+  - 目标：saveFavorites 统一归一化并裁剪后再写入
+  - 状态：done（2026-09-14）
+- [x] T-402 置顶运行时写入门禁
+  - 目标：togglePinned 新增条目后保持 64 条上限
+  - 状态：done（2026-09-14）
+- [x] T-403 分组运行时写入门禁
+  - 目标：saveFavGroupRegistry 统一归一化并裁剪后再写入
+  - 状态：done（2026-09-14）
+- [x] T-404 收藏去重优先级测试
+  - 目标：确认去重先于截断，避免重复项浪费容量
+  - 状态：done（2026-09-14）
+- [x] T-405 收藏顺序稳定性测试
+  - 目标：超限裁剪保留首项/最新优先顺序
+  - 状态：done（2026-09-14）
+- [x] T-406 置顶列表边界测试
+  - 目标：锁定 64 条上限与无 max 兼容
+  - 状态：done（2026-09-14）
+- [x] T-407 分组列表边界测试
+  - 目标：锁定 64 条上限与无 max 兼容
+  - 状态：done（2026-09-14）
+- [x] T-408 非法 max 回退测试
+  - 目标：0、负数和非数字 max 不意外删除数据
+  - 状态：done（2026-09-14）
+- [x] T-409 空/非数组回退测试
+  - 目标：保持首次启动不回写的 changed=false 语义
+  - 状态：done（2026-09-14）
+- [x] T-410 constants 容量审计
+  - 目标：测试锁定三类用户列表常量存在且有界
+  - 证据：`tests/storage-capacity-limits.test.cjs`
+  - 状态：done（2026-09-14）
+- [x] T-411 存储契约回归
+  - 目标：确认新增常量不绕过 storage key 登记与 sanitize 门禁
+  - 状态：done（2026-09-14）
+- [x] T-412 README 容量语义同步
+  - 目标：更新中英文文档中的持久化容量说明
+  - 状态：done（2026-09-14）
+- [x] T-413 决策 D-226 落档
+  - 目标：记录收藏/置顶/分组容量选择与兼容策略
+  - 状态：done（2026-09-14）
+- [x] T-414 状态收口与提交
+  - 目标：完成本轮 24 项内容的门禁复跑与本地提交
+  - 状态：done（2026-09-14）
+
+- [x] T-023 状态文档与发布基线同步
+  - 目标：让 PROGRESS/TODO/BLOCKERS/ROADMAP 明确反映 v0.16.38，避免把历史发布记录当作当前状态
+  - 状态：done（2026-09-12）
+- [x] T-024 Agent 与搜索兼容性增量
+  - 目标：在不依赖 Android 真机的前提下，继续补充能力边界、宿主返回结构兼容和回归门禁
+  - 验收：每个增量包含单测/类型检查，并保持 `pnpm verify:release` 全绿
+  - 进展：已完成 Agent 历史去重、已知字段嵌套包装兼容、循环/深度边界，以及无 `AbortController` 宿主的截止时间；状态转为 done，后续增量拆分为独立任务
+  - 状态：done（2026-09-12）
+- [x] T-025 第三方插件调研与内置组件决策
+  - 证据：`docs/plugin-research.md`，覆盖 10 个仓库的功能、可借鉴点、许可与安全边界
+  - 状态：done
+- [x] T-026 内置 `recent-writing-activity` 与 `recent-daily-notes`
+  - 证据：home model/adapters 注册、双语 i18n、配置范围与测试通过
+  - 状态：done
+- [x] T-027 轻量文档关系摘要组件
+  - 证据：新增 `document-relations-summary`，仅查询活动文档直接子块/引用，条数上限 12，三端只读
+  - 状态：done（完整关系图布局不做）
+- [x] T-028 预约块格式调研与只读组件
+  - 证据：`siyuan-dailynote-today` 使用 `attributes.name='custom-reservation'`、`value=YYYYMMDD`；新增 `today-reservations`，限制未来 0–14 天和 12 条
+  - 状态：done；不执行插入、取消或创建操作
+- [x] T-029 Agent 取消/超时回归
+  - 证据：新增统一 `normalizeAgentFailureReason`，覆盖 AbortError/ABORT_ERR/TimeoutError/普通异常，并接入 Agent 搜索错误返回；533 项自动测试通过
+  - 状态：done
+- [x] T-030 组件可观测性
+  - 证据：新增只读 Agent capability `home-adapter-diagnostics`，返回受限设备/模块/时间/稳定原因字段；不暴露异常对象或敏感数据
+  - 状态：done
+- [x] T-031 搜索宿主嵌套包装兼容
+  - 证据：`extractSearchRecords` 仅沿已知字段遍历两层对象包装，支持 `result.data.documents` / `data.result.records`，循环对象安全并拒绝未知或过深字段
+  - 状态：done
+- [x] T-032 Agent 诊断输出规范化
+  - 证据：新增 `buildAgentHomeDiagnostics` 纯函数，限定类型、设备、模块 ID、时间戳和 32 条上限；输出通过 capability JSON Schema 校验
+  - 状态：done
+- [x] T-033 Agent 搜索跨宿主截止时间
+  - 证据：搜索截止 Promise 不再依赖 `AbortController`，标题与全文请求共用 5 秒截止时间，并区分 `timeout` / `cancelled`
+  - 状态：done
+- [x] T-034 组件诊断统计摘要
+  - 证据：`home-adapter-diagnostics` 支持 1–1440 分钟窗口，返回按六类原因和三种设备聚合的有界 summary；明细 limit 不影响窗口总计
+  - 状态：done
+- [x] T-035 搜索结果包装兼容矩阵
+  - 证据：六种已知包装与首个非空数组优先级改为数据驱动回归矩阵，另有未知字段、过深包装和循环对象反例
+  - 状态：done
+- [x] T-036 Agent 能力一致性矩阵
+  - 证据：自动测试严格划分 6 个只读能力和 5 个动作能力，校验 11 个唯一名称、effects、handler，以及所有输入未知字段和输出字符串/数组上限
+  - 状态：done
+- [x] T-037 组件目录能力增强
+  - 证据：`home-widget-snapshot` 发现模式支持 `device` / `readOnly` 筛选，返回 `supportedDevices` / `readOnly` 元数据；目录上限固定为 24
+  - 状态：done
+- [x] T-038 组件目录有界分页
+  - 证据：发现模式新增 `offset`、`total`、`truncated`，单页最多 24、扫描最多 64，外部组件增多时仍可继续发现后续条目
+  - 状态：done
+- [x] T-039 当前文档大纲组件
+  - 证据：新增 `current-document-outline`，复用 `/api/outline/getDocOutline` 与 `flattenOutline`，仅取活动文档最多 12 个标题，三端只读且标题块可点击定位
+  - 状态：done
+- [x] T-040 Agent 组件目录来源元数据
+  - 证据：组件目录每项新增 `source: builtin|external`，只依据规范化 category 推导，不输出插件状态、回调或私有存储
+  - 状态：done
+- [x] T-041 写作活跃度笔记本范围
+  - 目标：为 `recent-writing-activity` 增加可选笔记本过滤，保持 7–30 天、只读聚合和 SQL 参数边界
+  - 状态：done（2026-09-12）
+- [x] T-042 近期日记笔记本范围
+  - 目标：为 `recent-daily-notes` 增加可选笔记本过滤，支持多日记本用户定向浏览且仍不创建缺失日记
+  - 状态：done（2026-09-12）
+- [x] T-043 Agent 组件目录来源筛选
+  - 目标：发现模式支持按 `builtin/external` 来源筛选，并与已有来源元数据、分页和 JSON Schema 保持一致
+  - 状态：done（2026-09-12）
+- [x] T-044 Agent 组件目录重复项收敛
+  - 目标：按规范化 `moduleId` 保留首项，防止异常注册源扭曲目录总数、分页和模型选择
+  - 状态：done（2026-09-12）
+- [x] T-045 组件目录分页边界元数据
+  - 目标：在筛选后 offset 超出结果时返回稳定的有效偏移或明确空页语义，并补齐跨页回归
+  - 状态：done（2026-09-12）
+- [x] T-046 笔记本范围适配器回归抽取
+  - 目标：将可选笔记本 SQL 范围构造收敛为可独立测试的纯函数，减少组件新增时重复安全判断
+  - 状态：done（2026-09-12）
+- [x] T-047 近期编辑范围配置
+  - 目标：`recent-edits` 支持 1–20 条上限和可选笔记本，默认行为保持全库最近 10 篇
+  - 状态：done（2026-09-12）
+- [x] T-048 今日写作笔记本范围
+  - 目标：`today-writing` 的字数、新建文档和编辑文档统计可按单个笔记本限定
+  - 状态：done（2026-09-12）
+- [x] T-049 笔记统计笔记本范围
+  - 目标：`note-stats` 的文档、字符、本周新建和修改口径共用同一笔记本范围
+  - 状态：done（2026-09-12）
+- [x] T-050 随机回顾笔记本范围
+  - 目标：`random-review` 在保留旧化时间边界的同时支持单笔记本抽取
+  - 状态：done（2026-09-12）
+- [x] T-051 往年今日范围配置
+  - 目标：`on-this-day` 支持 1–20 条上限和可选笔记本，保留排除当年结果的语义
+  - 状态：done（2026-09-12）
+- [x] T-052 剪藏待读笔记本范围
+  - 目标：`clipped-unread` 的标签查询支持单笔记本限定，并保持联表 SQL 无歧义
+  - 状态：done（2026-09-12）
+- [x] T-053 近期预约笔记本范围
+  - 目标：`today-reservations` 可按预约块所属笔记本限定，日期窗口和条数上限不变
+  - 状态：done（2026-09-12）
+- [x] T-054 本月日记定向打开
+  - 目标：`journal-monthly` 支持条数与笔记本配置，首项在选择笔记本后打开/创建该本今日日记
+  - 状态：done（2026-09-12）
+- [x] T-055 开发路线检查点同步
+  - 目标：更新 ROADMAP 的组件/Agent/测试数量、已完成任务表和继续开发口径，消除历史状态漂移
+  - 状态：done（2026-09-12）
+- [x] T-056 Agent 组件配置发现元数据
+  - 目标：目录以有界安全字段公开组件配置项的 key/type/range/options/default，便于模型正确构造快照参数
+  - 状态：done（2026-09-12）
+- [x] T-057 Agent 组件配置输入收敛
+  - 目标：按目标组件的公开 configSchema 丢弃未知字段并钳制值，防止任意配置透传到内置或第三方 adapter
+  - 状态：done（2026-09-12）
+- [x] T-058 Agent 组件快照概览字段
+  - 目标：在不泄露 adapter 私有对象的前提下返回有界 stat/count/done，使写作统计、任务与热度组件对模型有实际信息量
+  - 状态：done（2026-09-12）
+- [x] T-059 Agent 组件快照缓存状态
+  - 目标：公开稳定的 cached/updatedAt 元数据，帮助模型区分陈旧快照与即时结果，保持时间戳和输出 schema 有界
+  - 状态：done（2026-09-12）
+- [x] T-060 Agent 组件快照分页元数据
+  - 目标：快照模式复用 offset，返回 total/truncated，避免条目裁剪对模型静默发生
+  - 状态：done（2026-09-12）
+- [x] T-061 Agent 组件快照设备回显
+  - 目标：输出实际查询的 desktop/sidebar/mobile，避免跨端调用方误判结果能力范围
+  - 状态：done（2026-09-12）
+- [x] T-062 Agent 组件快照有效配置回显
+  - 目标：返回实际传给 adapter 的有界配置，明确未知字段丢弃、数值钳制和非法枚举降级结果
+  - 状态：done（2026-09-12）
+- [x] T-063 Agent 组件快照重试语义
+  - 目标：按稳定状态输出 retryable，区分 timeout/backoff/failed 与取消或不支持
+  - 状态：done（2026-09-12）
+- [x] T-064 Agent 组件快照显式刷新
+  - 目标：新增 refresh 布尔输入，在用户/模型明确要求时绕过短缓存，保持默认缓存行为不变
+  - 状态：done（2026-09-12）
+- [x] T-065 Agent 组件快照错误输出一致性
+  - 目标：合法但未注册的组件及读取异常返回符合 outputSchema 的 unregistered/failed 快照，而非旁路 error 对象
+  - 状态：done（2026-09-12）
+
+- [x] T-066 组件进度环渲染器
+  - 目标：为 `stat.arc` 建立有界 `{value,max}` 契约，在年度进度和写作打卡中提供紧凑 SVG progressbar，并同步 Agent 快照 schema
+  - 验收：非法/越界 arc 安全归一化；桌面、侧栏、移动共用渲染；556 项测试与 `pnpm verify:release` 全绿
+  - 状态：done（2026-09-13）
+
+## P4（下一阶段候选）
+
+- [x] T-069 面板首开延迟首读
+  - 目标：首屏优先渲染骨架，前两个组件立即读取，其余按空闲回调或 80ms 阶梯启动，并在销毁时清理尾部任务
+  - 状态：done（2026-09-13）
+- [x] T-070 卡片配色预设
+  - 目标：为内置组件提供受限强调色主题，保持思源主题变量优先和无障碍对比度
+  - 验收：自动多彩/柔和/单色三档；非法持久化值回退 auto；556 项测试与发布门禁通过
+  - 状态：done（2026-09-13）
+- [x] T-071 月历农历辅助信息
+  - 目标：在 `journal-calendar` 中以可关闭的次级文本显示农历，避免改变主日期点击语义
+  - 实现：新增“显示农历”配置（默认关闭），使用原生 `Intl.DateTimeFormat('zh-CN-u-ca-chinese')` 生成次级文本；不引入第三方农历库，主日期和点击行为保持不变
+  - 验收：次级文本经过 32 字符边界和安全渲染；TypeScript、556 项测试与 `pnpm verify:release` 全绿
+  - 状态：done（2026-09-13）
+- [x] T-072 月历导航与今日定位体验
+  - 目标：为 `journal-calendar` 增加上/下月与“回到今天”快捷入口，保持现有 `monthOffset` 边界和键盘/触控热区
+  - 实现：提供上月/今天/下月按钮，`monthOffset` 严格限制在 `-24…24`，导航后持久化并强制刷新当前组件；主日期单元格点击语义保持不变
+  - 验收：导航回调与按钮可访问性契约测试通过，完整发布门禁全绿
+  - 状态：done（2026-09-13）
+- [x] T-073 面板可见性驱动读取
+  - 目标：组件离开可视区域或折叠后暂停非必要刷新，重新可见时增量恢复，继续保留手动刷新优先级
+  - 实现：首屏后续组件使用 `IntersectionObserver`（提前 120px 预热）才启动读取；旧 WebView 回退到现有 `requestIdleCallback`/80ms 阶梯，销毁时统一断开观察器
+  - 验收：可见性门控契约、类型检查及完整发布门禁通过
+  - 状态：done（2026-09-13）
+- [x] T-074 缩略图按需缓存与降载
+  - 目标：将缩略图缓存改为可见优先、容量有界并在低内存/移动端主动降载，避免设置页长列表占用过多资源
+  - 实现：缩略图使用 `IntersectionObserver` 可见优先渲染，移动端采用更小 HTML/条目上限；缓存按 rootId 做容量淘汰并在页签关闭后清理，旧宿主回退为占位/批量渲染
+  - 验收：缩略图观察器生命周期、缓存容量与移动端边界已有自动测试；完整发布门禁全绿
+  - 状态：done（2026-09-13）
+- [x] T-075 性能可观测性摘要
+  - 目标：在现有只读诊断能力中补充可见性门控/缩略图命中率的有界摘要，默认不持久化、不采集内容
+  - 决策：D-051；仅保留事件类型、组件 ID、设备和时间窗口计数，最多 32 条事件，不记录内容或请求参数
+  - 实现：`home-adapter-diagnostics` 摘要新增 `cacheHits`、`completed`、`failures` 三项计数，均从已有 32 条环形事件窗口推导；可见性门控继续只影响读取调度，不记录内容
+  - 验收：Agent 输出 schema、隐私边界和 32 项专项测试通过，`pnpm verify:release` 全绿
+  - 状态：done（2026-09-13）
+- [x] T-076 首页键盘与 reduced-motion 细节审计
+  - 目标：统一月历导航、折叠按钮和条目焦点环的键盘顺序、触控热区与 reduced-motion 行为，避免新增交互在窄屏产生跳动
+  - 实现：月历导航和有日记日期统一 button 语义、28px 触控热区与 focus-visible 焦点环；减弱动态效果时关闭日历过渡
+  - 验收：结构 smoke、12 项 home-view 测试、TypeScript 与完整发布门禁通过
+  - 状态：done（2026-09-13）
+- [x] T-077 首页状态恢复与焦点连续性
+  - 目标：面板刷新、翻月和可见性恢复时保留当前模块焦点与滚动上下文，避免异步替换造成键盘位置跳变
+  - 实现：异步刷新替换模块 DOM 前暂存 `scrollTop`，替换后恢复；继续复用 `focusKey`，滚动位置仅存在于当前控制器生命周期
+  - 验收：13 项 home-controller 测试、TypeScript 与 `pnpm verify:release` 全绿
+  - 状态：done（2026-09-13）
+- [x] T-078 首页加载状态的低动效骨架
+  - 目标：为首开骨架增加稳定高度与轻量 shimmer，`prefers-reduced-motion` 下退化为静态占位，降低布局跳动
+  - 实现：固定 54px 有界占位、主题变量 `color-mix` 和 1.2s 低动效脉冲；reduced-motion 下禁用动画；无图片与第三方依赖
+  - 状态：done（2026-09-13）
+- [x] T-079 首页错误/空状态稳定高度与低带宽降级
+  - 目标：统一 error/empty 状态的最小高度与文案折行上限，并在低带宽或弱设备下跳过非必要装饰，继续保持可访问性
+  - 实现：error/empty 统一 54px 最小高度与两行截断；支持 `prefers-reduced-data` 时停用骨架动画，保留 reduced-motion 兼容
+  - 状态：done（2026-09-13）
+- [ ] T-080 首页状态文案布局回归
+  - 验收执行：见 `docs/acceptance-runbook.md` 对应分组
+  - 目标：仅针对真实宿主反馈的长文案或窄屏溢出补充快照/视觉回归，确保状态区不遮挡重试和折叠控件
+  - 状态：queued（等待真实溢出证据，不提前扩大 CSS 规则）
+- [x] T-081 首页手动刷新非阻塞反馈
+  - 目标：手动刷新时尽量保留当前 ready 内容，仅显示轻量更新提示，减少骨架闪烁与焦点跳变
+  - 实现：已有 ready 内容刷新时保留当前 DOM，以 `aria-busy` 和双语“更新中…”提示反馈；首次加载、空态和错态保持原路径
+  - 状态：done（2026-09-13）
+- [x] T-082 “刷新全部”有界并发
+  - 目标：将全部组件的强制刷新限制为小批并发，避免较多组件同时请求内核造成瞬时峰值，同时保持手动刷新优先级
+  - 实现：共享调度器固定两路并发、保持结果顺序并隔离单项失败；批次期间禁用刷新按钮并回显 busy 状态
+  - 状态：done（2026-09-13）
+- [x] T-083 首页刷新结果摘要
+  - 目标：仅在“刷新全部”出现失败时提供简短有界摘要，成功时保持安静，避免用户逐卡寻找失败项
+  - 实现：批次结束后只统计 `ok=false`，失败数量最多 64；成功批次不提示，不展示异常文本或单项私有数据
+  - 状态：done（2026-09-13）
+- [x] T-084 首页批量刷新取消语义
+  - 目标：面板关闭或重新布局时停止尚未开始的刷新队列，减少无界面承载的尾部请求
+  - 实现：批次携带 AbortSignal；面板销毁或重新渲染时中止批次并 dispose 旧控制器，队列跳过尚未开始项
+  - 状态：done（2026-09-13）
+- [x] T-085 首页刷新失败原因摘要
+  - 目标：失败摘要仅展示稳定原因类别计数（timeout/failed 等），不泄露异常文本，帮助用户判断是否重试
+  - 实现：按 timeout/failed/other 三类聚合，单类最多 64；双语提示仅在存在失败时显示，取消/销毁/过期不计入
+  - 状态：done（2026-09-13）
+- [x] T-086 首页失败摘要可重试入口
+  - 目标：失败摘要提供一次显式重试入口，沿用现有强制刷新和并发上限，不自动循环重试
+  - 实现：复用“刷新全部”按钮，失败后按钮切换为“重试”并只重试失败组件；成功后恢复全量刷新，不新增常驻控件
+  - 状态：done（2026-09-13）
+- [x] T-087 首页失败摘要保留焦点
+  - 目标：失败提示出现或重试结束后保持刷新按钮焦点，方便键盘连续操作
+  - 实现：批次开始记录按钮焦点，结束时仅在按钮仍连接且用户未主动移焦时恢复，避免抢夺其他控件焦点
+  - 状态：done（2026-09-13）
+- [x] T-088 首页刷新按钮忙碌态视觉反馈
+  - 目标：在不增加常驻布局高度的前提下，为按钮 busy/disabled 状态提供清晰但低动效的视觉反馈
+  - 实现：复用思源按钮的 disabled 主题样式，并同步 `aria-busy`/disabled 状态；不新增动画、布局高度或资源
+  - 状态：done（2026-09-13）
+- [x] T-089 首页批量刷新状态快照
+  - 目标：补充按钮 busy、失败摘要和重试标签的结构快照，覆盖刷新生命周期而不依赖真实设备
+  - 实现：扩展现有移动 smoke 静态契约，覆盖 busy true/false、失败后重试标签及 aria-label 恢复；不新增运行时代码
+  - 状态：done（2026-09-13）
+- [x] T-090 包体预算余量治理
+  - 目标：在压缩包接近 300 KiB 时优先删除重复文案/压缩路线文档，给后续修复保留最小安全余量
+  - 实现：压缩 ROADMAP 顶部状态摘要，保留当前测试/预算/设备策略关键信息；为后续代码增量释放约 100 bytes 余量
+  - 状态：done（2026-09-13）
+- [x] T-091 首页刷新失败摘要快照
+  - 目标：补充摘要文本的有界长度和稳定类别快照，防止多语言长文案再次逼近包体上限
+  - 实现：i18n 契约限制双语摘要 128 字符以内，并固定要求 count/timeout/failed/other 占位符；不新增生产代码
+  - 状态：done（2026-09-13）
+- [x] T-092 首页刷新摘要视觉密度审计
+  - 目标：在包体预算允许时检查长摘要在窄面板中的折行密度，优先采用现有状态区规则
+  - 实现：smoke 固化 error/empty 状态共用 54px 最小高度、两行截断和状态区选择器契约；不新增生产代码
+  - 状态：done（2026-09-13）
+- [ ] T-093 首页刷新摘要真实窄屏验收
+  - 验收执行：见 `docs/acceptance-runbook.md` 对应分组
+  - 目标：在桌面大版本节点或获得真实长文案反馈后，补充窄面板视觉截图验收
+  - 状态：queued（按 D-042 后置，不以浏览器模拟替代宿主证据）
+- [x] T-094 发布包体失败诊断
+  - 目标：包体超限时直接显示预算与剩余 headroom，缩短后续 UI/性能增量的定位时间
+  - 实现：`package-integrity` 使用显式预算变量并在断言信息中输出 headroom；不改发布包内容
+  - 状态：done（2026-09-13）
+- [x] T-095 发布包体安全余量策略
+  - 目标：在不放宽 300 KiB 硬上限前提下，建立可观测的软余量提醒，避免新增功能反复撞线
+  - 实现：连续 3 次生产构建均为 307188 bytes；`package-integrity` 在 headroom <1 KiB 时输出非阻断 diagnostic，硬上限仍严格失败
+  - 状态：done（2026-09-13）
+- [x] T-096 包体瘦身专项
+  - 目标：在下一次需要新增生产代码前，优先从 CSS/文档和重复运行时分支中释放至少 1 KiB 安全余量
+  - 实现：删除 ROADMAP 历史重复验收/优先级段落约 2.6 KiB 文本，归档压缩包从 307188 降至 305903 bytes；硬上限保持不变
+  - 状态：done（2026-09-13）
+- [x] T-097 包体增量预算检查点
+  - 目标：后续每个生产代码增量前记录归档 headroom，低于 1 KiB 时先做瘦身或拆分
+  - 实现：新增 `package-budget-checkpoint` host 测试，记录实际 bytes/硬预算/headroom，并在低于 1 KiB 时输出非阻断 diagnostic
+  - 状态：done（2026-09-13）
+- [x] T-098 生产包资源变更审计
+  - 目标：资源或文档进入归档时给出条目级体积变化提示，避免仅看总包体才发现大幅增长
+  - 实现：复用 central directory 读取工具导出压缩/未压缩大小；新增 host 审计逐条输出诊断，并将单条目压缩后大小限制为 120 KiB、条目总数限制为 32；不新增生产包内容或依赖
+  - 状态：done（2026-09-13）
+- [x] T-099 归档条目差异基线
+  - 目标：在条目级审计之上记录可审阅的历史基线，提示新增、删除或异常膨胀的资源/文档条目
+  - 实现：新增版本化 `package-resource-baseline.json`；审计对新增/删除条目和超过 8 KiB 且 25% 的压缩后增长输出 diagnostic，正常变更不硬失败
+  - 状态：done（2026-09-13）
+- [x] T-100 归档基线维护提示
+  - 目标：在发布候选或明确资源变更后提供基线更新提示与审阅说明，避免历史基线长期滞后
+  - 实现：归档审计检测任一条目新增、删除或压缩后大小漂移时输出“需审阅后再更新基线”诊断；无漂移时保持安静
+  - 状态：done（2026-09-13）
+- [x] T-101 路径筛选 UI 研究草案
+  - 目标：为 v0.17 路径筛选入口明确 API 前提、渐进交互、性能上限和三端降级边界
+  - 实现：新增 `docs/search-path-filter-proposal.md`；复用现有 `filters.paths` 模型契约，不提前引入未知宿主 API 或生产 UI
+  - 状态：done（2026-09-13）
+- [x] T-102 路径筛选目录模型与宿主契约
+  - 目标：确认路径枚举端点，并为桌面原型提供有界、安全、可独立测试的请求/响应模型
+  - 实现：上游源码确认 `/api/filetree/listDocsByPath`；新增纯模型严格验证 notebook/path/file id，最多返回 100 项并区分 invalid/failed/mismatch
+  - 状态：done（2026-09-13）
+- [ ] T-103 路径筛选桌面原型
+  - 验收执行：见 `docs/acceptance-runbook.md` 对应分组
+  - 目标：在桌面筛选弹层提供单笔记本路径前缀选择、chip 移除、请求取消和 API 缺失降级
+  - 状态：queued（模型与端点契约已就位。**预算前置已于 2026-09-15 解除**（D-353 上限上调至 512/768 KiB，D-355 实测全量接入仅增 59.7 KiB）；但实现另受**宿主证据门禁**约束：`tests/path-filter-ui-contract.test.cjs` 要求 `listDocsByPath` 在宿主端点获批前不得进入生产，T-107 明确以桌面大版本验收为判定前提，其前置为 B-005。实现方案已完成并实测通过（tsc 0 错误、i18n 11/11、生产图 32 模块 3/3），因门禁约束回滚，存档于 `docs/path-filter-desktop-plan.md`，待 T-107 通过后直接应用。见 D-357）
+- [x] T-104 下一轮生产包体瘦身
+  - 目标：在接入路径筛选 UI 前再释放至少 3 KiB 压缩包余量，避免 1.3 KiB headroom 被交互代码耗尽
+  - 实现：压缩 ROADMAP 重复大项目归档与 README 早期版本历史，归档包从 305,024 降至 301,669 bytes，释放约 3.3 KiB；硬上限保持不变
+  - 状态：done（2026-09-13）
+- [x] T-105 路径筛选侧栏体验评估
+  - 目标：根据桌面原型和真实端空间反馈，评估侧栏是否提供路径筛选及更紧凑的选中状态展示
+  - 实现：新增 `docs/search-path-filter-sidebar-evaluation.md`，确定“单行 chip + 一次性弹层”最小实验、能力探测准入条件和失败回退；不提前接入常驻目录树
+  - 状态：done（2026-09-13，真实桌面证据仍作为后续入口准入条件）
+- [x] T-106 路径筛选能力探测测试矩阵
+  - 目标：在不接入生产 UI 的前提下，为端点成功、缺失、超时、取消和响应错配建立稳定状态矩阵，避免后续把宿主失败误报为空目录
+  - 实现：纯模型新增 `normalizePathFilterProbeOutcome`，显式区分 ready/unavailable/timeout/cancelled/failed/mismatch/invalid；不读取异常文本且未接入生产入口
+  - 状态：done（2026-09-13）
+- [ ] T-107 路径筛选真实宿主能力证据
+  - 验收执行：见 `docs/acceptance-runbook.md` 对应分组
+  - 目标：在下一次桌面大版本验收中记录端点可用性、响应结构和最窄侧栏宽度，再决定是否拆分 T-103a/T-105a 生产入口
+  - 状态：**进行中（2026-09-16 完成 2/3）**。已在真实宿主（内核 3.8.4-beta.2，本机已认证会话）取得**端点可用性**（`/api/filetree/listDocsByPath` 200/22ms/code 0）与**响应结构**（`box`/`path` 回显一致、`files[]` 含 `id`/`name`/`path`/`subFileCount`，与 `path-filter-model.js` 假设逐项吻合），并额外汇总边界行为（不存在路径→空列表而非错误、`maxListCount` 被遵守、缺参/不存在 notebook→`code:-1`）；详见 `docs/path-filter-host-evidence.md`（脱敏，只读采集）。**仅剩"最窄可用侧栏宽度"未取**（属 UI 度量），故本项保持未完成。待该项完成后即可依据本证据放宽 `tests/path-filter-ui-contract.test.cjs` 并拆分 T-103a/T-105a 生产入口。
+- [x] T-108 路径筛选大列表性能边界
+  - 目标：验证异常大目录响应不会突破 100 项输出上限、去重边界或截断语义
+  - 实现：新增 5000 项响应压力回归，确认字符串 `code`、首尾稳定性与 `truncated` 元数据；不增加生产 bundle
+  - 状态：done（2026-09-13）
+- [x] T-109 进度文档状态锚点同步
+  - 目标：同步当前已完成任务范围和推送策略，避免接手者看到过期的任务编号或提交数量
+  - 实现：更新 `PROGRESS.md` 的完成范围与“本地开发提交待推送”表述，不改变发布策略
+  - 状态：done（2026-09-13）
+- [x] T-110 发布归档可复现性
+  - 目标：相同源码重复构建时生成字节一致的 `package.zip`，避免 ZIP 时间元数据造成无意义漂移
+  - 实现：`zip-webpack-plugin` 使用固定 1980-01-01 mtime、模式和压缩选项；新增 reproducible-build 静态门禁并完成双构建 SHA-256 校验
+  - 状态：done（2026-09-13）
+- [x] T-111 进度范围最终校准
+  - 目标：让进度文档首行完成范围与当前验证基线一致
+  - 实现：将 `PROGRESS.md` 完成范围更新为 T-071~T-110，不改变功能或发布策略
+  - 状态：done（2026-09-13）
+- [x] T-112 发布候选准备矩阵
+  - 目标：明确自动门禁、包体、版本元数据、真实宿主验收和 GitHub 发布动作的当前状态
+  - 实现：新增 `docs/release-readiness.md`；同步英文 README 的测试文件/数量，保留发布前人工步骤和用户确认边界
+  - 状态：done（2026-09-13）
+- [x] T-113 发布状态锚点清理
+  - 目标：清理 TODO 与路线文档中的过期开发头和“正式发布候选”表述
+  - 实现：改用本地 `main` 与“正式发布版本”措辞，和发布准备矩阵保持一致
+  - 状态：done（2026-09-13）
+- [x] T-114 发布准备产物一致性门禁
+  - 目标：防止发布准备矩阵中的 JS/ZIP 体积数字与实际生成产物漂移
+  - 实现：host release-quality 测试动态读取 `dist/index.js` 与 `package.zip` 大小并核对 `docs/release-readiness.md`；产物缺失时保持快速测试可跳过
+  - 状态：done（2026-09-13）
+- [x] T-115 进度范围二次同步
+  - 目标：让进度文档首行完成范围覆盖发布准备矩阵与产物一致性门禁
+  - 实现：将 `PROGRESS.md` 完成范围更新为 T-071~T-114，避免历史锚点落后于验证基线
+  - 状态：done（2026-09-13）
+- [x] T-116 发布矩阵入口可发现性
+  - 目标：让维护者从中英文 README 的发布前检查直接进入候选状态矩阵
+  - 实现：新增 `docs/release-readiness.md` 的双语入口，不改变运行时代码或发布动作
+  - 状态：done（2026-09-13）
+- [x] T-117 真实宿主只读探测记录
+  - 目标：确认本机宿主端口与认证状态，避免把未授权页面误判为路径端点不兼容
+  - 实现：记录 6806 端口返回授权页、测试配置端口 6807 及未调用受保护 API 的边界；不保存认证信息、不改变宿主数据
+  - 状态：done（2026-09-13，T-107 仍等待授权桌面会话）
+- [x] T-118 真实桌面验收记录模板
+  - 目标：为路径筛选、侧栏宽度、状态区长文案和生命周期验收预先定义无敏感信息的证据字段
+  - 实现：新增 `docs/desktop-acceptance-template.md`；明确认证信息、文档内容和浏览器模拟结果不得作为仓库证据
+  - 状态：done（2026-09-13）
+- [x] T-119 验收模板契约门禁
+  - 目标：防止真实桌面验收模板被后续文档整理误删关键证据字段
+  - 实现：新增 host 契约测试，锁定路径端点、侧栏宽度、长文案、生命周期和敏感信息边界；不增加生产 bundle
+  - 状态：done（2026-09-13）
+- [x] T-120 README 测试文件统计门禁
+  - 目标：防止新增测试文件后英文 README 的测试矩阵数量过期
+  - 实现：host release-quality 动态统计 `tests/` 与 `tests/host/` 的 `*.test.cjs` 文件并核对 README 声明；不增加生产 bundle
+  - 状态：done（2026-09-13）
+- [x] T-121 组件商店预览与添加交互
+  - 目标：修复实时预览永久 loading，并将尺寸选择与添加/应用操作拆开
+  - 实现：预览打开后主动触发 controller refresh；尺寸按钮仅选择并显示选中态；新增独立“添加组件/应用尺寸”按钮；补充中英文文案与商店契约测试
+  - 状态：done（2026-09-13，完整发布门禁已通过）
+- [ ] T-122 Agent 文档上下文契约与模型
+  - 目标：为 v0.17 准备只读 `document-context` 能力，统一标题、笔记本、路径、活动状态和有界大纲输出；不返回正文
+  - 实现：新增独立 `src/agent-document-context.js` 契约与纯模型，限制大纲 24 条、路径 256 字符；待真实桌面取消/权限审计后接入生产 Agent 注册
+  - 状态：in-progress
+- [ ] T-123 Agent 工作区计划 dry-run 模型
+  - 目标：为 v0.17 建立固定动作白名单的计划层，只读生成步骤、写权限标记、确认要求和过期时间，不直接执行
+  - 实现：新增独立 `src/agent-workspace-plan.js`，最多 8 步、单步最多 5 个文档、计划最长 10 分钟；过滤未知动作并提供稳定 planId/过期判断
+  - 状态：in-progress
+- [ ] T-124 Agent 工作区统一结果回执模型
+  - 目标：为计划执行后的完成、跳过、失败、取消和过期建立统一有界回执，支持部分成功而不泄露宿主异常文本
+  - 实现：`src/agent-workspace-plan.js` 新增回执 schema、稳定 receipt ID 和状态归一化；仍未接入生产执行器
+  - 状态：in-progress
+- [ ] T-125 Agent 工作区计划执行状态机
+  - 目标：在不绑定思源 API 的前提下固化确认、过期、取消、逐步执行和部分成功语义，为后续 `execute-workspace-plan` 接入复用
+  - 实现：新增注入式 `runWorkspacePlan`，无批准不执行、过期拒绝、AbortSignal 取消未开始步骤、执行器异常归一化为稳定失败 token
+  - 状态：in-progress
+- [ ] T-126 Agent 工作区固定动作适配层
+  - 目标：把计划步骤映射到六类白名单动作，统一做目标二次校验、参数裁剪和 handler 缺失/异常降级
+  - 实现：新增独立 `src/agent-workspace-actions.js`，仅允许 open/open-batch/restore/update/create/append；实际思源调用由宿主注入
+  - 状态：in-progress
+- [ ] T-127 Agent 工作区计划一次性执行门卫
+  - 目标：阻止同一计划被 Agent 重放，统一审批、过期、运行中和已消费状态，保持会话内记录有界
+  - 实现：新增独立 `src/agent-workspace-execution.js`，最多保留 32 条计划记录，提供 begin/finish/get/clear 生命周期
+  - 状态：in-progress
+- [ ] T-128 Agent 工作区审批摘要与执行编排
+  - 目标：把用户确认绑定到计划 digest，并组合一次性消费门卫与执行状态机，阻止确认后计划被替换或重复重放
+  - 实现：新增 `workspacePlanDigest`、`executeWorkspacePlan`；digest mismatch/denied/expired/replay 均在动作执行前返回，成功后写入有界消费记录
+  - 状态：in-progress
+- [ ] T-129 Agent 执行能力请求契约
+  - 目标：为未来 `execute-workspace-plan` 注册固定输入边界，要求 planId、digest 和一次性确认令牌，显式回显设备范围
+  - 实现：新增独立 `src/agent-workspace-capability.js`，拒绝未知字段、非法摘要和短/危险确认令牌；当前仅契约模型，不执行动作
+  - 状态：in-progress
+- [ ] T-130 Agent 审批令牌生命周期
+  - 目标：将用户确认绑定到 planId、digest、设备和过期时间，并保证令牌一次性消费、会话内有界保留
+  - 实现：新增独立 `src/agent-approval-token.js`，最多保留 32 个令牌，支持 issue/validate/consume/clear；令牌不携带正文或权限信息
+  - 状态：in-progress
+- [ ] T-131 Agent 执行编排接入审批令牌
+  - 目标：执行计划前校验 token 的 planId/digest/device/expiry，校验通过后一次性消费，阻止缺少授权或令牌重放进入动作 handler
+  - 实现：`executeWorkspacePlan` 支持注入 `approvalStore`、`approvalToken` 和 `device`，令牌验证失败不产生步骤副作用
+  - 状态：in-progress
+- [ ] T-132 Agent 工作区审批挑战生成器
+  - 目标：把计划转换为可展示、可确认的一次性挑战载荷，绑定 planId/digest/device/expiresAt/approvalToken，并校验计划未被替换
+  - 实现：新增独立 `src/agent-workspace-approval.js`，提供 challenge 创建与校验；令牌仍只存在内存，不携带正文或权限数据
+  - 状态：in-progress
+- [ ] T-133 Agent 工作区动作清单与审批摘要
+  - 目标：为六类固定动作提供 effect/确认/目标上限元数据，并生成不含正文的计划统计摘要
+  - 实现：`src/agent-workspace-actions.js` 新增 `WORKSPACE_ACTION_SPECS` 与 `buildWorkspacePlanSummary`，输出步骤数、对象数、导航/写入计数和确认标记
+  - 状态：in-progress
+- [ ] T-134 Agent 固定动作结果归一化
+  - 目标：将思源 handler 返回值收敛为稳定状态、合法 ID 和有界计数，阻止原始对象、正文和异常文本进入 Agent 回执
+  - 实现：`src/agent-workspace-actions.js` 新增 `normalizeWorkspaceActionResult`，按六类动作白名单输出字段；失败原因清洗为稳定 token
+  - 状态：in-progress
+- [ ] T-135 Agent 动作 postcondition 校验
+  - 目标：拒绝“completed 但缺少关键结果”的假成功，让 Agent 回执反映真实动作结果
+  - 实现：`validateWorkspaceActionPostcondition` 要求打开/更新/创建/追加动作返回合法目标或结果；恢复文档集保留无 ID 的完成语义
+  - 状态：in-progress
+- [ ] T-136 Agent 工作区计划结构完整性校验
+  - 目标：在审批和执行前验证步骤索引、动作白名单、写权限标记、目标数量与任务状态字段，阻止结构篡改进入 handler
+  - 实现：`validateWorkspacePlan` 接入 `runWorkspacePlan`，非法计划统一失败且不调用步骤执行器
+  - 状态：in-progress
+- [ ] T-137 Agent 导航宿主动作适配器
+  - 目标：将现有桌面/移动文档打开 API 封装为计划执行 handler，支持单篇、批量、旧宿主回退和取消信号
+  - 实现：新增独立 `src/agent-host-actions.js`，复用 `document-actions`；批量打开保持顺序并返回逐项 opened/failed
+  - 状态：in-progress
+- [ ] T-138 Agent 文档集恢复宿主适配器
+  - 目标：将现有文档集预检/恢复逻辑封装为计划 handler，复用顺序、已打开跳过、缺失探测和取消语义
+  - 实现：新增独立 `src/agent-document-set-actions.js`，宿主注入集合查询、可用性探测和打开回调；无集合/全缺失/全失败返回稳定原因
+  - 状态：in-progress
+- [ ] T-139 Agent 写入动作宿主适配器
+  - 目标：把任务更新、新建文档、追加今日日记封装为可注入 handler，统一校验载荷、取消语义和 postcondition
+  - 实现：新增独立 `src/agent-write-actions.js`；内核调用由宿主注入，任务仅改勾选标记，创建/追加必须回传合法文档 ID
+  - 状态：in-progress
+- [ ] T-140 Agent 工作区宿主 handler registry
+  - 目标：将导航、文档集恢复和写入三组 adapter 组合为统一六动作 registry，直接供计划执行器消费
+  - 实现：新增独立 `src/agent-workspace-registry.js`，各组回调分域注入并冻结输出键集合；不捕获 Plugin/DOM 状态
+  - 状态：in-progress
+- [ ] T-141 Agent 工作区执行会话 facade
+  - 目标：把审批 challenge、token store、replay guard、动作 registry 和执行器封装为单一会话 API
+  - 实现：新增独立 `src/agent-workspace-session.js`，提供 issue/preview/execute/dispose；会话销毁同时清理授权与重放状态
+  - 状态：in-progress
+- [ ] T-142 Agent 工作区审批预览摘要
+  - 目标：在真正执行前输出不含正文的步骤/对象/导航/写入统计，并与 challenge 同步生成
+  - 实现：session `preview()` 组合 `buildWorkspacePlanSummary` 与一次性 challenge，供后续审批 UI/Agent handler 复用
+  - 状态：in-progress
+- [ ] T-143 Agent 工作区 bridge facade
+  - 目标：提供统一 `plan → issue → execute → dispose` API，封装计划存储、审批会话和动作执行，供未来 Agent handler 直接调用
+  - 实现：新增独立 `src/agent-workspace-bridge.js`，计划内存最多 32 条，执行请求经现有契约归一化，销毁时清理全部状态
+  - 状态：in-progress
+- [ ] T-144 Agent workspace bridge handler 工厂
+  - 目标：为 `workspace-plan` 与 `execute-workspace-plan` 提供可注册的稳定 handler 包装，统一返回 `structuredContent` 与序列化 `result`
+  - 实现：新增 `createWorkspacePlanHandler` / `createWorkspaceExecuteHandler`，无效计划与缺失执行器分别降级为稳定错误；安全校验仍由 bridge/session 负责
+  - 状态：in-progress
+- [ ] T-145 Agent workspace capability data-driven definitions
+  - 目标：把 workspace-plan 与 execute-workspace-plan 的 spec、effects、handler 组合为可直接交给注册器的定义数组
+  - 实现：新增独立 `src/agent-workspace-capability-definitions.js`，区分只读计划与可写执行 effects，保持 bridge 安全逻辑单一来源
+  - 状态：in-progress
+- [ ] T-146 Agent workspace bridge 审批预览入口
+  - 目标：在 bridge 层直接提供不含正文的步骤摘要与审批 challenge，供 Agent/审批 UI 在执行前复用
+  - 实现：新增 `preview(planId, device, now)`，复用 session 预览与既有 challenge 校验边界；未知计划安全返回 null
+  - 状态：in-progress
+- [ ] T-147 Agent workspace handler 异常隔离
+  - 目标：阻止注入式 bridge/宿主异常文本或异常对象冒泡到 Agent 通道
+  - 实现：plan/execute handler 工厂捕获同步与异步异常，分别降级为 `invalid_plan` / `executor_unavailable`
+  - 状态：in-progress
+- [ ] T-148 Agent workspace capability 安全注册适配器
+  - 目标：将已知 workspace capability 定义交给宿主注册器，并按 capability 名称固定 effects，拒绝未知定义
+  - 实现：新增 `registerWorkspaceCapabilityDefinitions`，兼容旧宿主、隔离单项注册异常，不信任调用方覆盖执行 effects
+  - 状态：in-progress
+- [ ] T-149 Agent workspace canonical spec 防伪校验
+  - 目标：阻止外部构造同名但篡改 schema/effects 的 workspace capability 定义注册
+  - 实现：注册适配器要求使用模块内冻结 canonical spec 对象，伪造同名定义直接跳过
+  - 状态：in-progress
+- [ ] T-150 Agent workspace 过期计划回收
+  - 目标：为长期运行的 bridge 清理已过期计划元数据，避免有界计划槽位被陈旧审批占用
+  - 实现：新增 `prune(now)`，按统一 expiry 语义删除过期计划并返回回收数量；不影响 session 内 token/replay 清理
+  - 状态：in-progress
+- [ ] T-151 Agent workspace capability 卸载回收
+  - 目标：宿主卸载时回收已注册 capability 句柄，避免旧 handler 残留或异常冒泡
+  - 实现：新增 `disposeWorkspaceCapabilityRegistrations`，兼容 disposer、对象 disposer 与 `removeAgentCapability`，逐项隔离异常并返回计数
+  - 状态：in-progress
+- [ ] T-152 Agent workspace bridge 销毁态隔离
+  - 目标：防止 bridge dispose 后重新创建计划或执行旧请求
+  - 实现：增加幂等 disposed 标记；销毁后 plan/issue/preview 返回空值，execute 返回 `bridge_disposed`
+  - 状态：in-progress
+- [ ] T-153 Agent workspace capability lifecycle facade
+  - 目标：统一 workspace capability 的注册、句柄保存与不可逆卸载，避免调用方重复注册或遗漏清理
+  - 实现：新增 `createWorkspaceCapabilityLifecycle`，register 只执行一次，dispose 逐项回收并阻止再次注册
+  - 状态：in-progress
+- [ ] T-154 Agent workspace lifecycle 状态快照
+  - 目标：向宿主提供有界注册/失败/销毁状态，便于诊断部分注册失败而不泄露异常
+  - 实现：新增 `status()` 返回 `registered/failed/disposed`，失败计数最多 2，继续保留句柄与异常隔离
+  - 状态：in-progress
+- [ ] T-155 Agent workspace bridge 状态快照
+  - 目标：提供有界 bridge 运行状态，便于宿主诊断计划容量与销毁态而不暴露敏感数据
+  - 实现：新增 `status()` 返回 `planCount/maxPlans/disposed`，不返回计划、审批令牌或 handler 信息
+  - 状态：in-progress
+- [ ] T-156 Agent workspace capability 宿主探测
+  - 目标：在正式注册前判断宿主是否支持 addAgentCapability，并统一 unavailable/timeout/cancelled/failed 状态
+  - 实现：新增独立 `src/agent-workspace-probe.js`，只做能力存在性检查与稳定快照，不调用注册副作用
+  - 状态：in-progress
+- [ ] T-157 Agent workspace 注册句柄归一化
+  - 目标：识别 disposer、对象、ID 与空句柄，向生命周期状态暴露潜在不可回收注册
+  - 实现：新增 `normalizeWorkspaceCapabilityHandle` 与 `unmanaged` 计数，不返回句柄内容
+  - 状态：in-progress
+- [ ] T-158 Agent workspace lifecycle 宿主探测入口
+  - 目标：让 capability lifecycle 在注册前提供统一、无副作用的宿主可用性快照
+  - 实现：新增 `lifecycle.probe()`，复用 `agent-workspace-probe`，不改变注册或 status 契约
+  - 状态：in-progress
+- [ ] T-159 Agent workspace lifecycle 统一状态快照
+  - 目标：统一输出宿主可用性、注册成功/失败、不可回收句柄与销毁态，便于诊断和 UI 展示
+  - 实现：新增 `lifecycle.snapshot()`，组合既有 probe/status，保持所有字段有界且不携带敏感值
+  - 状态：in-progress
+- [ ] T-160 Agent workspace runtime 组合快照
+  - 目标：一次读取 capability lifecycle 与 bridge 状态，供诊断/UI 使用且不触发副作用
+  - 实现：新增 `buildWorkspaceCapabilityRuntimeSnapshot`，对缺失对象返回稳定空状态，不携带敏感数据
+  - 状态：in-progress
+- [ ] T-161 Agent workspace runtime 快照版本化
+  - 状态：in-progress（第二十八批曾误判为完成并勾选——TODO 原有说明指出本系列须保持未勾选：14 个契约模块不在生产依赖图内，判据是生产图可达而非代码存在；复选框已恢复，审计发现作为门禁补强记录保留）
+  - 目标：为组合快照提供稳定版本号与输入归一化，限制计数/状态范围并过滤未知字段
+  - 实现：新增 `WORKSPACE_RUNTIME_SNAPSHOT_VERSION` 与 `normalizeWorkspaceCapabilityRuntimeSnapshot`
+  - 状态：in-progress
+- [ ] T-162 Agent workspace runtime 版本兼容门禁
+  - 目标：消费快照前显式识别当前/未知未来版本，避免新协议被旧宿主误读
+  - 实现：新增 `isWorkspaceCapabilityRuntimeSnapshotCompatible`，仅接受缺省版本或 version=1
+  - 状态：in-progress
+- [ ] T-163 Agent workspace runtime 一致性校验
+  - 目标：阻止注册/计划计数溢出或 lifecycle 与 bridge 销毁态不一致的快照进入诊断/UI
+  - 实现：新增 `validateWorkspaceCapabilityRuntimeSnapshot`，输出稳定 `unsupported_version/registration_overflow/plan_overflow/dispose_mismatch`
+  - 状态：in-progress
+- [ ] T-164 Agent workspace runtime 状态转移 diff
+  - 目标：以固定字段识别两次 runtime 快照间的宿主、注册、计划和销毁变化
+  - 实现：新增 `diffWorkspaceCapabilityRuntimeSnapshots`，输出有界布尔值与计划数量增量，不携带原始快照
+  - 状态：in-progress
+- [ ] T-165 Agent workspace runtime 状态事件
+  - 目标：将 runtime 快照变化转换为 UI/诊断可消费的固定事件，限制事件数量与 delta 范围
+  - 实现：新增 `buildWorkspaceCapabilityRuntimeEvents`，最多输出 host/registration/unmanaged/plans/disposed 五类事件
+  - 状态：in-progress
+- [ ] T-166 Agent workspace runtime 事件归一化
+  - 目标：对状态事件固定排序、去重和 delta 上限，防止高频变化制造 UI 噪声
+  - 实现：新增 `normalizeWorkspaceCapabilityRuntimeEvents`，仅保留五类事件，最多一类一条
+  - 状态：in-progress
+- [ ] T-167 Agent workspace runtime 事件队列
+  - 目标：为 UI/诊断提供有界事件缓存，支持批量读取与确认消费
+  - 实现：新增 `createWorkspaceCapabilityEventQueue`，最多保留 16 条，dispose 后停止接收事件
+  - 状态：in-progress
+- [ ] T-168 Agent workspace runtime 事件游标
+  - 目标：支持 UI/诊断按序号增量读取、检测丢失事件并确认消费
+  - 实现：事件队列增加 `readSince(cursor, limit)` 与 `acknowledge(cursor)`，游标单调递增且队列仍最多 16 条
+  - 状态：in-progress
+- [ ] T-169 Agent workspace runtime diff 入队桥接
+  - 目标：将 snapshot diff 直接写入有界事件队列，统一事件归一化与游标语义
+  - 实现：新增 `enqueueWorkspaceCapabilityRuntimeDiff`，无效队列或无变化返回 0
+  - 状态：in-progress
+- [ ] T-170 Agent workspace runtime 事件安全回放
+  - 目标：在游标过旧导致队列溢出时明确要求重新获取完整快照，避免不完整事件流污染 UI
+  - 实现：新增 `readWorkspaceCapabilityRuntimeEventsForReplay`，正常返回 ready 批次，溢出返回 `snapshot_required`
+  - 状态：in-progress（第二十五批已补齐 diff/events/enqueue 实现与 33 项门禁——见 D-396 补充；但生产接线仍受 D-111 约束，保持未勾选）
+- [ ] T-171 Agent workspace runtime 快照恢复流程
+  - 目标：统一事件回放成功与队列溢出后的完整快照恢复，避免 UI 自行拼接游标和校验逻辑
+  - 实现：新增 `recoverWorkspaceCapabilityRuntime`，返回 events/snapshot/unavailable 三种稳定模式
+  - 状态：in-progress
+- [ ] T-172 Agent workspace runtime 恢复确认
+  - 目标：仅在成功回放或完整快照恢复后原子推进事件确认游标，失败时保留队列
+  - 实现：新增 `commitWorkspaceCapabilityRuntimeRecovery`，限定 events/snapshot 模式并忽略失败结果
+  - 状态：in-progress
+- [ ] T-173 Agent workspace runtime 恢复提交门面
+  - 目标：将恢复与游标确认组合为单一原子调用，成功才消费，失败保留队列
+  - 实现：新增 `recoverAndCommitWorkspaceCapabilityRuntime`，返回恢复结果与 acknowledged 计数
+  - 状态：in-progress
+- [ ] T-174 Agent workspace runtime 恢复并发协调器
+  - 目标：防止多个消费者重复或倒退确认同一批事件
+  - 实现：新增 `createWorkspaceCapabilityRecoveryCoordinator`，记录 lastCursor/commits 并拒绝重复确认
+  - 状态：in-progress
+- [ ] T-175 Agent workspace runtime 恢复协调器销毁态
+  - 目标：插件卸载后阻断异步恢复、确认和事件消费，避免销毁后的尾部任务污染队列
+  - 实现：coordinator 增加不可逆 `dispose()` 与 disposed 状态，后续调用返回 `coordinator_disposed`
+  - 状态：in-progress
+- [ ] T-176 Agent workspace 恢复协调器队列绑定销毁
+  - 目标：在插件彻底卸载时可选择同时清理事件队列，普通共享消费者仍保留队列
+  - 实现：`coordinator.dispose(true)` 同步调用 queue.dispose；默认 dispose() 不清理共享队列并保持幂等
+  - 状态：in-progress
+- [ ] T-177 Agent workspace runtime 恢复取消边界
+  - 目标：面板卸载或请求切换时安全取消恢复，不读取、不确认事件队列
+  - 实现：新增 `recoverWorkspaceCapabilityRuntimeWithSignal`，AbortSignal 已取消时返回稳定 cancelled
+  - 状态：in-progress
+- [ ] T-180 Agent workspace runtime 恢复安全出口
+  - 目标：为带取消信号的恢复提供统一归一化结果
+  - 实现：新增 `recoverWorkspaceCapabilityRuntimeSafe`
+  - 状态：in-progress（第二十六批已补齐恢复取消边界/安全出口/原子门面与 14 项门禁——见 D-396 补充；生产接线仍受 D-111 约束，保持未勾选）
+- [ ] T-181 Agent workspace recovery coordinator 运行快照
+  - 目标：一次读取 coordinator 与队列的有界状态
+  - 实现：新增 `coordinator.snapshot()` 与 queue status
+  - 状态：in-progress
+- [ ] T-182 Agent workspace runtime session facade
+  - 目标：统一 queue/coordinator 的会话级创建、快照与销毁，隔离不同宿主会话的恢复状态
+  - 实现：新增 `createWorkspaceCapabilityRuntimeSession`，生成有界 sessionId，dispose 同步清理 queue/coordinator
+  - 状态：in-progress
+- [ ] T-183 Agent workspace session 快照版本化
+  - 目标：为 runtime session 提供稳定版本号与归一化快照
+  - 实现：新增 `build/normalizeWorkspaceCapabilityRuntimeSessionSnapshot`
+  - 状态：in-progress
+- [ ] T-184 Agent workspace session registry
+  - 目标：有界管理多个 runtime session，支持创建、查找、移除和统一销毁
+  - 实现：新增 `createWorkspaceCapabilityRuntimeSessionRegistry`，最多 8 个会话
+  - 状态：in-progress
+- [ ] T-185 Agent workspace session registry 快照
+  - 目标：聚合所有 session 的有界运行状态，供诊断/UI 一次读取
+  - 实现：新增 registry `snapshot()`，仅输出 sessionId、disposed 和 runtime 状态
+  - 状态：in-progress
+- [ ] T-186 Agent workspace session registry 回收
+  - 目标：主动清理已销毁 session，避免 registry 长期持有失效引用
+  - 实现：新增 registry `prune()`，返回回收数量并保持有界
+  - 状态：in-progress
+- [ ] T-187 Agent workspace session registry 快照归一化
+  - 目标：跨宿主消费 registry 快照时限制会话数量、ID 格式和销毁状态
+  - 实现：新增 `normalizeWorkspaceCapabilityRuntimeSessionRegistrySnapshot`，最多保留 8 个合法 session 摘要
+  - 状态：in-progress
+- [ ] T-188 Agent workspace session registry 事件通知
+  - 目标：记录会话创建、淘汰、移除和回收事件，供诊断/UI 观察生命周期变化
+  - 实现：registry 增加有界 `events()` 与可选 `onEvent`，最多保留 8 条且隔离观察器异常
+  - 状态：in-progress
+- [ ] T-189 Agent workspace session registry 空闲回收
+  - 目标：清理长期未访问且未销毁的 session，降低长期驻留内存
+  - 实现：新增 `pruneIdle(now, maxIdleMs)`，访问 session 自动刷新 lastSeen，非法阈值不回收
+  - 状态：in-progress
+- [ ] T-190 Agent workspace registry 事件游标
+  - 目标：支持 registry 生命周期事件的增量读取与确认消费
+  - 实现：新增 `eventCursor/eventsSince/acknowledgeEvents`，保留最多 8 条事件
+  - 状态：in-progress
+- [ ] T-191 Agent workspace registry 事件归一化
+  - 目标：过滤未知事件、非法 sessionId 和越界序号
+  - 实现：新增 `normalizeWorkspaceCapabilityRuntimeRegistryEvents`
+  - 状态：in-progress
+- [ ] T-192 Agent workspace registry 事件安全回放
+  - 目标：按游标读取 registry 生命周期事件，溢出时要求完整快照
+  - 实现：新增 `readWorkspaceCapabilityRuntimeRegistryEventsForReplay`
+  - 状态：in-progress
+- [ ] T-193 Agent workspace registry 回放确认
+  - 目标：仅确认 ready 回放结果，失败或 snapshot_required 保留事件
+  - 实现：新增 `commitWorkspaceCapabilityRuntimeRegistryReplay`
+  - 状态：in-progress
+- [ ] T-194 Agent workspace registry 快照恢复
+  - 目标：统一 registry 事件回放与溢出后的完整 snapshot 恢复
+  - 实现：新增 `recoverWorkspaceCapabilityRuntimeRegistry`
+  - 状态：in-progress（第二十七批已补齐 session/registry 快照归一化/事件归一化/回放/恢复 6 项实现与 31 项门禁——见 D-396 补充；生产接线仍受 D-111 约束，保持未勾选）
+- [x] T-195 Agent workspace registry 回放取消边界
+  - 目标：registry 事件回放在会话取消后不读取、不确认事件
+  - 实现：新增 `readWorkspaceCapabilityRuntimeRegistryEventsForReplayWithSignal`
+  - 状态：done
+- [x] T-196 Agent workspace registry 回放超时边界
+  - 目标：截止时间前后均检查超时，失败时保留 registry 事件
+  - 实现：新增 `readWorkspaceCapabilityRuntimeRegistryEventsForReplayWithDeadline`
+  - 状态：done
+- [x] T-197 Agent workspace registry 恢复确认门面
+  - 目标：events/snapshot 两种成功恢复统一确认，失败结果不消费事件
+  - 实现：新增 `commitWorkspaceCapabilityRuntimeRegistryRecovery`
+  - 状态：done
+- [x] T-198 Agent workspace registry 恢复并发协调器
+  - 目标：限制 registry 游标倒退/重复提交，并在销毁后阻断恢复
+  - 实现：新增 `createWorkspaceCapabilityRuntimeRegistryRecoveryCoordinator`
+  - 状态：done
+- [x] T-199 Agent workspace registry 异常隔离
+  - 目标：宿主 eventsSince/snapshot 抛错时返回稳定 `registry_unavailable`
+  - 实现：回放与快照路径增加异常捕获，不向 Agent/UI 泄漏异常对象
+  - 状态：done
+- [x] T-200 Agent workspace registry 恢复结果归一化
+  - 目标：固定 events/snapshot/cancelled/timeout/unavailable 终态并限制字段
+  - 实现：新增 `normalizeWorkspaceCapabilityRuntimeRegistryRecoveryResult`
+  - 状态：done
+- [x] T-201 Agent workspace registry 安全恢复门面
+  - 目标：带取消信号的恢复统一执行归一化且不产生确认副作用
+  - 实现：新增 `recoverWorkspaceCapabilityRuntimeRegistrySafe`
+  - 状态：done
+- [x] T-202 Agent workspace registry coordinator 截止与取消入口
+  - 目标：协调器提供 signal/deadline 恢复入口，沿用单调游标和销毁语义
+  - 实现：新增 `recoverWithSignal` 与 `recoverWithDeadline`
+  - 状态：done
+- [x] T-203 Agent workspace registry signal 提交门面
+  - 目标：将 signal 恢复与确认组合为单一安全调用
+  - 实现：新增 `recoverAndCommitWithSignal`，取消时 acknowledged 固定为 0
+  - 状态：done
+- [x] T-204 Agent workspace registry deadline 提交门面
+  - 目标：将 deadline 恢复与确认组合为单一安全调用
+  - 实现：新增 `recoverAndCommitWithDeadline`，超时不消费事件
+  - 状态：done
+- [x] T-205 Agent workspace registry 快照一致性校验
+  - 目标：检测容量、数量、重复 sessionId 与 disposed 状态矛盾
+  - 实现：新增 `validateWorkspaceCapabilityRuntimeSessionRegistrySnapshot`
+  - 状态：done
+- [x] T-206 Agent workspace registry 快照差异计算
+  - 目标：为 UI/诊断提供会话新增、移除、销毁和容量变化摘要
+  - 实现：新增 `diffWorkspaceCapabilityRuntimeSessionRegistrySnapshots`
+  - 状态：done
+- [x] T-207 Agent workspace registry 差异归一化
+  - 目标：固定差异事件类型、sessionId 与容量字段上限
+  - 实现：新增 `normalizeWorkspaceCapabilityRuntimeSessionRegistryDiff`
+  - 状态：done
+- [x] T-208 Agent workspace registry 恢复快照校验接入
+  - 目标：snapshot recovery 只接受通过一致性校验的 registry 快照
+  - 实现：`recoverWorkspaceCapabilityRuntimeRegistry` 校验失败返回 `invalid_snapshot`
+  - 状态：done
+- [x] T-209 Agent workspace registry invalid_snapshot 归一化
+  - 目标：safe/coordinator 输出固定 invalid_snapshot 终态且不携带快照内容
+  - 实现：扩展 registry recovery result normalization 的终态白名单
+  - 状态：done
+- [x] T-210 Agent workspace registry 快照版本兼容
+  - 目标：为 registry 快照提供 version=1 构建与兼容检查，拒绝未知版本恢复
+  - 实现：新增 `WORKSPACE_RUNTIME_SESSION_REGISTRY_SNAPSHOT_VERSION`、builder 与 compatibility helper
+  - 状态：done
+- [x] T-211 Agent workspace registry 跨 session 摘要
+  - 目标：提供 active/disposed/capacityAvailable 等有界只读统计
+  - 实现：新增 `buildWorkspaceCapabilityRuntimeSessionRegistrySummary`
+  - 状态：done
+- [x] T-212 Agent workspace registry 差异事件队列
+  - 目标：为 registry diff 提供独立 8 条队列、游标读取与确认消费
+  - 实现：新增 `createWorkspaceCapabilityRuntimeRegistryDiffQueue`
+  - 状态：done
+- [x] T-213 Agent workspace registry 差异入队桥接
+  - 目标：将前后快照差异安全写入 registry 专用队列，不污染 runtime 事件类型
+  - 实现：新增 `enqueueWorkspaceCapabilityRuntimeSessionRegistryDiff`
+  - 状态：done
+- [x] T-214 Agent workspace registry 差异安全回放
+  - 目标：diff queue 支持有界 cursor replay、溢出检测与 snapshot_required
+  - 实现：新增 `readWorkspaceCapabilityRuntimeSessionRegistryDiffForReplay`
+  - 状态：done
+- [x] T-215 Agent workspace registry 差异回放确认
+  - 目标：仅确认 ready diff replay，snapshot_required/失败保留队列
+  - 实现：新增 `commitWorkspaceCapabilityRuntimeSessionRegistryDiffReplay`
+  - 状态：done
+- [x] T-216 Agent workspace registry 差异快照恢复
+  - 目标：diff queue 溢出后以通过校验的 registry snapshot 恢复
+  - 实现：新增 `recoverWorkspaceCapabilityRuntimeSessionRegistryDiff`
+  - 状态：done
+- [x] T-217 Agent workspace registry diff 回放取消边界
+  - 目标：diff replay 在 signal 取消前后均不消费队列
+  - 实现：新增 `readWorkspaceCapabilityRuntimeSessionRegistryDiffForReplayWithSignal`
+  - 状态：done
+- [x] T-218 Agent workspace registry diff 回放超时边界
+  - 目标：diff replay 在 deadline 到达时返回 timeout 并保留队列
+  - 实现：新增 `readWorkspaceCapabilityRuntimeSessionRegistryDiffForReplayWithDeadline`
+  - 状态：done
+- [x] T-219 Agent workspace registry diff 恢复结果归一化
+  - 目标：固定 diff recovery 终态并限制事件/快照字段
+  - 实现：新增 `normalizeWorkspaceCapabilityRuntimeSessionRegistryDiffRecoveryResult` 与 safe facade
+  - 状态：done
+- [x] T-220 Agent workspace registry diff 恢复确认门面
+  - 目标：events/snapshot 成功恢复统一 acknowledge，失败不消费
+  - 实现：新增 `commitWorkspaceCapabilityRuntimeSessionRegistryDiffRecovery`
+  - 状态：done
+- [x] T-221 Agent workspace registry diff recovery coordinator
+  - 目标：限制 diff cursor 倒退/重复提交并支持 dispose、signal/deadline 组合调用
+  - 实现：新增 `createWorkspaceCapabilityRuntimeSessionRegistryDiffRecoveryCoordinator`
+  - 状态：done
+- [x] T-222 Agent workspace registry diff coordinator 快照
+  - 目标：一次读取 diff coordinator 与 queue 的有界运行状态
+  - 实现：新增 `coordinator.snapshot()`
+  - 状态：done
+- [x] T-223 Agent workspace registry 联合诊断摘要
+  - 目标：聚合 registry summary、registry status、diff queue/coordinator 状态
+  - 实现：新增 `buildWorkspaceCapabilityRuntimeSessionRegistryDiagnostics`
+  - 状态：done
+- [x] T-224 Agent workspace registry 联合恢复结果归一化
+  - 目标：统一 registry 主事件与 diff 事件两路恢复结果，限制 acknowledged 上限
+  - 实现：新增 `normalizeWorkspaceCapabilityRuntimeSessionRegistryJointRecoveryResult`
+  - 状态：done
+- [x] T-225 Agent workspace registry 联合恢复协调器
+  - 目标：双游标恢复仅在两路均成功时原子确认，拒绝部分成功污染状态
+  - 实现：新增 `createWorkspaceCapabilityRuntimeSessionRegistryJointRecoveryCoordinator`
+  - 状态：done
+- [x] T-226 Agent workspace registry 联合取消边界
+  - 目标：联合恢复取消时两路均不读取确认，返回稳定 cancelled
+  - 实现：新增 `recoverAndCommitWithSignal`
+  - 状态：done
+- [x] T-227 Agent workspace registry 联合超时边界
+  - 目标：联合恢复超时时两路均不确认，返回稳定 timeout
+  - 实现：新增 `recoverAndCommitWithDeadline`
+  - 状态：done
+- [x] T-228 Agent workspace registry 诊断归一化
+  - 目标：限制联合诊断中的计数、游标、提交次数和稳定 reason
+  - 实现：新增 `normalizeWorkspaceCapabilityRuntimeSessionRegistryDiagnostics`
+  - 状态：done
+- [x] T-229 Agent workspace registry diagnostics capability 契约
+  - 目标：定义严格只读、无输入、固定输出上限的 Agent capability spec
+  - 实现：新增 `WORKSPACE_RUNTIME_REGISTRY_DIAGNOSTICS_SPEC`
+  - 状态：done
+- [x] T-230 Agent workspace registry diagnostics handler
+  - 目标：将联合诊断安全包装为可注册 handler，隔离宿主异常
+  - 实现：新增 `createWorkspaceCapabilityRuntimeSessionRegistryDiagnosticsHandler`
+  - 状态：done
+- [x] T-231 Agent workspace diagnostics 安全注册适配器
+  - 目标：注册 diagnostics 时固定 canonical spec 与只读 effects，拒绝伪造权限
+  - 实现：扩展 `WORKSPACE_CAPABILITY_NAMES` 与 `registerWorkspaceCapabilityDefinitions`
+  - 状态：done
+- [x] T-232 Agent workspace capability 初始化顺序回归
+  - 目标：确保新增 diagnostics spec 不引入模块加载时序错误
+  - 实现：调整 `WORKSPACE_CAPABILITY_NAMES` 声明顺序并增加直接 require 自检
+  - 状态：done
+- [x] T-233 Agent workspace definitions diagnostics 工厂
+  - 目标：一次创建 workspace-plan/execute 与 diagnostics 三项有序定义
+  - 实现：新增 `createWorkspaceCapabilityDefinitionsWithDiagnostics`
+  - 状态：done
+- [x] T-234 Agent workspace diagnostics 输入归一化
+  - 目标：拒绝数组/任意输入字段，保持 diagnostics 无输入契约
+  - 实现：新增 `normalizeWorkspaceCapabilityRuntimeRegistryDiagnosticsInput`
+  - 状态：done
+- [x] T-235 Agent workspace lifecycle 自定义定义注册
+  - 目标：允许独立 diagnostics 定义进入生命周期，同时保持旧调用兼容
+  - 实现：`lifecycle.register(definitionsOverride)` 支持安全注入定义数组
+  - 状态：done
+- [x] T-236 Agent workspace capability 定义完整性校验
+  - 目标：统一校验 canonical spec、handler 与固定 effects
+  - 实现：新增 `validateWorkspaceCapabilityDefinition` 并接入注册流程
+  - 状态：done
+- [x] T-237 Agent workspace capability schema 矩阵门禁
+  - 目标：定义注册前必须具备 object input/output schema 的统一校验
+  - 实现：`validateWorkspaceCapabilityDefinition` 增加 schema 类型检查
+  - 状态：done
+- [x] T-238 Agent workspace lifecycle 句柄类型统计
+  - 目标：区分 managed/opaque/invalid 宿主返回，支持旧宿主可观测性
+  - 实现：lifecycle status/snapshot 增加 `opaque` 与 `invalid` 计数
+  - 状态：done
+- [x] T-239 Agent workspace capability definitions 批量矩阵校验
+  - 目标：批量报告定义总数、有效/无效、重复名称与稳定原因
+  - 实现：新增 `validateWorkspaceCapabilityDefinitions`
+  - 状态：done
+- [x] T-240 Agent workspace runtime snapshot 句柄统计兼容
+  - 目标：保留既有 runtime snapshot schema，同时提供独立 opaque/invalid 句柄统计入口
+  - 实现：新增 lifecycle `handleStatus()`，避免破坏现有快照兼容
+  - 状态：done
+- [x] T-241 Agent workspace capability 注册失败原因分类
+  - 目标：将 Abort/Timeout/普通异常归一化为稳定取消/超时/失败原因
+  - 实现：新增 `normalizeWorkspaceCapabilityRegistrationFailureReason` 与 lifecycle `failureStatus()`
+  - 状态：done
+- [x] T-242 Agent workspace definitions diagnostics 摘要
+  - 目标：将批量定义矩阵压缩为可供 UI/Agent 消费的有界统计
+  - 实现：新增 `buildWorkspaceCapabilityDefinitionsDiagnostics`
+  - 状态：done
+- [x] T-243 Agent workspace definitions diagnostics 归一化
+  - 目标：固定 definitions 摘要字段与 8 条上限
+  - 实现：新增 `normalizeWorkspaceCapabilityDefinitionsDiagnostics`
+  - 状态：done
+- [x] T-244 Agent workspace lifecycle diagnostics 摘要
+  - 目标：聚合宿主探测、注册、句柄类型与失败原因计数
+  - 实现：新增 `buildWorkspaceCapabilityLifecycleDiagnostics`
+  - 状态：done
+- [x] T-245 Agent workspace definition/lifecycle 联合诊断
+  - 目标：一次读取 definitions 矩阵与 lifecycle 运行状态
+  - 实现：新增 `buildWorkspaceCapabilityDefinitionLifecycleDiagnostics`
+  - 状态：done
+- [x] T-246 Agent workspace diagnostics snapshot 版本化
+  - 目标：为统一诊断总览提供 version=1 快照契约
+  - 实现：新增 `WORKSPACE_CAPABILITY_DIAGNOSTICS_SNAPSHOT_VERSION` 与 builder/normalizer
+  - 状态：done
+- [x] T-247 Agent workspace diagnostics snapshot 兼容校验
+  - 目标：拒绝未知版本、定义数量溢出和缺失 registry 摘要的快照
+  - 实现：新增 `isWorkspaceCapabilityDiagnosticsSnapshotCompatible` 与 `validateWorkspaceCapabilityDiagnosticsSnapshot`
+  - 状态：done
+- [x] T-248 Agent workspace diagnostics snapshot 差异计算
+  - 目标：检测 definitions/lifecycle/registry/diffQueue/coordinator 五类变化
+  - 实现：新增 `diffWorkspaceCapabilityDiagnosticsSnapshots`
+  - 状态：done
+- [x] T-249 Agent workspace diagnostics 变化事件构建
+  - 目标：将诊断快照变化转换为固定顺序、有界事件
+  - 实现：新增 `buildWorkspaceCapabilityDiagnosticsEvents`
+  - 状态：done
+- [x] T-250 Agent workspace diagnostics 事件归一化
+  - 目标：去重未知事件并固定五类事件顺序
+  - 实现：新增 `normalizeWorkspaceCapabilityDiagnosticsEvents`
+  - 状态：done
+- [x] T-251 Agent workspace diagnostics 事件队列
+  - 目标：提供独立最多 8 条 diagnostics 事件缓存、cursor 与 dispose
+  - 实现：新增 `createWorkspaceCapabilityDiagnosticsEventQueue`
+  - 状态：done
+- [x] T-252 Agent workspace diagnostics diff 入队
+  - 目标：将 diagnostics snapshot 变化写入专用事件队列
+  - 实现：新增 `enqueueWorkspaceCapabilityDiagnosticsDiff`
+  - 状态：done
+- [x] T-253 Agent workspace diagnostics replay/recovery
+  - 目标：支持有界回放、确认及溢出后的 versioned snapshot 恢复
+  - 实现：新增 `readWorkspaceCapabilityDiagnosticsEventsForReplay`、`commitWorkspaceCapabilityDiagnosticsReplay`、`recoverWorkspaceCapabilityDiagnostics`
+  - 状态：done
+- [x] T-254 Agent workspace diagnostics replay 取消边界
+  - 目标：signal 取消前后均不读取/确认 diagnostics 事件
+  - 实现：新增 `readWorkspaceCapabilityDiagnosticsEventsForReplayWithSignal`
+  - 状态：done
+- [x] T-255 Agent workspace diagnostics replay 超时边界
+  - 目标：deadline 到达时返回 timeout，保留事件队列
+  - 实现：新增 `readWorkspaceCapabilityDiagnosticsEventsForReplayWithDeadline`
+  - 状态：done
+- [x] T-256 Agent workspace diagnostics recovery 归一化
+  - 目标：统一 events/snapshot/invalid_snapshot/cancelled/timeout 终态
+  - 实现：新增 `normalizeWorkspaceCapabilityDiagnosticsRecoveryResult`
+  - 状态：done
+- [x] T-257 Agent workspace diagnostics recovery coordinator
+  - 目标：单调 cursor、原子确认、dispose 与 signal/deadline 组合调用
+  - 实现：新增 `createWorkspaceCapabilityDiagnosticsRecoveryCoordinator`
+  - 状态：done
+- [x] T-258 Agent workspace diagnostics 联合恢复结果归一化
+  - 目标：统一 diagnostics events/snapshot 两路恢复结果与 acknowledged 上限
+  - 实现：新增 `normalizeWorkspaceCapabilityDiagnosticsJointRecoveryResult`
+  - 状态：done
+- [x] T-259 Agent workspace diagnostics 联合恢复协调器
+  - 目标：将 diagnostics queue replay 与 snapshot fallback 组合为单一恢复入口
+  - 实现：新增 `createWorkspaceCapabilityDiagnosticsJointRecoveryCoordinator`
+  - 状态：done
+- [x] T-260 Agent workspace diagnostics 联合取消边界
+  - 目标：联合 diagnostics 恢复在取消时不读取/确认事件
+  - 实现：新增 coordinator `recoverAndCommitWithSignal`
+  - 状态：done
+- [x] T-261 Agent workspace diagnostics 联合超时边界
+  - 目标：联合 diagnostics 恢复在截止时间到达时返回 timeout
+  - 实现：新增 coordinator `recoverAndCommitWithDeadline`
+  - 状态：done
+- [x] T-262 Agent workspace diagnostics 联合 handler
+  - 目标：将联合恢复包装为输入有界、异常隔离的只读 handler
+  - 实现：新增 `createWorkspaceCapabilityDiagnosticsJointRecoveryHandler`
+  - 状态：done
+- [ ] T-178 Agent workspace runtime 恢复超时边界
+  - 目标：在截止时间到达时停止恢复并返回稳定 timeout，不读取或确认事件
+  - 实现：新增 `recoverWorkspaceCapabilityRuntimeWithDeadline`，超时与 cancelled 分开归类
+  - 状态：done
+- [ ] T-179 Agent workspace runtime 恢复结果归一化
+  - 目标：统一 events/snapshot/cancelled/timeout/invalid_snapshot 终态字段，过滤未知扩展
+  - 实现：新增 `normalizeWorkspaceCapabilityRuntimeRecoveryResult`，限制 cursor、事件数和快照内容
+  - 状态：done
+
+## T-1773~T-1802 组件面板日期组件修复（2026-09-14）
+
+- [x] T-1773 今日待办移除普通段落误匹配
+- [x] T-1774 今日待办移除列表容器重复匹配
+- [x] T-1775 今日待办识别规范任务列表项（type=i/subtype=t）
+- [x] T-1776 保留未完成复选框筛选
+- [x] T-1777 保留已完成复选框筛选
+- [x] T-1778 兼容大写 X 完成标记
+- [x] T-1779 兼容前缀列表 markdown
+- [x] T-1780 增加 JS 二次复选框校验
+- [x] T-1781 限制任务预取数量
+- [x] T-1782 保持用户条数上限
+- [x] T-1783 保持今日日记默认范围
+- [x] T-1784 保持全库扫描时间窗
+- [x] T-1785 保持笔记本过滤
+- [x] T-1786 保持任务点击入口
+- [x] T-1787 保持任务完成状态渲染
+- [x] T-1788 保持空态提示语义
+- [x] T-1789 修复日历容器 display grid
+- [x] T-1790 固定日历七列布局
+- [x] T-1791 固定日历列宽自适应
+- [x] T-1792 增加日历网格间距
+- [x] T-1793 增加日历单元格居中
+- [x] T-1794 增加日历单元格最小高度
+- [x] T-1795 增加星期标题对齐
+- [x] T-1796 增加日期单元格对齐
+- [x] T-1797 将空白占位升级为相邻月份日期
+- [x] T-1798 保持日历月份导航
+- [x] T-1799 保持日历今日高亮
+- [x] T-1800 保持日历日记点击
+- [x] T-1801 增加日历样式回归测试
+- [x] T-1802 增加任务查询回归测试
+- [x] T-1803 日历运行时条目上限扩展至 42
+- [x] T-1804 非日历组件继续保持 24 条上限
+- [x] T-1805 日历协议保留农历 secondary 字段
+- [x] T-1806 日历协议保留 outside 状态
+- [x] T-1807 日历渲染层保留完整六周
+- [x] T-1808 日历增加当前年月标题
+- [x] T-1809 日历增加跨月日期弱化显示
+- [x] T-1810 日历增加周末颜色区分
+- [x] T-1811 日历增加今日日径圆形高亮
+- [x] T-1812 日历增加已有日记圆点标记
+- [x] T-1813 日历导航增加稳定焦点键
+- [x] T-1814 日历日期增加 gridcell 语义
+- [x] T-1815 日历可点击日期使用 button 语义
+- [x] T-1816 日历已有日记增加可访问标签
+- [x] T-1817 日历组件尺寸收敛为 large/full
+- [x] T-1818 今日待办优先识别 custom-dailynote 属性
+- [x] T-1819 今日待办兼容 YYYY-MM-DD 标题
+- [x] T-1820 月历优先识别 custom-dailynote 月份属性
+- [x] T-1821 月历兼容 YYYY-MM-DD 标题
+- [x] T-1822 月历重复日期保留最新文档
+- [x] T-1823 月历 SQL 使用别名化笔记本范围
+- [x] T-1824 月历查询保持 64 条硬上限
+- [x] T-1825 中英文补充日记属性说明
+- [x] T-1826 中英文补充月份标题格式
+- [x] T-1827 中英文补充已有日记语义
+- [x] T-1828 增加完整六周 adapter 回归
+- [x] T-1829 增加 iPad 式日期状态渲染回归
+- [x] T-1830 增加 custom-dailynote 查询回归
+- [x] T-1831 增加日历推荐尺寸回归
+- [x] T-1832 保持外部参考代码不进入生产依赖
+
+## T-1833~T-1872 外部生活组件目录与离线时钟（2026-09-14）
+
+- [x] T-1833 调研开源小组件仪表盘生态
+- [x] T-1834 调研 Open-Meteo 天气来源
+- [x] T-1835 调研 DailyHotApi 热榜来源
+- [x] T-1836 调研 NewsNow 新闻来源
+- [x] T-1837 调研 ActivityWatch 使用时长来源
+- [x] T-1838 调研 holiday-cn 节假日来源
+- [x] T-1839 调研 TMDB 电影数据来源
+- [x] T-1840 调研 Bangumi 番剧数据来源
+- [x] T-1841 调研 get-windows 活动窗口能力
+- [x] T-1842 记录各来源许可证与条款边界
+- [x] T-1843 记录各来源凭据要求
+- [x] T-1844 记录各来源平台支持范围
+- [x] T-1845 记录各来源隐私数据面
+- [x] T-1846 区分直连 HTTP 与本地桥接
+- [x] T-1847 区分内置、外部、条件、桥接和参考状态
+- [x] T-1848 建立外部组件不可变目录
+- [x] T-1849 建立外部组件字段归一化
+- [x] T-1850 建立外部组件查询过滤
+- [x] T-1851 建立外部组件分类过滤
+- [x] T-1852 建立外部组件可用性过滤
+- [x] T-1853 建立外部组件端侧过滤
+- [x] T-1854 建立外部组件目录摘要
+- [x] T-1855 建立外部组件主题分组
+- [x] T-1856 建立需配置状态决策
+- [x] T-1857 建立本地服务状态决策
+- [x] T-1858 未知来源默认降级为仅参考
+- [x] T-1859 外部组件数组防御性复制
+- [x] T-1860 外部组件文本长度与控制字符边界
+- [x] T-1861 实测免 Key 来源连通性
+- [x] T-1862 记录公共热榜端点 TLS 失败事实
+- [x] T-1863 编写外部数据源审计文档
+- [x] T-1864 规划独立生活信息商店分组
+- [x] T-1865 规划网络缓存和失败降级
+- [x] T-1866 规划凭据不进入 Agent/日志边界
+- [x] T-1867 新增离线时间与日期内置组件
+- [x] T-1868 使用 Intl 本地化时间与星期
+- [x] T-1869 时间组件支持桌面/侧栏/移动
+- [x] T-1870 时间组件每分钟自动刷新
+- [x] T-1871 页面隐藏时暂停时间刷新
+- [x] T-1872 面板销毁时清理时间心跳
+
+## T-1873~T-1912 天气组件与节假日日历（2026-09-14）
+
+- [x] T-1873 核验 Open-Meteo 预测接口契约
+- [x] T-1874 核验 Open-Meteo 地理编码接口契约
+- [x] T-1875 核验 Open-Meteo 署名和非商业条款
+- [x] T-1876 核验 holiday-cn 跨年度数据约定
+- [x] T-1877 新增天气城市显式配置
+- [x] T-1878 新增摄氏/华氏温标配置
+- [x] T-1879 新增 2~5 日预报配置边界
+- [x] T-1880 新增城市名称控制字符清洗
+- [x] T-1881 新增本地化地理编码 URL
+- [x] T-1882 新增经纬度和地点标题归一化
+- [x] T-1883 新增固定字段天气预测 URL
+- [x] T-1884 新增 WMO 天气代码分类
+- [x] T-1885 新增昼夜天气图标映射
+- [x] T-1886 新增当前天气数值边界
+- [x] T-1887 新增多日预测数组归一化
+- [x] T-1888 新增天气快照和体感温度
+- [x] T-1889 新增降水概率次级文本
+- [x] T-1890 新增 Open-Meteo CC BY 4.0 署名入口
+- [x] T-1891 城市未配置时保持零网络请求
+- [x] T-1892 新增外部地址精确白名单
+- [x] T-1893 新增 128 KiB 响应上限
+- [x] T-1894 新增网络状态码和 JSON 失败隔离
+- [x] T-1895 新增旧 WebView 可用的超时竞争
+- [x] T-1896 新增请求取消信号透传
+- [x] T-1897 新增地点 24 小时缓存
+- [x] T-1898 新增天气 15 分钟缓存
+- [x] T-1899 新增最多 16 条外部响应缓存
+- [x] T-1900 隐藏页面暂停天气自动刷新
+- [x] T-1901 面板销毁清理天气刷新计时器
+- [x] T-1902 插件卸载清理生活组件缓存
+- [x] T-1903 新增天气专属商店预览
+- [x] T-1904 新增 iPad 式渐变天气卡
+- [x] T-1905 新增大号温度与横向预报布局
+- [x] T-1906 新增窄屏两列天气布局
+- [x] T-1907 移除天气样式对 CSS :has 的依赖
+- [x] T-1908 月历新增中国节假日显式开关
+- [x] T-1909 月历新增节假日与调休班标识
+- [x] T-1910 月历合并节假日和农历次级文本
+- [x] T-1911 节假日网络失败隔离并保留原月历
+- [x] T-1912 新增天气/节假日模型、网络、DOM 与 Chromium 回归
+
+## T-1913~T-1952 Bangumi 每日放送与生活组件商店透明度（2026-09-14）
+
+- [x] T-1913 核验 Bangumi 官方 API 仓库与开发文档
+- [x] T-1914 核验兼容日历接口的整周响应契约
+- [x] T-1915 识别 v0 API 暂无等价日历端点
+- [x] T-1916 将番剧推荐诚实更名为每日放送
+- [x] T-1917 按本地星期选择今日放送
+- [x] T-1918 支持明日放送并处理周日回绕
+- [x] T-1919 支持从今天开始的本周放送
+- [x] T-1920 限制每周最多七个日期分组
+- [x] T-1921 限制每组最多四十八个远程条目
+- [x] T-1922 按条目 ID 去重每日结果
+- [x] T-1923 优先中文标题并回退原始标题
+- [x] T-1924 归一化评分和排名数值边界
+- [x] T-1925 生成固定 Bangumi subject 跳转地址
+- [x] T-1926 增加条目数量 2~12 配置边界
+- [x] T-1927 增加今日/明日/本周范围配置
+- [x] T-1928 增加封面显示开关
+- [x] T-1929 对 Bangumi 日历端点使用精确白名单
+- [x] T-1930 对每日放送响应使用 128 KiB 上限
+- [x] T-1931 增加每日放送 30 分钟内存缓存
+- [x] T-1932 透传组件读取取消信号
+- [x] T-1933 增加 8.5 秒组件读取超时边界
+- [x] T-1934 联网页面隐藏时暂停周期刷新
+- [x] T-1935 面板销毁时清理生活组件计时器
+- [x] T-1936 每日放送失败与其他组件隔离
+- [x] T-1937 无当前放送时显示明确空态
+- [x] T-1938 新增 media 组件展示协议类型
+- [x] T-1939 修复目录归一化丢弃 media 类型
+- [x] T-1940 新增真实封面响应式媒体网格
+- [x] T-1941 移动端媒体网格限制为两列
+- [x] T-1942 封面使用 3:4 比例与懒加载
+- [x] T-1943 封面使用异步解码和无 referrer 请求
+- [x] T-1944 模型层限制 lain.bgm.tv HTTPS 封面
+- [x] T-1945 adapter 层再次限制远程封面地址
+- [x] T-1946 view 层第三次限制远程封面地址
+- [x] T-1947 商店新增每日放送媒体骨架预览
+- [x] T-1948 商店外部数据徽标改为联网数据
+- [x] T-1949 商店展示外部组件数据来源
+- [x] T-1950 商店展示联网或完全离线状态
+- [x] T-1951 商店展示位置及个人数据隐私摘要
+- [x] T-1952 新增模型、网络、DOM、商店与 Chromium 回归
+
+## T-1953~T-1994 DailyHot/NewsNow 资讯组件与来源健康（2026-09-14）
+
+- [x] T-1953 核验 DailyHotApi 自部署与缓存说明
+- [x] T-1954 核验 NewsNow 自部署与来源接口约定
+- [x] T-1955 修正 NewsNow 维护仓库地址
+- [x] T-1956 将两类候选升级为可添加生产组件
+- [x] T-1957 新增 DailyHotApi 完整端点配置
+- [x] T-1958 新增 NewsNow 完整端点配置
+- [x] T-1959 未配置端点时保持零网络请求
+- [x] T-1960 远程端点强制使用 HTTPS
+- [x] T-1961 本机 loopback 允许 HTTP 开发服务
+- [x] T-1962 禁止端点携带用户名与密码
+- [x] T-1963 禁止端点携带 URL fragment
+- [x] T-1964 DailyHot 仅允许已知热榜路由
+- [x] T-1965 DailyHot 兼容根路由与 api 路由
+- [x] T-1966 DailyHot 禁止透传查询参数
+- [x] T-1967 NewsNow 仅允许 api/s 来源接口
+- [x] T-1968 NewsNow 强制单一合法 id 参数
+- [x] T-1969 NewsNow 拒绝额外查询参数
+- [x] T-1970 外部响应继续使用 128 KiB 上限
+- [x] T-1971 外部读取继续使用 8.5 秒组件超时
+- [x] T-1972 新增资讯源 30 分钟内存缓存
+- [x] T-1973 新增来源 fresh 状态
+- [x] T-1974 新增来源 cached 状态
+- [x] T-1975 新增来源 stale 状态
+- [x] T-1976 来源失败时回退最近成功快照
+- [x] T-1977 无历史缓存时隔离单组件失败
+- [x] T-1978 归一化 DailyHot data 响应
+- [x] T-1979 归一化 NewsNow items 响应
+- [x] T-1980 过滤危险条目跳转协议
+- [x] T-1981 按链接或标识去重资讯条目
+- [x] T-1982 条目数量限制为 3~12
+- [x] T-1983 新增热度显示开关
+- [x] T-1984 新增资讯条目排名语义
+- [x] T-1985 组件标题栏显示来源健康徽标
+- [x] T-1986 新增平板式渐变排行榜卡片
+- [x] T-1987 前三名使用高对比排名徽标
+- [x] T-1988 新增移动端紧凑资讯布局
+- [x] T-1989 商店新增资讯与热点分组
+- [x] T-1990 商店新增 feed 骨架和端点隐私标识
+- [x] T-1991 新增模型、网络、adapter、view 与商店回归
+- [x] T-1992 新增 Chromium 排行卡视觉门禁并同步交付文档
+- [x] T-1993 外部请求禁止自动跟随重定向
+- [x] T-1994 新增可配置组件后立即打开配置表单
+
+## T-3245~T-3274 组件商店文本选择与误触控制（2026-09-15）
+
+- [x] T-3245 允许选择组件卡片正文文本
+- [x] T-3246 禁止误选来源徽标文本
+- [x] T-3247 禁止误选可用性徽标文本
+- [x] T-3248 禁止误选尺寸控制区文本
+- [x] T-3249 禁止误选分组折叠按钮文本
+- [x] T-3250 禁止误选搜索清空按钮文本
+- [x] T-3251 使用标准 user-select 属性声明
+- [x] T-3252 保留卡片键盘焦点反馈
+- [x] T-3253 保留触控操作边界
+- [x] T-3254 保留长文本任意断行策略
+- [x] T-3255 保留旧 WebView 断词回退
+- [x] T-3256 保留英文自动连字符策略
+- [x] T-3257 保留段落友好换行策略
+- [x] T-3258 保留手机端单列布局适配
+- [x] T-3259 保留打印样式兼容
+- [x] T-3260 保留强制高对比色兼容
+- [x] T-3261 保留减弱动效降级
+- [x] T-3262 保留商店层叠隔离
+- [x] T-3263 保留卡片内容渲染隔离
+- [x] T-3264 验证选择样式不引入网络资源
+- [x] T-3265 验证选择样式不引入脚本副作用
+- [x] T-3266 将正文选择规则限定到商店卡片
+- [x] T-3267 将来源防误选规则限定到来源徽标
+- [x] T-3268 将状态防误选规则限定到可用性徽标
+- [x] T-3269 将控制防误选规则限定到尺寸区
+- [x] T-3270 验证选择规则不引入拖拽状态
+- [x] T-3271 验证可选与不可选状态可确定
+- [x] T-3272 验证卡片选择样式块完整闭合
+- [x] T-3273 验证控制防误选样式块完整闭合
+- [x] T-3274 新增 30 项选择行为契约回归
+
+## T-3275~T-3304 待安装组件卡片可访问性与键盘一致性（2026-09-15）
+
+- [x] T-3275 抽取可用卡片与待安装卡片共享键盘绑定
+- [x] T-3276 保持卡片负 tabindex 焦点锚点
+- [x] T-3277 保持卡片 group 语义
+- [x] T-3278 待安装卡片接入可见卡片导航集合
+- [x] T-3279 待安装卡片支持 ArrowRight
+- [x] T-3280 待安装卡片支持 ArrowLeft
+- [x] T-3281 待安装卡片支持 ArrowDown
+- [x] T-3282 待安装卡片支持 ArrowUp
+- [x] T-3283 待安装卡片支持 Home
+- [x] T-3284 待安装卡片支持 End
+- [x] T-3285 待安装导航阻止默认滚动
+- [x] T-3286 待安装导航移动焦点
+- [x] T-3287 待安装卡片暴露 moduleId
+- [x] T-3288 待安装卡片标记 plugin 分类
+- [x] T-3289 待安装卡片标记 external 可用性
+- [x] T-3290 待安装卡片声明未知集成状态
+- [x] T-3291 待安装卡片保留 added 状态
+- [x] T-3292 待安装卡片声明 warning/info 状态色调
+- [x] T-3293 待安装卡片增加可访问名称
+- [x] T-3294 区分插件未安装与插件不可用文案
+- [x] T-3295 待安装标题增加稳定 id
+- [x] T-3296 不可用移除操作保持 button 语义
+- [x] T-3297 不可用移除操作保留专用样式类
+- [x] T-3298 不可用移除操作增加 aria-label
+- [x] T-3299 不可用移除操作增加 tooltip
+- [x] T-3300 保留 pending 卡片样式钩子
+- [x] T-3301 保留 unavailable 卡片样式钩子
+- [x] T-3302 待安装卡片纳入搜索字段
+- [x] T-3303 新增待安装卡片样式范围回归
+- [x] T-3304 新增 30 项待安装卡片契约回归
+
+## T-3305~T-3334 组件商店空结果恢复与焦点回收（2026-09-15）
+
+- [x] T-3305 记录打开商店的触发元素
+- [x] T-3306 搜索清空按钮增加 tooltip
+- [x] T-3307 排序控件增加 tooltip
+- [x] T-3308 为商店 Tab 列表补充 ARIA label
+- [x] T-3309 为结果摘要分配稳定 id
+- [x] T-3310 保持结果摘要 status 语义
+- [x] T-3311 保持结果摘要 polite live region
+- [x] T-3312 为可用分区分配稳定 id
+- [x] T-3313 为功能分组标题分配稳定 id
+- [x] T-3314 为功能网格补充 group 语义
+- [x] T-3315 功能网格通过 aria-labelledby 关联标题
+- [x] T-3316 为待安装分区分配稳定 id
+- [x] T-3317 为待安装网格分配稳定 id
+- [x] T-3318 为待安装网格补充 group 语义
+- [x] T-3319 待安装网格通过 aria-labelledby 关联标题
+- [x] T-3320 清空筛选按钮增加专用样式类
+- [x] T-3321 清空筛选按钮增加 aria-label
+- [x] T-3322 清空筛选按钮增加 tooltip
+- [x] T-3323 清空筛选同步清除查询词
+- [x] T-3324 清空筛选隐藏搜索清除按钮
+- [x] T-3325 清空筛选恢复 all Tab
+- [x] T-3326 清空筛选按 tabKey 判断激活态
+- [x] T-3327 清空筛选恢复 roving tabindex
+- [x] T-3328 清空筛选后恢复搜索框焦点
+- [x] T-3329 商店销毁后恢复触发元素焦点
+- [x] T-3330 保持空结果 status 语义
+- [x] T-3331 清空筛选按钮禁止误选
+- [x] T-3332 强制高对比度覆盖清空筛选按钮
+- [x] T-3333 保持清空筛选样式作用域
+- [x] T-3334 新增 30 项空结果与焦点恢复契约回归
+
+## T-3335~T-3364 组件商店重绘焦点与滚动稳定性（2026-09-15）
+
+- [x] T-3335 重绘前记录活动元素
+- [x] T-3336 重绘前记录滚动位置
+- [x] T-3337 限定焦点记录在商店根节点
+- [x] T-3338 识别卡片焦点
+- [x] T-3339 识别 Tab 焦点
+- [x] T-3340 识别分组按钮焦点
+- [x] T-3341 识别搜索框焦点
+- [x] T-3342 识别排序控件焦点
+- [x] T-3343 清理旧商店 DOM 后再重绘
+- [x] T-3344 抽取重绘视图恢复函数
+- [x] T-3345 限制恢复后的滚动位置
+- [x] T-3346 重绘后查找卡片集合
+- [x] T-3347 按 moduleId 恢复卡片焦点
+- [x] T-3348 跳过过滤隐藏卡片
+- [x] T-3349 重绘后查找 Tab 集合
+- [x] T-3350 按 tabKey 恢复 Tab 焦点
+- [x] T-3351 重绘后查找分组集合
+- [x] T-3352 按分组标题恢复折叠按钮焦点
+- [x] T-3353 恢复搜索框焦点
+- [x] T-3354 恢复排序控件焦点
+- [x] T-3355 使用 preventScroll 恢复焦点
+- [x] T-3356 空商店状态也恢复视图
+- [x] T-3357 正常商店状态恢复视图
+- [x] T-3358 排序变更保持重绘路径
+- [x] T-3359 模块变更保持重绘路径
+- [x] T-3360 插件复扫保持重绘路径
+- [x] T-3361 使用 none 作为焦点安全初始态
+- [x] T-3362 使用稳定 focusValue 传递恢复目标
+- [x] T-3363 保持卡片非正 tabindex
+- [x] T-3364 新增 30 项重绘焦点契约回归
+
+## T-3365~T-3394 组件商店真实预览生命周期与可访问状态（2026-09-15）
+
+- [x] T-3365 预览弹窗记录触发元素
+- [x] T-3366 预览容器暴露 moduleId
+- [x] T-3367 预览容器暴露 device
+- [x] T-3368 预览容器暴露 size
+- [x] T-3369 预览容器使用 region 语义
+- [x] T-3370 预览容器增加可访问名称
+- [x] T-3371 预览初始状态标记 aria-busy
+- [x] T-3372 预览正文保留作用域 class
+- [x] T-3373 预览正文使用 status 语义
+- [x] T-3374 预览正文使用 polite live region
+- [x] T-3375 预览创建真实 home controller
+- [x] T-3376 预览读取绑定 moduleId
+- [x] T-3377 预览读取绑定 device
+- [x] T-3378 预览读取透传选定尺寸
+- [x] T-3379 预览强制刷新真实数据
+- [x] T-3380 预览跟踪 disposed 状态
+- [x] T-3381 抽取预览统一清理函数
+- [x] T-3382 清理函数释放 controller
+- [x] T-3383 清理函数清除轮询计时器
+- [x] T-3384 清理函数恢复触发元素焦点
+- [x] T-3385 包装 Dialog destroy
+- [x] T-3386 destroy 调用统一清理
+- [x] T-3387 destroy 保留宿主原始销毁
+- [x] T-3388 预览先 mount 再 refresh
+- [x] T-3389 refresh 完成后清除 aria-busy
+- [x] T-3390 refresh 使用 finally 收口状态
+- [x] T-3391 预览轮询宿主连接状态
+- [x] T-3392 断连时复用统一清理
+- [x] T-3393 保持移动端预览尺寸边界
+- [x] T-3394 新增 30 项预览生命周期契约回归
+
+## T-3395~T-3424 预览来源透明度与隐私提示（2026-09-15）
+
+- [x] T-3395 预览解析来源元数据
+- [x] T-3396 预览增加来源信息容器
+- [x] T-3397 预览来源容器使用 note 语义
+- [x] T-3398 抽取来源提示 chip 工厂
+- [x] T-3399 来源提示 chip 使用作用域 class
+- [x] T-3400 来源提示 chip 增加 tooltip
+- [x] T-3401 识别远程网络集成
+- [x] T-3402 识别本机服务集成
+- [x] T-3403 离线集成安全回退
+- [x] T-3404 增加位置隐私说明
+- [x] T-3405 增加本机隐私说明
+- [x] T-3406 增加端点隐私说明
+- [x] T-3407 增加不发送笔记说明
+- [x] T-3408 来源名称使用本地化模板
+- [x] T-3409 来源缺失回退 SiYuan
+- [x] T-3410 来源 chip 使用 source 色调
+- [x] T-3411 网络 chip 使用 network 色调
+- [x] T-3412 本机 chip 使用 local 色调
+- [x] T-3413 离线 chip 使用 offline 色调
+- [x] T-3414 隐私 chip 使用 privacy 色调
+- [x] T-3415 来源提示先于真实组件正文渲染
+- [x] T-3416 来源提示使用 flex 布局
+- [x] T-3417 来源提示支持窄屏换行
+- [x] T-3418 来源提示保持有限间距
+- [x] T-3419 来源 chip 保留可见边框
+- [x] T-3420 来源 chip 支持长来源名断行
+- [x] T-3421 来源 chip 保留旧 WebView 断词回退
+- [x] T-3422 来源 chip 支持用户复制
+- [x] T-3423 网络和隐私色调保持作用域隔离
+- [x] T-3424 新增 30 项预览来源透明度契约回归
+
+## T-3425~T-3454 组件商店预览上下文与窄屏可访问性（2026-09-15）
+
+- [x] T-3425 预览生成稳定作用域 ID
+- [x] T-3426 预览容器暴露 integration 数据属性
+- [x] T-3427 预览容器暴露 privacy 数据属性
+- [x] T-3428 来源元数据保留 moduleId
+- [x] T-3429 来源元数据增加可访问名称
+- [x] T-3430 来源 chip 暴露 tone 数据属性
+- [x] T-3431 来源 chip 增加 aria-label
+- [x] T-3432 预览展示主面板上下文
+- [x] T-3433 预览展示侧栏上下文
+- [x] T-3434 预览展示移动端上下文
+- [x] T-3435 预览展示当前尺寸上下文
+- [x] T-3436 预览正文保留 moduleId
+- [x] T-3437 预览正文保留 device
+- [x] T-3438 预览正文保留 size
+- [x] T-3439 预览正文开启原子 live 更新
+- [x] T-3440 预览正文初始 busy 状态
+- [x] T-3441 预览正文完成后清除 busy
+- [x] T-3442 预览正文关联来源说明
+- [x] T-3443 预览正文支持键盘聚焦
+- [x] T-3444 上下文 chip 使用独立 tone
+- [x] T-3445 来源说明采用 sticky 定位
+- [x] T-3446 来源说明保持层级优先
+- [x] T-3447 来源说明固定顶部位置
+- [x] T-3448 来源说明增加分隔边框
+- [x] T-3449 来源说明使用半透明背景
+- [x] T-3450 来源说明支持背景模糊
+- [x] T-3451 上下文 chip 使用虚线边框
+- [x] T-3452 预览正文允许长内容换行
+- [x] T-3453 预览正文保持 flex 可收缩
+- [x] T-3454 新增 36 项预览上下文契约回归
+
+## T-3455~T-3484 组件商店操作反馈与尺寸选择语义（2026-09-15）
+
+- [x] T-3455 尺寸控件使用 group 语义
+- [x] T-3456 尺寸控件保留 moduleId
+- [x] T-3457 尺寸控件记录 selectedSize
+- [x] T-3458 尺寸标题生成稳定 ID
+- [x] T-3459 尺寸组关联标题
+- [x] T-3460 尺寸按钮显式声明 button 类型
+- [x] T-3461 尺寸按钮暴露 selected 数据态
+- [x] T-3462 尺寸按钮增加 tooltip
+- [x] T-3463 尺寸按钮关联主操作
+- [x] T-3464 尺寸切换同步组状态
+- [x] T-3465 尺寸切换同步操作状态
+- [x] T-3466 添加操作改为显式创建按钮
+- [x] T-3467 添加操作声明 button 类型
+- [x] T-3468 添加操作使用稳定 ID
+- [x] T-3469 添加操作记录 add/apply-size
+- [x] T-3470 添加操作记录 selectedSize
+- [x] T-3471 添加操作关联尺寸说明
+- [x] T-3472 添加操作标签包含选定尺寸
+- [x] T-3473 添加操作提供 tooltip
+- [x] T-3474 来源元数据增加 note 语义
+- [x] T-3475 来源 chip 暴露 kind
+- [x] T-3476 来源 chip 增加 aria-label
+- [x] T-3477 卡片记录支持尺寸
+- [x] T-3478 卡片记录当前尺寸
+- [x] T-3479 卡片状态使用稳定 ID
+- [x] T-3480 卡片状态暴露 state
+- [x] T-3481 卡片状态使用 live 语义
+- [x] T-3482 预览/配置/移除操作记录 action
+- [x] T-3483 操作按钮增强窄屏布局
+- [x] T-3484 新增 44 项商店操作契约回归
+
+## T-3485~T-3514 组件商店筛选状态与可访问反馈（2026-09-15）
+
+- [x] T-3485 商店根节点使用 region 语义
+- [x] T-3486 商店根节点暴露设备信息
+- [x] T-3487 商店根节点记录当前 Tab
+- [x] T-3488 搜索容器使用 search 语义
+- [x] T-3489 搜索输入使用 searchbox 语义
+- [x] T-3490 搜索输入关闭自动补全
+- [x] T-3491 搜索输入声明移动端键盘意图
+- [x] T-3492 清空搜索记录 action
+- [x] T-3493 排序控件记录 action
+- [x] T-3494 排序控件记录当前排序
+- [x] T-3495 排序控件关联结果摘要
+- [x] T-3496 指南按钮声明 dialog
+- [x] T-3497 指南按钮记录 action
+- [x] T-3498 根节点记录规范化查询
+- [x] T-3499 结果摘要开启 atomic live
+- [x] T-3500 结果摘要暴露 visible 计数
+- [x] T-3501 结果摘要暴露 total 计数
+- [x] T-3502 结果摘要暴露 added 计数
+- [x] T-3503 Tab 列表使用稳定 ID
+- [x] T-3504 Tab 关联结果摘要
+- [x] T-3505 Tab 初始化计数数据
+- [x] T-3506 Tab 更新计数数据
+- [x] T-3507 Tab 标签播报计数
+- [x] T-3508 Tab 描述结果摘要
+- [x] T-3509 卡片暴露 aria-hidden
+- [x] T-3510 分组暴露 aria-hidden
+- [x] T-3511 折叠网格暴露 aria-hidden
+- [x] T-3512 空状态使用 live/atomic
+- [x] T-3513 待安装与分组操作补齐状态元数据
+- [x] T-3514 新增 45 项筛选状态契约回归
+
+## T-3515~T-3544 组件商店筛选焦点与触控导航（2026-09-15）
+
+- [x] T-3515 筛选记录当前 Tab
+- [x] T-3516 筛选记录当前排序
+- [x] T-3517 筛选记录过滤前焦点
+- [x] T-3518 卡片记录过滤匹配状态
+- [x] T-3519 过滤识别已聚焦卡片
+- [x] T-3520 过滤后恢复下一张可见卡片焦点
+- [x] T-3521 无可见卡片时回到搜索框
+- [x] T-3522 Tab 激活同步 aria-current
+- [x] T-3523 Tab 初始化同步 aria-current
+- [x] T-3524 清空筛选同步 aria-current
+- [x] T-3525 尺寸按钮支持左右方向键
+- [x] T-3526 尺寸按钮支持 Home
+- [x] T-3527 尺寸按钮支持 End
+- [x] T-3528 尺寸按钮方向键循环
+- [x] T-3529 尺寸按钮阻止原生滚动
+- [x] T-3530 尺寸按钮焦点移动
+- [x] T-3531 尺寸按钮补齐触控动作
+- [x] T-3532 添加按钮补齐触控动作
+- [x] T-3533 配置按钮补齐触控动作
+- [x] T-3534 移除按钮补齐触控动作
+- [x] T-3535 分组按钮补齐触控动作
+- [x] T-3536 搜索清空补齐触控动作
+- [x] T-3537 筛选清空补齐触控动作
+- [x] T-3538 指南按钮补齐触控动作
+- [x] T-3539 待安装移除补齐触控动作
+- [x] T-3540 Tab 当前项使用数字字形
+- [x] T-3541 隐藏卡片保持作用域隔离
+- [x] T-3542 隐藏卡片使用 content-visibility
+- [x] T-3543 保持搜索焦点不被无关筛选抢占
+- [x] T-3544 新增 41 项焦点导航契约回归
+
+## T-3545~T-3574 组件商店渲染状态与语义连续性（2026-09-15）
+
+- [x] T-3545 商店根节点记录渲染版本
+- [x] T-3546 商店根节点初始化 aria-busy
+- [x] T-3547 商店重绘前声明忙碌状态
+- [x] T-3548 商店重绘后清除忙碌状态
+- [x] T-3549 空商店清除忙碌状态
+- [x] T-3550 商店记录可用组件数量
+- [x] T-3551 商店记录待安装组件数量
+- [x] T-3552 商店记录可见组件数量
+- [x] T-3553 商店记录全部组件数量
+- [x] T-3554 商店记录已添加组件数量
+- [x] T-3555 结果摘要暴露 ready 状态
+- [x] T-3556 结果摘要暴露 results 状态
+- [x] T-3557 结果摘要暴露 empty 状态
+- [x] T-3558 Tab 暴露集合总数
+- [x] T-3559 Tab 暴露集合位置
+- [x] T-3560 卡片关联标题节点
+- [x] T-3561 卡片状态开启 atomic 播报
+- [x] T-3562 尺寸组声明横向方向
+- [x] T-3563 尺寸组保持 group 语义
+- [x] T-3564 尺寸按钮暴露集合总数
+- [x] T-3565 尺寸按钮暴露集合位置
+- [x] T-3566 添加按钮记录 moduleId
+- [x] T-3567 可用分区声明 heading 语义
+- [x] T-3568 可用分区声明 heading 层级
+- [x] T-3569 待安装分区声明 heading 语义
+- [x] T-3570 功能分组声明 heading 语义
+- [x] T-3571 功能分组声明 heading 层级
+- [x] T-3572 分组网格记录分组键
+- [x] T-3573 空筛选状态记录 state
+- [x] T-3574 新增 40 项渲染状态契约回归
+
+## T-3575~T-3604 移动端组件商店单列与窄屏交互（2026-09-15）
+
+- [x] T-3575 移动端搜索区允许换行
+- [x] T-3576 移动端搜索区保持紧凑间距
+- [x] T-3577 移动端输入框保留清空按钮空间
+- [x] T-3578 移动端输入框允许收缩
+- [x] T-3579 移动端排序控件填充半行
+- [x] T-3580 移动端指南控件填充半行
+- [x] T-3581 移动端排序控件移除固定最大宽度
+- [x] T-3582 移动端指南控件允许收缩
+- [x] T-3583 移动端网格强制单列
+- [x] T-3584 移动端网格保持零最小宽度
+- [x] T-3585 移动端网格保留卡片间距
+- [x] T-3586 移动端 Tab 保持横向滚动
+- [x] T-3587 移动端 Tab 限制横向过滚动
+- [x] T-3588 移动端 Tab 开启惯性滚动
+- [x] T-3589 移动端 Tab 使用细滚动条
+- [x] T-3590 移动端 Tab 增加触控高度
+- [x] T-3591 移动端 Tab 保留横向内边距
+- [x] T-3592 移动端摘要增加内边距
+- [x] T-3593 移动端卡片填充整行
+- [x] T-3594 移动端卡片限制最大宽度
+- [x] T-3595 移动端卡片保留紧凑内边距
+- [x] T-3596 移动端卡片头允许收缩
+- [x] T-3597 移动端预览限制最大宽度
+- [x] T-3598 移动端预览裁剪溢出
+- [x] T-3599 移动端尺寸行保持触控间距
+- [x] T-3600 移动端添加按钮保持末端对齐
+- [x] T-3601 移动端来源元数据限制宽度
+- [x] T-3602 移动端空状态限制宽度
+- [x] T-3603 移动端空状态允许长文本换行
+- [x] T-3604 新增 40 项移动布局契约回归
+
+## T-3605~T-3634 移动端组件商店行为边界与回归扩展（2026-09-15）
+
+- [x] T-3605 移动面板注入专用 class
+- [x] T-3606 移动面板 class 受设备检测保护
+- [x] T-3607 移动面板使用 mobile device key
+- [x] T-3608 商店对话框宽度受视口约束
+- [x] T-3609 商店对话框高度受视口约束
+- [x] T-3610 预览对话框宽度受视口约束
+- [x] T-3611 预览对话框高度受视口约束
+- [x] T-3612 移动卡片使用规范化尺寸
+- [x] T-3613 移动尺寸解析复用 home model
+- [x] T-3614 卡片暴露支持端信息
+- [x] T-3615 根节点记录设备类型
+- [x] T-3616 根节点保持 region 语义
+- [x] T-3617 搜索区保持 search 语义
+- [x] T-3618 输入框声明 enterkeyhint
+- [x] T-3619 输入框关闭 autocomplete
+- [x] T-3620 Tab 保持方向键导航
+- [x] T-3621 Tab 保持 Home 导航
+- [x] T-3622 Tab 保持 End 导航
+- [x] T-3623 Tab 导航阻止页面滚动
+- [x] T-3624 卡片保持局部焦点导航
+- [x] T-3625 卡片支持上下方向键
+- [x] T-3626 卡片支持 Home
+- [x] T-3627 卡片支持 End
+- [x] T-3628 尺寸按钮保持触控语义
+- [x] T-3629 添加按钮保持触控语义
+- [x] T-3630 Tab 按钮保持触控语义
+- [x] T-3631 指南按钮保持触控语义
+- [x] T-3632 网格保持隔离与卡片盒模型
+- [x] T-3633 空状态与来源标签保持有界换行
+- [x] T-3634 新增移动行为边界回归
+
+## T-3635~T-3664 移动端组件商店视觉无障碍与安全区域契约（2026-09-15）
+
+- [x] T-3635 移动面板网格显式单列
+- [x] T-3636 移动面板单元格保持整行宽度
+- [x] T-3637 添加按钮设置最小触控高度
+- [x] T-3638 配置按钮设置最小触控高度
+- [x] T-3639 移除按钮设置最小触控高度
+- [x] T-3640 添加按钮标签禁止折行
+- [x] T-3641 配置按钮标签禁止折行
+- [x] T-3642 移除按钮标签禁止折行
+- [x] T-3643 搜索清空按钮保持触控语义
+- [x] T-3644 筛选清空按钮保持触控语义
+- [x] T-3645 分组折叠按钮保持触控语义
+- [x] T-3646 移除不可用按钮保持触控语义
+- [x] T-3647 商店减弱动效媒体查询存在
+- [x] T-3648 卡片减弱动效时禁用过渡
+- [x] T-3649 Tab 减弱动效时禁用过渡
+- [x] T-3650 卡片悬停变换在减弱动效时关闭
+- [x] T-3651 移动减弱动效时保持卡片可见
+- [x] T-3652 移动减弱动效时限制卡片 containment
+- [x] T-3653 强制配色媒体查询存在
+- [x] T-3654 强制配色允许系统颜色接管
+- [x] T-3655 强制配色卡片使用 Canvas 背景
+- [x] T-3656 强制配色控件使用 CanvasText 前景
+- [x] T-3657 强制配色焦点使用 Highlight 轮廓
+- [x] T-3658 强制配色焦点轮廓保留偏移
+- [x] T-3659 强制配色激活 Tab 使用 Highlight 边框
+- [x] T-3660 强制配色激活 Tab 使用 HighlightText
+- [x] T-3661 打印模式隐藏商店搜索与导航控件
+- [x] T-3662 打印模式隐藏尺寸和预览操作
+- [x] T-3663 打印模式保持卡片完整并提升可读性
+- [x] T-3664 长文本、过滚动与安全区域契约回归
+
+## T-3665~T-3694 组件商店语义状态与焦点恢复契约（2026-09-15）
+
+- [x] T-3665 商店根节点记录初始 Tab
+- [x] T-3666 商店根节点初始化 busy 状态
+- [x] T-3667 加载开始播报 busy 状态
+- [x] T-3668 加载完成清除 busy 状态
+- [x] T-3669 Tab 暴露选中状态
+- [x] T-3670 Tab 暴露当前页面状态
+- [x] T-3671 Tab 使用 roving tabindex
+- [x] T-3672 Tab 关联结果摘要
+- [x] T-3673 结果摘要使用 status 角色
+- [x] T-3674 结果摘要使用 polite live
+- [x] T-3675 结果摘要使用 atomic 播报
+- [x] T-3676 结果摘要记录结果状态
+- [x] T-3677 结果摘要记录可见数量
+- [x] T-3678 结果摘要记录总数量
+- [x] T-3679 结果摘要记录已添加数量
+- [x] T-3680 卡片关联结果摘要
+- [x] T-3681 Tab 激活更新根节点状态
+- [x] T-3682 Tab 激活重新应用筛选
+- [x] T-3683 Tab 键盘导航移动焦点
+- [x] T-3684 卡片键盘导航移动焦点
+- [x] T-3685 卡片导航阻止页面滚动
+- [x] T-3686 无卡片时导航回到搜索框
+- [x] T-3687 空筛选状态使用 status 角色
+- [x] T-3688 空筛选状态使用 polite live
+- [x] T-3689 空筛选状态使用 atomic 播报
+- [x] T-3690 清空筛选保持 button 类型
+- [x] T-3691 清空筛选记录 action 元数据
+- [x] T-3692 清空筛选恢复 Tab 选中状态
+- [x] T-3693 清空筛选恢复 roving tabindex
+- [x] T-3694 分组、尺寸控件与对话框焦点契约回归
+
+## T-3695~T-3734 组件商店加载、可用性与降级契约（2026-09-15）
+
+- [x] T-3695 商店渲染版本初始化
+- [x] T-3696 商店渲染版本递增
+- [x] T-3697 记录可用组件数量
+- [x] T-3698 搜索框恢复查询值
+- [x] T-3699 清空搜索保持 button 类型
+- [x] T-3700 清空搜索记录 action
+- [x] T-3701 清空搜索空值时隐藏
+- [x] T-3702 清空搜索后恢复输入焦点
+- [x] T-3703 排序控件记录 action
+- [x] T-3704 排序控件关联结果摘要
+- [x] T-3705 排序值经过规范化
+- [x] T-3706 指南按钮保持 button 类型
+- [x] T-3707 指南按钮记录 action
+- [x] T-3708 指南按钮声明 dialog popup
+- [x] T-3709 筛选规范化搜索查询
+- [x] T-3710 筛选记录活动条件
+- [x] T-3711 筛选记录排序状态
+- [x] T-3712 筛选切换卡片隐藏类
+- [x] T-3713 筛选同步卡片 aria-hidden
+- [x] T-3714 筛选记录卡片命中状态
+- [x] T-3715 筛选隐藏无结果分组
+- [x] T-3716 筛选同步分组 aria-hidden
+- [x] T-3717 折叠分组同步网格 aria-hidden
+- [x] T-3718 筛选后焦点回到首个可见卡片
+- [x] T-3719 筛选后空结果焦点回到搜索框
+- [x] T-3720 Tab 暴露集合大小
+- [x] T-3721 Tab 暴露集合位置
+- [x] T-3722 待安装分区使用二级标题
+- [x] T-3723 待安装分区使用稳定标识
+- [x] T-3724 待安装网格使用 group 语义
+- [x] T-3725 待安装网格关联分区标题
+- [x] T-3726 不可用组件记录 unavailable 状态
+- [x] T-3727 不可用组件使用 warning 状态色
+- [x] T-3728 待安装卡片记录 external 可用性
+- [x] T-3729 待安装卡片关联标题
+- [x] T-3730 移除不可用按钮保持 button 类型
+- [x] T-3731 移除不可用按钮记录 action
+- [x] T-3732 移除不可用按钮保护缺失实例
+- [x] T-3733 空目录重置 ready/pending 计数
+- [x] T-3734 空目录结束 busy 状态并清理生命周期
+
+## T-3735~T-3774 组件指南、真实预览与配置表单契约（2026-09-15）
+
+- [x] T-3735 指南对话框使用本地化标题
+- [x] T-3736 指南对话框使用独立根节点
+- [x] T-3737 指南移动宽度受视口约束
+- [x] T-3738 指南移动高度受视口约束
+- [x] T-3739 指南链接指向统一文档
+- [x] T-3740 指南外链新窗口打开
+- [x] T-3741 指南外链隔离 opener 与 referrer
+- [x] T-3742 指南展示本地文档路径
+- [x] T-3743 预览对话框记录 opener
+- [x] T-3744 预览尺寸缺失时回退 medium
+- [x] T-3745 预览优先选择声明的 medium
+- [x] T-3746 预览标题包含组件名称
+- [x] T-3747 预览移动宽度受视口约束
+- [x] T-3748 预览移动高度受视口约束
+- [x] T-3749 预览根节点记录组件 ID
+- [x] T-3750 预览根节点记录设备类型
+- [x] T-3751 预览根节点记录解析尺寸
+- [x] T-3752 预览根节点使用 region 语义
+- [x] T-3753 预览根节点具备组件标签
+- [x] T-3754 预览根节点播报初始 busy
+- [x] T-3755 预览记录数据集成类型
+- [x] T-3756 预览记录隐私要求
+- [x] T-3757 预览来源元数据使用 note 语义
+- [x] T-3758 预览元数据 chip 记录 tone
+- [x] T-3759 预览元数据 chip 具备可访问标签
+- [x] T-3760 预览正文使用 status 语义
+- [x] T-3761 预览正文使用 polite live
+- [x] T-3762 预览正文使用 atomic 更新
+- [x] T-3763 预览正文具备初始 busy 状态
+- [x] T-3764 预览正文支持键盘聚焦
+- [x] T-3765 预览正文关联来源元数据
+- [x] T-3766 真实读取透传解析后的尺寸
+- [x] T-3767 预览控制器提供错误与重试标签
+- [x] T-3768 预览条目动作关闭对话框
+- [x] T-3769 任务切换失败展示用户提示
+- [x] T-3770 任务切换后刷新预览内容
+- [x] T-3771 预览销毁幂等并释放控制器
+- [x] T-3772 预览销毁清除轮询定时器
+- [x] T-3773 首次预览强制读取并收敛 busy
+- [x] T-3774 配置表单校验、保存与刷新回调契约
+
+## T-3775~T-3814 配置字段边界与预览元数据契约（2026-09-15）
+
+- [x] T-3775 配置表单使用独立根节点
+- [x] T-3776 配置表单清理旧内容
+- [x] T-3777 配置控件按字段键索引
+- [x] T-3778 配置表单追踪重置字段
+- [x] T-3779 数字默认值校验有限数
+- [x] T-3780 选择默认值限制在选项内
+- [x] T-3781 重置同步草稿状态
+- [x] T-3782 重置记录字段键
+- [x] T-3783 标签关联生成控件
+- [x] T-3784 选择控件使用块级样式
+- [x] T-3785 选择控件渲染声明选项
+- [x] T-3786 选择变更回写草稿
+- [x] T-3787 笔记本控件初始禁用
+- [x] T-3788 笔记本控件显示加载状态
+- [x] T-3789 笔记本控件保留空选项
+- [x] T-3790 笔记本控件保留过期值
+- [x] T-3791 笔记本控件加载后启用
+- [x] T-3792 文档输入限制长度
+- [x] T-3793 文档输入校验 ID 格式
+- [x] T-3794 文档输入关联建议列表
+- [x] T-3795 文档建议数量有界
+- [x] T-3796 文档输入回写长度受限值
+- [x] T-3797 数字字段使用 number 类型
+- [x] T-3798 数字字段声明最小值
+- [x] T-3799 数字字段声明最大值
+- [x] T-3800 数字变更按范围钳制
+- [x] T-3801 日期字段使用 date 类型
+- [x] T-3802 日期字段声明下界
+- [x] T-3803 日期字段声明上界
+- [x] T-3804 文本字段限制长度
+- [x] T-3805 重置遍历全部 schema
+- [x] T-3806 取消按钮销毁对话框
+- [x] T-3807 保存查找无效控件
+- [x] T-3808 保存定位实例
+- [x] T-3809 保存保留其他实例
+- [x] T-3810 预览 ready 清除容器 busy
+- [x] T-3811 预览 ready 清除正文 busy
+- [x] T-3812 预览元数据与正文 ID 稳定
+- [x] T-3813 预览来源缓存状态可播报
+- [x] T-3814 预览断连监测保持有界
+
+## T-3815~T-3854 对话框内容、字段标签与异步配置契约（2026-09-15）
+
+- [x] T-3815 指南提示使用本地化内容
+- [x] T-3816 指南提示使用独立样式类
+- [x] T-3817 指南链接使用按钮样式
+- [x] T-3818 指南链接使用本地化标签
+- [x] T-3819 指南备注使用独立样式类
+- [x] T-3820 指南备注位于链接之后
+- [x] T-3821 预览 ID 清洗组件标识
+- [x] T-3822 预览元数据记录组件 ID
+- [x] T-3823 预览元数据使用指南提示标签
+- [x] T-3824 预览 chip 标题镜像标签
+- [x] T-3825 预览添加来源 chip
+- [x] T-3826 预览添加集成 chip
+- [x] T-3827 预览添加隐私 chip
+- [x] T-3828 预览添加设备表面 chip
+- [x] T-3829 预览添加尺寸 chip
+- [x] T-3830 预览透传调用选项
+- [x] T-3831 预览任务保留完成状态元数据
+- [x] T-3832 预览任务切换采用异步流程
+- [x] T-3833 预览任务调用宿主适配器
+- [x] T-3834 预览任务尝试后刷新
+- [x] T-3835 预览销毁防重复
+- [x] T-3836 预览销毁包装原始关闭
+- [x] T-3837 预览销毁调用原始关闭
+- [x] T-3838 预览 busy 仅在挂载时清除
+- [x] T-3839 预览断连定时器记录
+- [x] T-3840 预览断连定时器清理
+- [x] T-3841 配置字段使用独立样式类
+- [x] T-3842 配置标签使用独立样式类
+- [x] T-3843 配置控件 ID 清洗非法字符
+- [x] T-3844 配置控件创建后登记
+- [x] T-3845 笔记本填充清理加载选项
+- [x] T-3846 笔记本填充渲染可用列表
+- [x] T-3847 笔记本填充恢复当前值
+- [x] T-3848 笔记本填充回写草稿
+- [x] T-3849 笔记本填充消费重置标记
+- [x] T-3850 笔记本异步加载隔离
+- [x] T-3851 文档 datalist 使用稳定 ID
+- [x] T-3852 文档 datalist 渲染建议项
+- [x] T-3853 文档输入监听回写草稿
+- [x] T-3854 配置动作顺序与预览断连契约回归
+
+## T-3855~T-3894 配置可访问性、异步安全与预览来源契约（2026-09-15）
+
+- [x] T-3855 配置标题包含组件 ID
+- [x] T-3856 配置对话框使用 home-config 根节点
+- [x] T-3857 配置字段标签使用字段文案
+- [x] T-3858 配置控件 ID 包含实例 ID
+- [x] T-3859 配置控件 ID 包含字段键
+- [x] T-3860 select 控件接收生成 ID
+- [x] T-3861 notebook 控件接收生成 ID
+- [x] T-3862 document 控件接收生成 ID
+- [x] T-3863 标签与控件位于同一字段行
+- [x] T-3864 select 初始值来自草稿
+- [x] T-3865 select 草稿回写选中值
+- [x] T-3866 notebook 当前值读取草稿
+- [x] T-3867 notebook 当前值受选项约束
+- [x] T-3868 notebook 保留过期 ID
+- [x] T-3869 notebook 过期值显示不可用标签
+- [x] T-3870 notebook 填充后恢复当前值
+- [x] T-3871 notebook 变更监听回写草稿
+- [x] T-3872 notebook 异步 promise 调用 fill
+- [x] T-3873 document 使用本地化 placeholder
+- [x] T-3874 document 初始值来自草稿
+- [x] T-3875 document 初始化草稿值
+- [x] T-3876 document 建议使用 rootId
+- [x] T-3877 document 建议使用标题
+- [x] T-3878 document 关联 datalist
+- [x] T-3879 date 输入使用有界年份
+- [x] T-3880 number 输入保存数值草稿
+- [x] T-3881 number 变更拒绝非有限值
+- [x] T-3882 number 无效值回退默认值
+- [x] T-3883 text 变更保持协议长度
+- [x] T-3884 默认值处理 null
+- [x] T-3885 默认值截断数字
+- [x] T-3886 重置保护缺失控件
+- [x] T-3887 重置写入字符串控件值
+- [x] T-3888 重置遍历 schema
+- [x] T-3889 取消按钮使用本地化标签
+- [x] T-3890 保存按钮使用本地化标签
+- [x] T-3891 保存先校验再读取状态
+- [x] T-3892 保存只复制草稿字段
+- [x] T-3893 预览来源与隐私兜底安全
+- [x] T-3894 预览设备表面和数据新鲜度契约回归
+
+## T-3895~T-3934 商店卡片元数据、尺寸与操作状态契约（2026-09-15）
+
+- [x] T-3895 卡片使用 section 语义
+- [x] T-3896 卡片安装键盘绑定
+- [x] T-3897 卡片记录组件 ID
+- [x] T-3898 卡片搜索文本包含来源
+- [x] T-3899 卡片记录规范化分类
+- [x] T-3900 卡片记录可用性
+- [x] T-3901 直连组件归类 offline
+- [x] T-3902 卡片尺寸缺失回退 medium
+- [x] T-3903 卡片记录支持尺寸
+- [x] T-3904 卡片记录当前尺寸
+- [x] T-3905 卡片记录添加状态
+- [x] T-3906 卡片记录状态 tone
+- [x] T-3907 卡片记录集成 tone
+- [x] T-3908 卡片提供可访问摘要
+- [x] T-3909 卡片图标声明 viewBox
+- [x] T-3910 卡片图标对读屏隐藏
+- [x] T-3911 卡片标题支持组件 ID 回退
+- [x] T-3912 卡片标题使用稳定 ID
+- [x] T-3913 卡片通过 aria-labelledby 关联标题
+- [x] T-3914 条件徽标提供 aria-label
+- [x] T-3915 条件徽标提供 tooltip
+- [x] T-3916 支持表面文本提供 aria-label
+- [x] T-3917 支持表面文本提供 tooltip
+- [x] T-3918 卡片状态使用稳定 ID
+- [x] T-3919 卡片状态记录添加状态
+- [x] T-3920 卡片状态使用 polite live
+- [x] T-3921 卡片状态使用 atomic
+- [x] T-3922 卡片通过 aria-describedby 关联状态
+- [x] T-3923 来源元数据使用 note
+- [x] T-3924 来源元数据提供引导标签
+- [x] T-3925 来源 chip 记录 kind
+- [x] T-3926 来源 chip 提供 aria-label
+- [x] T-3927 卡片预览记录 kind
+- [x] T-3928 卡片预览标记装饰内容
+- [x] T-3929 卡片预览记录组件 ID
+- [x] T-3930 预览尺寸条使用 presentation
+- [x] T-3931 预览尺寸盒记录 size
+- [x] T-3932 预览尺寸盒提供标题
+- [x] T-3933 尺寸组记录选择状态并关联标签
+- [x] T-3934 尺寸按钮与预览操作契约回归
+
+## T-3935~T-3974 添加、应用尺寸、配置与移除状态契约（2026-09-15）
+
+- [x] T-3935 尺寸选择清理旧选中样式
+- [x] T-3936 尺寸选择清理旧 pressed 状态
+- [x] T-3937 尺寸选择清理旧 data 状态
+- [x] T-3938 尺寸选择设置新 tile
+- [x] T-3939 尺寸选择应用选中样式
+- [x] T-3940 尺寸选择设置 pressed 状态
+- [x] T-3941 尺寸选择设置 data 状态
+- [x] T-3942 尺寸选择同步分组状态
+- [x] T-3943 尺寸选择同步操作状态
+- [x] T-3944 尺寸选择更新可访问标签
+- [x] T-3945 尺寸按钮支持 ArrowLeft
+- [x] T-3946 尺寸按钮支持 ArrowRight
+- [x] T-3947 尺寸按钮支持 Home
+- [x] T-3948 尺寸按钮支持 End
+- [x] T-3949 尺寸导航阻止默认行为
+- [x] T-3950 尺寸导航移动焦点
+- [x] T-3951 添加动作读取选中尺寸
+- [x] T-3952 添加动作解析组件宽高
+- [x] T-3953 添加动作读取最新状态
+- [x] T-3954 添加动作限定设备布局
+- [x] T-3955 应用动作定位已有布局
+- [x] T-3956 应用动作更新尺寸与宽高
+- [x] T-3957 添加动作创建组件实例
+- [x] T-3958 添加动作启用新实例
+- [x] T-3959 添加动作从原点布局
+- [x] T-3960 添加动作默认展开
+- [x] T-3961 添加动作写入设备布局
+- [x] T-3962 添加动作持久化状态
+- [x] T-3963 条件组件提示前置要求
+- [x] T-3964 条件组件使用本地化提示
+- [x] T-3965 添加动作刷新商店
+- [x] T-3966 添加动作通知父面板
+- [x] T-3967 新增可配置组件打开配置表单
+- [x] T-3968 配置表单接收新实例
+- [x] T-3969 配置保存后刷新商店
+- [x] T-3970 已添加组件显示配置动作
+- [x] T-3971 配置动作使用已有实例
+- [x] T-3972 配置保存后重新渲染
+- [x] T-3973 移除动作仅对已添加卡片显示
+- [x] T-3974 移除、配置与状态回归契约
+
+## T-3975~T-4014 组件商店分组与待安装区域契约（2026-09-15）
+
+- [x] T-3975 声明内置组件分组元数据
+- [x] T-3976 日记与日程组件显式分组
+- [x] T-3977 任务组件显式分组
+- [x] T-3978 文档与导航组件显式分组
+- [x] T-3979 数据洞察组件显式分组
+- [x] T-3980 生活信息组件显式分组
+- [x] T-3981 新闻组件显式分组
+- [x] T-3982 专注组件显式分组
+- [x] T-3983 学习组件显式分组
+- [x] T-3984 采集组件显式分组
+- [x] T-3985 系统组件显式分组
+- [x] T-3986 按 moduleId 解析内置分组
+- [x] T-3987 未知内置组件回退其他分组
+- [x] T-3988 按作者解析插件分组
+- [x] T-3989 无作者插件回退通用分组
+- [x] T-3990 从可用卡片构建分组
+- [x] T-3991 创建缺失分组桶
+- [x] T-3992 将卡片放入对应分组
+- [x] T-3993 内置分组优先排序
+- [x] T-3994 保留未知分组尾部排序
+- [x] T-3995 每个分组渲染独立组头
+- [x] T-3996 组头使用三级标题语义
+- [x] T-3997 组头使用稳定位置 ID
+- [x] T-3998 组头记录稳定分组键
+- [x] T-3999 组头暴露卡片数量
+- [x] T-4000 分组标签暴露卡片数量
+- [x] T-4001 分组折叠状态可追踪
+- [x] T-4002 分组展开状态可访问
+- [x] T-4003 折叠按钮记录分组键
+- [x] T-4004 折叠按钮控制对应网格
+- [x] T-4005 分组网格使用稳定 ID
+- [x] T-4006 分组网格使用 group 语义
+- [x] T-4007 分组网格关联组头
+- [x] T-4008 待安装状态复用目录解析器
+- [x] T-4009 待安装区域排除 ready 状态
+- [x] T-4010 根节点记录待安装计数
+- [x] T-4011 待安装组头使用稳定 ID
+- [x] T-4012 待安装组头记录 section 键
+- [x] T-4013 待安装网格使用稳定 ID
+- [x] T-4014 待安装网格关联组头
+- [x] T-4015 待安装卡片搜索文本包含来源
+- [x] T-4016 待安装卡片记录 requires-provider 状态
+- [x] T-4017 待安装卡片显示提供方
+- [x] T-4018 不可用卡片使用 warning tone
+- [x] T-4019 不可用卡片使用专用样式类
+- [x] T-4020 不可用卡片提供移除动作
+- [x] T-4021 不可用移除按 moduleId 查找实例
+- [x] T-4022 不可用移除后刷新并通知父面板
+- [x] T-4023 空目录重置 ready/pending 计数
+
+## T-4024~T-4073 筛选分组可见性与计数同步契约（2026-09-15）
+
+- [x] T-4024 可用分区稳定 ID
+- [x] T-4025 可用分区 section 键
+- [x] T-4026 可用分区二级标题语义
+- [x] T-4027 可用分区 heading 角色
+- [x] T-4028 可用分区本地化标签
+- [x] T-4029 初始化搜索查询数据
+- [x] T-4030 记录活动筛选器
+- [x] T-4031 记录当前排序
+- [x] T-4032 使用归一化查询匹配卡片
+- [x] T-4033 筛选切换卡片隐藏类
+- [x] T-4034 筛选暴露卡片 aria-hidden
+- [x] T-4035 筛选记录卡片匹配状态
+- [x] T-4036 按子卡片计算分组可见性
+- [x] T-4037 隐藏无结果分组标题
+- [x] T-4038 隐藏无结果分组网格
+- [x] T-4039 保留分组折叠状态
+- [x] T-4040 暴露分组标题 aria-hidden
+- [x] T-4041 暴露分组网格 aria-hidden
+- [x] T-4042 处理可用分区筛选
+- [x] T-4043 处理待安装分区筛选
+- [x] T-4044 隐藏无结果分区标题
+- [x] T-4045 隐藏待安装分区网格
+- [x] T-4046 统计可见卡片
+- [x] T-4047 识别筛选前焦点卡片
+- [x] T-4048 跳过筛选后隐藏卡片
+- [x] T-4049 聚焦首个可见卡片
+- [x] T-4050 无可见卡片时回到搜索框
+- [x] T-4051 切换筛选空状态可见性
+- [x] T-4052 空状态同步 aria-hidden
+- [x] T-4053 从卡片数据重算结果摘要
+- [x] T-4054 摘要显示可见数量
+- [x] T-4055 摘要显示总数量
+- [x] T-4056 摘要显示已添加数量
+- [x] T-4057 摘要记录可见数据
+- [x] T-4058 摘要记录总数数据
+- [x] T-4059 摘要记录已添加数据
+- [x] T-4060 摘要记录空结果状态
+- [x] T-4061 根节点记录可见数量
+- [x] T-4062 根节点记录总数量
+- [x] T-4063 根节点记录已添加数量
+- [x] T-4064 Tab 计数复用卡片数据
+- [x] T-4065 Tab 标签显示计数
+- [x] T-4066 Tab 数据集同步计数
+- [x] T-4067 Tab aria-label 同步计数
+- [x] T-4068 Tab 关联实时结果摘要
+- [x] T-4069 清除筛选重置查询
+- [x] T-4070 清除筛选重置活动 Tab
+- [x] T-4071 清除筛选清空搜索框
+- [x] T-4072 清除筛选恢复 Tab aria 状态
+- [x] T-4073 清除筛选后重新应用模型并聚焦
+
+## T-4074~T-4126 搜索排序、渲染恢复与生命周期契约（2026-09-15）
+
+- [x] T-4074 捕获商店对话框 opener
+- [x] T-4075 使用本地化商店标题
+- [x] T-4076 桌面宽度受视口约束
+- [x] T-4077 桌面高度受视口约束
+- [x] T-4078 根节点缺失安全退出
+- [x] T-4079 商店根节点使用 region
+- [x] T-4080 根节点使用可访问标签
+- [x] T-4081 根节点记录设备
+- [x] T-4082 初始化查询、Tab 与排序状态
+- [x] T-4083 初始化渲染版本与 busy 状态
+- [x] T-4084 折叠组使用局部状态集合
+- [x] T-4085 重绘前宣布 busy
+- [x] T-4086 渲染版本单调递增
+- [x] T-4087 捕获当前活动元素
+- [x] T-4088 捕获滚动位置
+- [x] T-4089 初始化焦点快照
+- [x] T-4090 捕获卡片焦点
+- [x] T-4091 捕获 Tab 焦点
+- [x] T-4092 捕获分组焦点
+- [x] T-4093 捕获搜索框焦点
+- [x] T-4094 捕获排序控件焦点
+- [x] T-4095 重绘前清空旧 DOM
+- [x] T-4096 读取最新主页状态
+- [x] T-4097 按设备读取布局
+- [x] T-4098 安全解析布局实例
+- [x] T-4099 同步布局与实例映射
+- [x] T-4100 按设备列出组件
+- [x] T-4101 仅纳入可用组件 ID
+- [x] T-4102 记录可用组件数量
+- [x] T-4103 恢复搜索查询
+- [x] T-4104 查询决定清除按钮显隐
+- [x] T-4105 清除搜索同步重置输入
+- [x] T-4106 清除搜索隐藏自身
+- [x] T-4107 清除搜索重新应用筛选
+- [x] T-4108 清除搜索恢复焦点
+- [x] T-4109 Escape 仅处理非空查询
+- [x] T-4110 Escape 阻止默认行为
+- [x] T-4111 Escape 委托清除动作
+- [x] T-4112 排序提供四种模式
+- [x] T-4113 排序值归一化
+- [x] T-4114 排序记录当前模式
+- [x] T-4115 排序关联结果摘要
+- [x] T-4116 排序变化归一化并重绘
+- [x] T-4117 重绘恢复滚动边界
+- [x] T-4118 按组件 ID 恢复卡片焦点
+- [x] T-4119 恢复焦点不触发滚动
+- [x] T-4120 初始立即渲染商店
+- [x] T-4121 动态刷新忽略脱离 DOM 的根节点
+- [x] T-4122 动态刷新重绘并通知父面板
+- [x] T-4123 注册组件变化监听
+- [x] T-4124 延迟复扫并检查连接状态
+- [x] T-4125 销毁时清理计时器与监听
+- [x] T-4126 销毁后调用原始销毁并恢复 opener 焦点
+
+## T-4127~T-4176 商店模型边界与组件状态契约（2026-09-15）
+
+- [x] T-4127 异常卡片输入安全归一化
+- [x] T-4128 非法分类回退 builtin
+- [x] T-4129 非法可用性回退 ready
+- [x] T-4130 非法集成标记为 unknown
+- [x] T-4131 兼容字符串 true 添加状态
+- [x] T-4132 拒绝字符串 false 添加状态
+- [x] T-4133 搜索文本小写化
+- [x] T-4134 异常筛选回退 all
+- [x] T-4135 异常卡片集合计数安全
+- [x] T-4136 摘要独立统计已添加数量
+- [x] T-4137 搜索文本包含标题描述和 ID
+- [x] T-4138 日历组件预览类型
+- [x] T-4139 未知插件预览类型回退
+- [x] T-4140 来源信息返回防御性副本
+- [x] T-4141 未知组件来源安全为空
+- [x] T-4142 预览类型非法值回退 list
+- [x] T-4143 卡片状态默认 medium
+- [x] T-4144 卡片状态保留合法尺寸
+- [x] T-4145 尺寸选择无选项回退
+- [x] T-4146 尺寸选择保留当前合法值
+- [x] T-4147 尺寸选择清理非字符串
+- [x] T-4148 尺寸支持识别合法值
+- [x] T-4149 尺寸支持拒绝非法值
+- [x] T-4150 表面列表使用 fallback
+- [x] T-4151 表面列表过滤非法重复值
+- [x] T-4152 条件组件谓词
+- [x] T-4153 外部组件谓词
+- [x] T-4154 分区显隐拒绝负数
+- [x] T-4155 分区显隐拒绝 NaN
+- [x] T-4156 异常卡片组显隐
+- [x] T-4157 空分组标签回退
+- [x] T-4158 分组排序保留未知组
+- [x] T-4159 分组卡片支持 id 别名
+- [x] T-4160 分组卡片移除无身份项
+- [x] T-4161 焦点索引处理 NaN
+- [x] T-4162 焦点移动处理异常 delta
+- [x] T-4163 分页处理 NaN 页码
+- [x] T-4164 分页大小上限
+- [x] T-4165 来源摘要使用 unknown 标签
+- [x] T-4166 卡片元数据保持可选
+- [x] T-4167 外部组件禁止添加
+- [x] T-4168 外部组件仍可预览
+- [x] T-4169 已添加组件动作顺序
+- [x] T-4170 动作标签安全回退
+- [x] T-4171 工具提示使用卡片状态
+- [x] T-4172 搜索状态排序回退
+- [x] T-4173 搜索状态归一化比较
+- [x] T-4174 异常筛选序列化
+- [x] T-4175 空查询高亮不标记
+- [x] T-4176 分组 ID 负索引回退
+
+## T-4177~T-4231 第三方组件目录与状态快照契约（2026-09-15）
+
+- [x] T-4177 类别空值安全回退
+- [x] T-4178 可用性空值回退 reference
+- [x] T-4179 认证模式空值回退 none
+- [x] T-4180 集成模式空值回退 reference
+- [x] T-4181 平台列表过滤非法值
+- [x] T-4182 目录条目保持固定字段
+- [x] T-4183 provider 文本长度上限
+- [x] T-4184 source URL 长度上限
+- [x] T-4185 目录搜索归一化
+- [x] T-4186 非法类别筛选安全
+- [x] T-4187 非法平台筛选安全
+- [x] T-4188 自定义目录可用性汇总
+- [x] T-4189 异常目录分组安全
+- [x] T-4190 条件组件未配置状态
+- [x] T-4191 条件组件已配置状态
+- [x] T-4192 bridge 无服务状态
+- [x] T-4193 bridge 服务就绪状态
+- [x] T-4194 reference 状态保持
+- [x] T-4195 external 组件可添加状态
+- [x] T-4196 配置状态动作 configure
+- [x] T-4197 本地服务状态动作 start-service
+- [x] T-4198 reference 状态动作 learn-more
+- [x] T-4199 error 状态动作 retry
+- [x] T-4200 unavailable 状态动作 learn-more
+- [x] T-4201 builtin 状态本地化标签
+- [x] T-4202 unavailable 状态本地化标签
+- [x] T-4203 offline 外部状态转换
+- [x] T-4204 unknown health 不触发重试
+- [x] T-4205 缺少 canAdd 不可选择
+- [x] T-4206 ready 状态可选择
+- [x] T-4207 healthy 状态汇总
+- [x] T-4208 异常状态汇总忽略非法项
+- [x] T-4209 目录标题排序稳定
+- [x] T-4210 指南链接清理查询参数
+- [x] T-4211 空模块指南链接安全
+- [x] T-4212 HTTP 组件安装步骤
+- [x] T-4213 本地直连组件无额外步骤
+- [x] T-4214 preferences-only 隐私级别
+- [x] T-4215 状态列表标准化
+- [x] T-4216 时间戳上限
+- [x] T-4217 快照 health 默认 unknown
+- [x] T-4218 非对象快照解析安全
+- [x] T-4219 快照 status 变化检测
+- [x] T-4220 异常历史裁剪安全
+- [x] T-4221 最新快照忽略异常项
+- [x] T-4222 重复快照保留最新
+- [x] T-4223 异常 TTL 使用 bounded 默认
+- [x] T-4224 新鲜快照不触发刷新
+- [x] T-4225 刷新原因清理危险符号
+- [x] T-4226 未知刷新项保持原状态
+- [x] T-4227 刷新成功保留组件 ID
+- [x] T-4228 刷新失败记录原因
+- [x] T-4229 刷新取消记录 cancelled 状态
+- [x] T-4230 异常刷新队列安全规划
+- [x] T-4231 失败刷新回执标准化
+- [x] T-4232 全部健康状态排序
+- [x] T-4233 相同健康状态比较
+- [x] T-4234 cached 与 unknown 健康比较
+- [x] T-4235 非法健康值比较归一化
+- [x] T-4236 缺失时间戳 freshness unknown
+- [x] T-4237 TTL 边界 fresh
+- [x] T-4238 TTL 后 aging
+- [x] T-4239 两倍 TTL aging
+- [x] T-4240 超过两倍 TTL expired
+- [x] T-4241 未来时间戳年龄归零
+- [x] T-4242 重试次数负值归零
+- [x] T-4243 重试次数小数截断
+- [x] T-4244 非数字重试次数安全
+- [x] T-4245 重试基础延迟下限
+- [x] T-4246 重试基础延迟上限
+- [x] T-4247 重试延迟五分钟上限
+- [x] T-4248 负重试次数延迟归一化
+- [x] T-4249 healthy 不重试
+- [x] T-4250 offline 未达上限可重试
+- [x] T-4251 达到上限停止重试
+- [x] T-4252 unknown 不重试
+- [x] T-4253 重试计划模块 ID 清理
+- [x] T-4254 重试计划计算 retryAt
+- [x] T-4255 不可重试计划 retryAt 清零
+- [x] T-4256 重试计划次数钳制
+- [x] T-4257 timeout 变体分类
+- [x] T-4258 deadline 错误分类
+- [x] T-4259 API Key 配置错误分类
+- [x] T-4260 localhost 服务错误分类
+- [x] T-4261 network 错误分类
+- [x] T-4262 response 错误分类
+- [x] T-4263 空错误分类 none
+- [x] T-4264 缺失时间戳刷新时间
+- [x] T-4265 过期时间不早于当前时间
+- [x] T-4266 刷新到期精确边界
+- [x] T-4267 刷新到期前一毫秒
+- [x] T-4268 空旧快照使用当前快照
+- [x] T-4269 不同模块保留旧快照
+- [x] T-4270 新健康快照覆盖旧状态
+- [x] T-4271 相同时间戳采用当前状态
+- [x] T-4272 unknown 不降级为 error
+- [x] T-4273 健康排序 cached 优先
+- [x] T-4274 健康排序模块 ID 稳定
+- [x] T-4275 健康排序过滤空模块
+- [x] T-4276 健康分组归一化
+- [x] T-4277 刷新汇总统计可重试
+- [x] T-4278 刷新汇总统计新鲜项
+- [x] T-4279 刷新汇总忽略空模块
+- [x] T-4280 刷新条目默认状态与优先级
+- [x] T-4281 刷新队列边界与回执生命周期
+- [x] T-4282 目录模块 ID 清理查找
+- [x] T-4283 空模块 ID 查找安全
+- [x] T-4284 目录列表标准化数量
+- [x] T-4285 目录列表防御性复制
+- [x] T-4286 描述文本搜索
+- [x] T-4287 查询与可用性组合筛选
+- [x] T-4288 分类与平台组合筛选
+- [x] T-4289 空筛选对象安全
+- [x] T-4290 默认目录汇总
+- [x] T-4291 凭据需求汇总
+- [x] T-4292 分类分组键保留
+- [x] T-4293 分类分组顺序稳定
+- [x] T-4294 可用性排序优先级
+- [x] T-4295 可用性排序稳定并列
+- [x] T-4296 隐私级别非法值回退
+- [x] T-4297 location-only 隐私级别
+- [x] T-4298 API Key 设置步骤顺序
+- [x] T-4299 自建端点设置步骤
+- [x] T-4300 本地服务设置步骤
+- [x] T-4301 参考组件限制说明
+- [x] T-4302 状态列表共享健康状态
+- [x] T-4303 状态列表异常输入
+- [x] T-4304 快照构建就绪状态
+- [x] T-4305 快照构建时间戳
+- [x] T-4306 快照构建离线状态
+- [x] T-4307 快照兼容性缺失模块
+- [x] T-4308 快照兼容性模块长度
+- [x] T-4309 快照兼容性健康值
+- [x] T-4310 快照兼容性动作值
+- [x] T-4311 快照序列化确定性
+- [x] T-4312 快照解析合法载荷
+- [x] T-4313 快照解析版本回退
+- [x] T-4314 时间戳变化不触发 diff
+- [x] T-4315 健康状态 diff
+- [x] T-4316 当前模块 ID 优先
+- [x] T-4317 unchanged 过渡
+- [x] T-4318 action changed 过渡
+- [x] T-4319 历史记录容量限制
+- [x] T-4320 历史记录过滤空模块
+- [x] T-4321 空快照追加忽略
+- [x] T-4322 历史记录追加最新项
+- [x] T-4323 历史容量淘汰旧项
+- [x] T-4324 历史裁剪小上限
+- [x] T-4325 历史裁剪非法上限
+- [x] T-4326 按模块选择最新快照
+- [x] T-4327 最新快照缺失返回空
+- [x] T-4328 无模块选择最后快照
+- [x] T-4329 按健康筛选历史
+- [x] T-4330 历史筛选数量上限
+- [x] T-4331 历史汇总、合并与序列化
+- [x] T-4332 builtin 状态可添加
+- [x] T-4333 external 状态可添加
+- [x] T-4334 conditional 状态需配置
+- [x] T-4335 conditional 配置完成
+- [x] T-4336 bridge 状态需本地服务
+- [x] T-4337 bridge 服务就绪
+- [x] T-4338 reference 状态不可添加
+- [x] T-4339 非法可用性回退
+- [x] T-4340 模块 ID 标准化
+- [x] T-4341 configure 动作
+- [x] T-4342 start-service 动作
+- [x] T-4343 learn-more 动作
+- [x] T-4344 显式错误 retry 动作
+- [x] T-4345 stale retry 动作
+- [x] T-4346 error retry 动作
+- [x] T-4347 healthy add 动作
+- [x] T-4348 不可添加 learn-more
+- [x] T-4349 显式可添加未知状态
+- [x] T-4350 external 状态标签
+- [x] T-4351 ready 状态标签
+- [x] T-4352 config 状态标签
+- [x] T-4353 local-service 状态标签
+- [x] T-4354 reference 状态标签
+- [x] T-4355 unavailable 状态标签
+- [x] T-4356 空状态未知标签
+- [x] T-4357 healthy 状态描述
+- [x] T-4358 stale 状态描述
+- [x] T-4359 error 状态描述
+- [x] T-4360 offline 外部状态描述
+- [x] T-4361 offline builtin 状态保持
+- [x] T-4362 诊断原因清理
+- [x] T-4363 unknown health 默认
+- [x] T-4364 conditional 配置动作优先级
+- [x] T-4365 bridge 服务动作优先级
+- [x] T-4366 builtin 可选状态
+- [x] T-4367 external 可选状态
+- [x] T-4368 ready 可选状态
+- [x] T-4369 needs-config 不可选
+- [x] T-4370 reference 不可选
+- [x] T-4371 unavailable 不可选
+- [x] T-4372 null 状态不可选
+- [x] T-4373 汇总可选项
+- [x] T-4374 汇总配置项
+- [x] T-4375 汇总不可用项
+- [x] T-4376 汇总参考项
+- [x] T-4377 汇总健康项
+- [x] T-4378 汇总降级项
+- [x] T-4379 汇总过滤原始值
+- [x] T-4380 指南链接与隐私级别
+- [x] T-4381 组合状态诊断边界
+- [x] T-4382 time 分类归一化
+- [x] T-4383 weather 分类归一化
+- [x] T-4384 trending 分类归一化
+- [x] T-4385 holiday 分类归一化
+- [x] T-4386 media 分类归一化
+- [x] T-4387 activity 分类归一化
+- [x] T-4388 builtin 可用性归一化
+- [x] T-4389 external 可用性归一化
+- [x] T-4390 conditional 可用性归一化
+- [x] T-4391 bridge 可用性归一化
+- [x] T-4392 reference 可用性归一化
+- [x] T-4393 none 认证归一化
+- [x] T-4394 api-key 认证归一化
+- [x] T-4395 user-endpoint 认证归一化
+- [x] T-4396 local-service 认证归一化
+- [x] T-4397 direct 集成归一化
+- [x] T-4398 HTTP 集成归一化
+- [x] T-4399 local-bridge 集成归一化
+- [x] T-4400 reference 集成归一化
+- [x] T-4401 平台顺序与去重
+- [x] T-4402 非数组平台安全
+- [x] T-4403 平台非法值过滤
+- [x] T-4404 空平台列表安全
+- [x] T-4405 null 条目安全
+- [x] T-4406 原始类型条目安全
+- [x] T-4407 标题空白清理
+- [x] T-4408 控制字符清理
+- [x] T-4409 moduleId 长度上限
+- [x] T-4410 title 长度上限
+- [x] T-4411 providerName 长度上限
+- [x] T-4412 sourceUrl 长度上限
+- [x] T-4413 license 长度上限
+- [x] T-4414 privacy 长度上限
+- [x] T-4415 description 长度上限
+- [x] T-4416 缺省 category
+- [x] T-4417 缺省 availability
+- [x] T-4418 缺省 auth
+- [x] T-4419 缺省 integration
+- [x] T-4420 尺寸去重与清理
+- [x] T-4421 空尺寸过滤
+- [x] T-4422 尺寸数量上限
+- [x] T-4423 非数组尺寸安全
+- [x] T-4424 元数据字段保留
+- [x] T-4425 输出固定键集合
+- [x] T-4426 非数组目录筛选
+- [x] T-4427 非法平台筛选忽略
+- [x] T-4428 provider 大小写搜索
+- [x] T-4429 query 空白清理
+- [x] T-4430 category fallback 筛选
+- [x] T-4431 availability fallback 筛选
+- [x] T-4432 unknown 健康归一化
+- [x] T-4433 healthy 健康归一化
+- [x] T-4434 cached 健康归一化
+- [x] T-4435 stale 健康归一化
+- [x] T-4436 offline 健康归一化
+- [x] T-4437 error 健康归一化
+- [x] T-4438 null 健康值回退
+- [x] T-4439 数字健康值回退
+- [x] T-4440 安全原因标点
+- [x] T-4441 原因尖括号清理
+- [x] T-4442 原因非法标点清理
+- [x] T-4443 原因长度上限
+- [x] T-4444 非字符串原因安全
+- [x] T-4445 零时间戳
+- [x] T-4446 小数时间戳截断
+- [x] T-4447 时间戳 fallback
+- [x] T-4448 负 fallback 归零
+- [x] T-4449 超大 fallback
+- [x] T-4450 快照版本固定
+- [x] T-4451 快照 status 默认
+- [x] T-4452 快照 status 长度上限
+- [x] T-4453 快照 action 非法回退
+- [x] T-4454 快照 reason 清理
+- [x] T-4455 快照 timestamp 截断
+- [x] T-4456 快照 moduleId 上限
+- [x] T-4457 原始快照输入安全
+- [x] T-4458 构建快照 status
+- [x] T-4459 构建快照 retry action
+- [x] T-4460 构建快照诊断原因
+- [x] T-4461 构建快照模块 ID 来源
+- [x] T-4462 构建快照默认时间
+- [x] T-4463 快照兼容最小形状
+- [x] T-4464 快照兼容 null
+- [x] T-4465 快照兼容数组
+- [x] T-4466 快照版本类型校验
+- [x] T-4467 快照序列化 action
+- [x] T-4468 快照序列化 health
+- [x] T-4469 空字符串解析
+- [x] T-4470 对象解析安全
+- [x] T-4471 status diff
+- [x] T-4472 action diff
+- [x] T-4473 reason diff
+- [x] T-4474 diff 模块 ID fallback
+- [x] T-4475 transition 模块 ID
+- [x] T-4476 历史顺序保持
+- [x] T-4477 历史容量上限
+- [x] T-4478 追加不修改原数组
+- [x] T-4479 裁剪不修改原数组
+- [x] T-4480 最新/筛选/汇总边界
+- [x] T-4481 合并与历史序列化
+- [x] T-4482 TTL 最小边界
+- [x] T-4483 TTL 小数截断
+- [x] T-4484 TTL 常规值
+- [x] T-4485 TTL 最大边界
+- [x] T-4486 TTL fallback
+- [x] T-4487 fallback 下限
+- [x] T-4488 fallback 上限
+- [x] T-4489 快照年龄计算
+- [x] T-4490 零时间戳年龄未知
+- [x] T-4491 缺失快照年龄未知
+- [x] T-4492 freshness 最小 TTL
+- [x] T-4493 零次重试延迟
+- [x] T-4494 一次重试延迟
+- [x] T-4495 最大次数延迟有限
+- [x] T-4496 非法基础延迟
+- [x] T-4497 零基础延迟
+- [x] T-4498 error 重试
+- [x] T-4499 offline 重试
+- [x] T-4500 stale 重试
+- [x] T-4501 cached 不重试
+- [x] T-4502 非法健康不重试
+- [x] T-4503 负次数归一化
+- [x] T-4504 重试计划固定键
+- [x] T-4505 重试计划基础延迟
+- [x] T-4506 重试计划 now 截断
+- [x] T-4507 空模块计划安全
+- [x] T-4508 healthy 无延迟
+- [x] T-4509 最大次数计划停止
+- [x] T-4510 none 错误类型
+- [x] T-4511 network 错误类型
+- [x] T-4512 response 错误类型
+- [x] T-4513 非法错误类型
+- [x] T-4514 错误分类大小写
+- [x] T-4515 timeout 分类优先级
+- [x] T-4516 DNS 网络分类
+- [x] T-4517 payload 响应分类
+- [x] T-4518 city 配置分类
+- [x] T-4519 刷新时间 TTL
+- [x] T-4520 刷新时间放大
+- [x] T-4521 缺失时间戳到期
+- [x] T-4522 未来快照未到期
+- [x] T-4523 cached 错误降级
+- [x] T-4524 错误原因继承
+- [x] T-4525 新错误状态
+- [x] T-4526 空当前模块
+- [x] T-4527 刷新汇总固定键
+- [x] T-4528 刷新汇总过滤空项
+- [x] T-4529 队列 null 安全
+- [x] T-4530 队列空模块过滤
+- [x] T-4531 回执与队列边界
+- [x] T-4532 idle 状态归一化
+- [x] T-4533 queued 状态归一化
+- [x] T-4534 running 状态归一化
+- [x] T-4535 succeeded 状态归一化
+- [x] T-4536 failed 状态归一化
+- [x] T-4537 cancelled 状态归一化
+- [x] T-4538 skipped 状态归一化
+- [x] T-4539 非法优先级默认
+- [x] T-4540 优先级上限
+- [x] T-4541 优先级下限
+- [x] T-4542 队列条目模块清理
+- [x] T-4543 请求时间截断
+- [x] T-4544 尝试次数上限
+- [x] T-4545 队列原因清理
+- [x] T-4546 队列输入顺序
+- [x] T-4547 队列容量上限
+- [x] T-4548 入队默认时间
+- [x] T-4549 入队强制 queued
+- [x] T-4550 入队保留高优先级
+- [x] T-4551 重复入队更新时间
+- [x] T-4552 入队防御性复制
+- [x] T-4553 出队优先级排序
+- [x] T-4554 出队 running 状态
+- [x] T-4555 出队只移除目标
+- [x] T-4556 无 queued 出队安全
+- [x] T-4557 更新优先级
+- [x] T-4558 更新尝试次数
+- [x] T-4559 非对象 patch 安全
+- [x] T-4560 更新模块 ID 清理
+- [x] T-4561 成功状态迁移
+- [x] T-4562 成功清理原因
+- [x] T-4563 失败次数递增
+- [x] T-4564 失败次数上限
+- [x] T-4565 失败原因清理
+- [x] T-4566 取消默认原因
+- [x] T-4567 取消自定义原因
+- [x] T-4568 删除模块 ID 清理
+- [x] T-4569 删除保留其他模块
+- [x] T-4570 队列状态汇总
+- [x] T-4571 未知状态归一化统计
+- [x] T-4572 并发值四
+- [x] T-4573 并发上限
+- [x] T-4574 并发下限
+- [x] T-4575 批处理固定结构
+- [x] T-4576 批处理四并发
+- [x] T-4577 批处理保留终态
+- [x] T-4578 批次汇总固定结构
+- [x] T-4579 批次成功与队列统计
+- [x] T-4580 回执固定结构与原因
+- [x] T-4581 回执合并、调度与清理
+- [x] T-4582 模块 ID 稳定性
+- [x] T-4583 标题非空
+- [x] T-4584 provider 非空
+- [x] T-4585 source URL 非空
+- [x] T-4586 source URL HTTPS
+- [x] T-4587 license 非空
+- [x] T-4588 privacy 非空
+- [x] T-4589 description 有界
+- [x] T-4590 平台非空
+- [x] T-4591 尺寸非空
+- [x] T-4592 分类声明一致
+- [x] T-4593 availability 声明一致
+- [x] T-4594 auth 声明一致
+- [x] T-4595 integration 声明一致
+- [x] T-4596 平台声明一致
+- [x] T-4597 尺寸唯一
+- [x] T-4598 平台唯一
+- [x] T-4599 external 可添加
+- [x] T-4600 builtin 可添加
+- [x] T-4601 conditional 需设置
+- [x] T-4602 reference 不可添加
+- [x] T-4603 认证组件有设置指引
+- [x] T-4604 无认证组件元数据
+- [x] T-4605 HTTP 网络提示
+- [x] T-4606 reference 限制提示
+- [x] T-4607 local-service 提示
+- [x] T-4608 TMDB conditional
+- [x] T-4609 TMDB preferences-only
+- [x] T-4610 DailyHot endpoint-only
+- [x] T-4611 NewsNow endpoint-only
+- [x] T-4612 ActivityWatch local-only
+- [x] T-4613 active-window desktop-only
+- [x] T-4614 local clock direct
+- [x] T-4615 weather location-only
+- [x] T-4616 holiday HTTP
+- [x] T-4617 Bangumi HTTP
+- [x] T-4618 可用性汇总分区
+- [x] T-4619 分类分组总数
+- [x] T-4620 time 分组
+- [x] T-4621 weather 分组
+- [x] T-4622 trending 分组
+- [x] T-4623 holiday 分组
+- [x] T-4624 media 分组
+- [x] T-4625 activity 分组
+- [x] T-4626 全目录标题排序
+- [x] T-4627 availability 首项
+- [x] T-4628 availability 末项
+- [x] T-4629 指南链接唯一
+- [x] T-4630 状态列表数量与 ID
+- [x] T-4631 全目录快照健康默认
+- [x] T-4632 weather 查询筛选
+- [x] T-4633 ActivityWatch 查询筛选
+- [x] T-4634 API 查询筛选
+- [x] T-4635 time 分类筛选
+- [x] T-4636 weather 分类筛选
+- [x] T-4637 trending 分类筛选
+- [x] T-4638 holiday 分类筛选
+- [x] T-4639 media 分类筛选
+- [x] T-4640 activity 分类筛选
+- [x] T-4641 desktop 平台筛选
+- [x] T-4642 sidebar 平台筛选
+- [x] T-4643 mobile 平台筛选
+- [x] T-4644 external 可用性筛选
+- [x] T-4645 conditional 可用性筛选
+- [x] T-4646 builtin 可用性筛选
+- [x] T-4647 reference 可用性筛选
+- [x] T-4648 media mobile 组合筛选
+- [x] T-4649 trending external 组合筛选
+- [x] T-4650 external mobile 组合筛选
+- [x] T-4651 API conditional 组合筛选
+- [x] T-4652 空 query 全量
+- [x] T-4653 空白 query 全量
+- [x] T-4654 moduleId 查询
+- [x] T-4655 本地化标题查询
+- [x] T-4656 provider 大小写查询
+- [x] T-4657 标题排序数量
+- [x] T-4658 标题排序稳定保留
+- [x] T-4659 availability 排序数量
+- [x] T-4660 未知排序回退
+- [x] T-4661 availability 并列稳定
+- [x] T-4662 builtin 摘要
+- [x] T-4663 external 摘要
+- [x] T-4664 conditional 摘要
+- [x] T-4665 bridge 摘要
+- [x] T-4666 reference 摘要
+- [x] T-4667 auth 摘要
+- [x] T-4668 非法 category 分组回退
+- [x] T-4669 自定义分组顺序
+- [x] T-4670 指南链接空白清理
+- [x] T-4671 指南链接斜杠清理
+- [x] T-4672 指南链接连字符
+- [x] T-4673 指南链接 query 清理
+- [x] T-4674 指南链接 fragment 清理
+- [x] T-4675 API Key 步骤
+- [x] T-4676 endpoint 步骤
+- [x] T-4677 local-service 步骤
+- [x] T-4678 HTTP 步骤
+- [x] T-4679 direct 无步骤
+- [x] T-4680 reference 单步骤
+- [x] T-4681 隐私级别映射
+- [x] T-4682 导出目录枚举冻结
+- [x] T-4683 类别枚举不可追加
+- [x] T-4684 可用性枚举不可追加
+- [x] T-4685 目录根不可替换
+- [x] T-4686 目录条目标题不可变
+- [x] T-4687 目录平台数组不可变
+- [x] T-4688 目录尺寸数组不可变
+- [x] T-4689 目录列表数组隔离
+- [x] T-4690 目录列表条目隔离
+- [x] T-4691 目录列表平台隔离
+- [x] T-4692 目录列表尺寸隔离
+- [x] T-4693 目录列表嵌套副作用隔离
+- [x] T-4694 查找条目隔离
+- [x] T-4695 查找嵌套副作用隔离
+- [x] T-4696 查找参数不变
+- [x] T-4697 标题归一化不改输入
+- [x] T-4698 平台归一化不改输入
+- [x] T-4699 尺寸归一化不改输入
+- [x] T-4700 平台数组防御复制
+- [x] T-4701 尺寸数组防御复制
+- [x] T-4702 筛选不改输入
+- [x] T-4703 筛选结果条目隔离
+- [x] T-4704 冻结输入可筛选
+- [x] T-4705 摘要不改输入
+- [x] T-4706 摘要结果不受后续输入影响
+- [x] T-4707 分组不改输入
+- [x] T-4708 分组条目隔离
+- [x] T-4709 排序不改输入顺序
+- [x] T-4710 排序返回新数组
+- [x] T-4711 排序条目隔离
+- [x] T-4712 状态列表不改输入
+- [x] T-4713 状态列表条目隔离
+- [x] T-4714 快照构建不改条目
+- [x] T-4715 快照构建不改选项
+- [x] T-4716 快照结果独立
+- [x] T-4717 快照归一化不改输入
+- [x] T-4718 快照序列化不改输入
+- [x] T-4719 快照解析返回新对象
+- [x] T-4720 历史归一化不改快照
+- [x] T-4721 历史归一化返回副本
+- [x] T-4722 历史追加不改原数组
+- [x] T-4723 历史裁剪不改原数组
+- [x] T-4724 历史序列化不改输入
+- [x] T-4725 队列归一化不改输入
+- [x] T-4726 队列归一化返回副本
+- [x] T-4727 入队不改原队列
+- [x] T-4728 出队不改原队列
+- [x] T-4729 队列更新不改原条目
+- [x] T-4730 批处理规划不改原队列
+- [x] T-4731 回执、展示与诊断输入隔离
+- [x] T-4732 快照序列化固定键
+- [x] T-4733 快照序列化过滤未知字段
+- [x] T-4734 快照动作归一化
+- [x] T-4735 错误版本快照安全回退
+- [x] T-4736 malformed 对象快照回退
+- [x] T-4737 数组快照回退
+- [x] T-4738 原始值快照回退
+- [x] T-4739 快照未知字段隔离
+- [x] T-4740 快照时间戳截断
+- [x] T-4741 oversized 快照 ID 拒绝
+- [x] T-4742 历史序列化固定 envelope
+- [x] T-4743 历史序列化容量上限
+- [x] T-4744 历史错误版本回退
+- [x] T-4745 历史非数组回退
+- [x] T-4746 历史解析容量上限
+- [x] T-4747 历史保留最新记录
+- [x] T-4748 历史健康归一化
+- [x] T-4749 最新快照副本
+- [x] T-4750 最新快照 ID 清理
+- [x] T-4751 最新快照默认尾记录
+- [x] T-4752 历史筛选副本
+- [x] T-4753 历史筛选容量钳制
+- [x] T-4754 历史摘要健康计数
+- [x] T-4755 历史摘要最新记录隔离
+- [x] T-4756 快照合并忽略非法值
+- [x] T-4757 快照合并并列覆盖
+- [x] T-4758 快照合并忽略空 ID
+- [x] T-4759 快照合并结果隔离
+- [x] T-4760 快照差异输入归一化
+- [x] T-4761 转换结果固定键
+- [x] T-4762 时间戳 fallback 下界
+- [x] T-4763 时间戳 fallback 保真
+- [x] T-4764 时间戳有限值截断
+- [x] T-4765 TTL 小数边界
+- [x] T-4766 TTL fallback 上界
+- [x] T-4767 快照年龄非负
+- [x] T-4768 freshness aging 边界
+- [x] T-4769 retry delay 最小 base
+- [x] T-4770 retry delay 最大封顶
+- [x] T-4771 retry plan 默认值
+- [x] T-4772 retry plan 输入隔离
+- [x] T-4773 错误控制字符清理
+- [x] T-4774 未知错误分类
+- [x] T-4775 null 错误分类
+- [x] T-4776 刷新条目固定键
+- [x] T-4777 刷新条目原始值安全
+- [x] T-4778 刷新队列容量与顺序
+- [x] T-4779 刷新队列过滤空 ID
+- [x] T-4780 回执未知字段隔离
+- [x] T-4781 状态/隐私边界与摘要固定形状
+- [x] T-4782 快照 envelope 版本兼容
+- [x] T-4783 历史 envelope 版本兼容
+- [x] T-4784 retry 边界确定性
+- [x] T-4785 错误分类输入隔离
+- [x] T-4786 队列回执字段隔离
+- [x] T-4787 状态摘要输入隔离
+- [x] T-4788 商店状态固定键
+- [x] T-4789 builtin 配置无影响
+- [x] T-4790 external endpoint 无影响
+- [x] T-4791 conditional 严格配置标记
+- [x] T-4792 conditional ready 状态
+- [x] T-4793 bridge 严格服务标记
+- [x] T-4794 bridge ready 状态
+- [x] T-4795 状态未知选项隔离
+- [x] T-4796 null 条目安全
+- [x] T-4797 原始条目安全
+- [x] T-4798 moduleId 边界
+- [x] T-4799 configure 动作优先级
+- [x] T-4800 start-service 动作优先级
+- [x] T-4801 reference 动作优先级
+- [x] T-4802 stale 重试动作
+- [x] T-4803 offline 动作保持 add
+- [x] T-4804 error 强制重试
+- [x] T-4805 canAdd 严格布尔
+- [x] T-4806 缺省 canAdd
+- [x] T-4807 null 状态动作
+- [x] T-4808 ready 状态标签
+- [x] T-4809 needs-config 状态标签
+- [x] T-4810 local-service 状态标签
+- [x] T-4811 reference 状态标签
+- [x] T-4812 unavailable 状态标签
+- [x] T-4813 未知状态标签
+- [x] T-4814 状态描述固定键
+- [x] T-4815 非法健康归一化
+- [x] T-4816 reason 边界
+- [x] T-4817 external offline 状态
+- [x] T-4818 builtin offline 状态
+- [x] T-4819 conditional offline 状态
+- [x] T-4820 bridge offline 状态
+- [x] T-4821 reference offline 状态
+- [x] T-4822 stale 可重试
+- [x] T-4823 offline 可重试
+- [x] T-4824 error 可重试
+- [x] T-4825 unknown 不可重试
+- [x] T-4826 healthy 不可重试
+- [x] T-4827 selectable 严格布尔
+- [x] T-4828 selectable external
+- [x] T-4829 selectable ready
+- [x] T-4830 reference 不可选
+- [x] T-4831 unavailable 不可选
+- [x] T-4832 显式 addable 状态
+- [x] T-4833 状态摘要空列表
+- [x] T-4834 setup 严格布尔计数
+- [x] T-4835 selectable 严格布尔计数
+- [x] T-4836 degraded 混合计数
+- [x] T-4837 标题排序 fallback
+- [x] T-4838 availability fallback 稳定排序
+- [x] T-4839 null filter 显式拒绝
+- [x] T-4840 guide anchor 清理
+- [x] T-4841 setup 步骤顺序
+- [x] T-4842 privacy 数值拒绝
+- [x] T-4843 商店枚举冻结
+- [x] T-4844 页签列表防御复制
+- [x] T-4845 query 控制字符清理
+- [x] T-4846 query 长度上限
+- [x] T-4847 卡片 ID 清理
+- [x] T-4848 query token 去重
+- [x] T-4849 query token 数量上限
+- [x] T-4850 多 token 全匹配
+- [x] T-4851 added 状态排序
+- [x] T-4852 ready/conditional 排序
+- [x] T-4853 category 比较
+- [x] T-4854 availability 计数固定键
+- [x] T-4855 integration unknown 计数
+- [x] T-4856 tab 计数固定键
+- [x] T-4857 已添加无障碍标签
+- [x] T-4858 未添加无障碍回退
+- [x] T-4859 页码下界
+- [x] T-4860 页数计算
+- [x] T-4861 分页元数据
+- [x] T-4862 空列表焦点
+- [x] T-4863 焦点循环移动
+- [x] T-4864 折叠组排序序列化
+- [x] T-4865 折叠组空项过滤
+- [x] T-4866 分组计数过滤
+- [x] T-4867 卡片可见性过滤
+- [x] T-4868 卡片标题回退
+- [x] T-4869 排序标签回退
+- [x] T-4870 卡片元数据
+- [x] T-4871 区块摘要变量替换
+- [x] T-4872 已添加预览动作
+- [x] T-4873 未添加配置禁用
+- [x] T-4874 卡片索引 ID 别名
+- [x] T-4875 卡片移动排序
+- [x] T-4876 搜索空状态
+- [x] T-4877 筛选空状态
+- [x] T-4878 筛选描述标签
+- [x] T-4879 筛选序列化往返
+- [x] T-4880 筛选等价比较
+- [x] T-4881 筛选覆盖合并
+- [x] T-4882 筛选重置
+- [x] T-4883 本地集成色调
+- [x] T-4884 conditional 已添加优先级
+- [x] T-4885 高亮范围去重
+- [x] T-4886 移动端键盘提示
+- [x] T-4887 来源标签回退
+- [x] T-4888 tooltip 来源回退
+- [x] T-4889 搜索状态默认值
+- [x] T-4890 精确 token 评分
+- [x] T-4891 等分稳定排序
+- [x] T-4892 搜索摘要变量替换
+- [x] T-4893 filter badge 回退
+- [x] T-4894 动作集标题
+- [x] T-4895 preview 类型归一化
+- [x] T-4896 尺寸选项过滤
+- [x] T-4897 支持面去重
+- [x] T-4898 分组 Other 回退
+- [x] T-4899 分组优先顺序
+- [x] T-4900 折叠组可逆切换
+- [x] T-4901 已添加配置动作
+- [x] T-4902 未配置尺寸动作
+- [x] T-4903 未添加添加动作
+- [x] T-4904 卡片归一化输入隔离
+- [x] T-4905 筛选输入集合隔离
+- [x] T-4906 筛选引用语义
+- [x] T-4907 摘要 malformed 输入
+- [x] T-4908 冻结卡片计数
+- [x] T-4909 搜索文本 malformed
+- [x] T-4910 搜索文本长度上限
+- [x] T-4911 builtin preview 回退
+- [x] T-4912 plugin preview 回退
+- [x] T-4913 source 非字符串拒绝
+- [x] T-4914 source 返回副本
+- [x] T-4915 preview 类型安全回退
+- [x] T-4916 card status added 归一化
+- [x] T-4917 card status 尺寸回退
+- [x] T-4918 size 选项过滤
+- [x] T-4919 size 支持 malformed
+- [x] T-4920 surface fallback 过滤
+- [x] T-4921 conditional malformed 安全
+- [x] T-4922 external 谓词
+- [x] T-4923 section 正数可见
+- [x] T-4924 section Infinity 拒绝
+- [x] T-4925 group query 可见性
+- [x] T-4926 group label 清理
+- [x] T-4927 group label 长度上限
+- [x] T-4928 group 插入顺序
+- [x] T-4929 group preferred 缺省
+- [x] T-4930 dedupe 输入隔离
+- [x] T-4931 dedupe 空 ID
+- [x] T-4932 dedupe 长 ID
+- [x] T-4933 collapsed set 副本
+- [x] T-4934 collapsed primitive 安全
+- [x] T-4935 toggle 输入隔离
+- [x] T-4936 toggle 标签清理
+- [x] T-4937 action falsey added
+- [x] T-4938 action false configured
+- [x] T-4939 token 空 query
+- [x] T-4940 token added 过滤
+- [x] T-4941 unknown availability 排名
+- [x] T-4942 title tie 稳定
+- [x] T-4943 sort malformed 输入
+- [x] T-4944 availability malformed 归一化
+- [x] T-4945 integration malformed 归一化
+- [x] T-4946 tab count malformed
+- [x] T-4947 page fractional 截断
+- [x] T-4948 page size fractional 截断
+- [x] T-4949 page 输入隔离
+- [x] T-4950 focus 负值钳制
+- [x] T-4951 focus 负 delta
+- [x] T-4952 collapsed malformed 序列化
+- [x] T-4953 unknown empty action
+- [x] T-4954 empty action label 回退
+- [x] T-4955 group key punctuation 回退
+- [x] T-4956 group id 非有限值
+- [x] T-4957 full density
+- [x] T-4958 density 未知回退
+- [x] T-4959 layout 尺寸回退
+- [x] T-4960 source summary 空标签
+- [x] T-4961 identity alias
+- [x] T-4962 identity 空 ID
+- [x] T-4963 score 大小写
+- [x] T-4964 rank 输入隔离
+- [x] T-4965 empty query summary
+- [x] T-4966 filter badge 本地化
+- [x] T-4967 keyboard surface 回退
+- [x] T-4968 source label 长度
+- [x] T-4969 status label 长度
+- [x] T-4970 tooltip 确定性
+- [x] T-4971 商店搜索 role
+- [x] T-4972 搜索框 role
+- [x] T-4973 搜索 enter 提示
+- [x] T-4974 清除搜索 action
+- [x] T-4975 清除搜索焦点
+- [x] T-4976 排序 action
+- [x] T-4977 排序摘要关联
+- [x] T-4978 指南 dialog 语义
+- [x] T-4979 指南打开动作
+- [x] T-4980 tablist 语义
+- [x] T-4981 tab 按钮语义
+- [x] T-4982 tab roving tabindex
+- [x] T-4983 tab selected 更新
+- [x] T-4984 tab current 更新
+- [x] T-4985 tab 计数 dataset
+- [x] T-4986 结果 status 区域
+- [x] T-4987 结果 live 区域
+- [x] T-4988 结果 atomic 属性
+- [x] T-4989 ready 标题层级
+- [x] T-4990 pending 标题层级
+- [x] T-4991 卡片 moduleId
+- [x] T-4992 卡片 aria-label
+- [x] T-4993 尺寸按钮类型
+- [x] T-4994 尺寸 pressed 状态
+- [x] T-4995 尺寸 action 关联
+- [x] T-4996 add action 元数据
+- [x] T-4997 add moduleId
+- [x] T-4998 add size 状态
+- [x] T-4999 add 描述关联
+- [x] T-5000 add 保存状态
+- [x] T-5001 add 重绘状态
+- [x] T-5002 conditional 提示
+- [x] T-5003 configure dialog
+- [x] T-5004 configure 打开表单
+- [x] T-5005 remove action
+- [x] T-5006 remove 实例
+- [x] T-5007 preview dialog
+- [x] T-5008 preview 打开模块
+- [x] T-5009 group expanded
+- [x] T-5010 group controls
+- [x] T-5011 unavailable 移除
+- [x] T-5012 unavailable 重绘
+- [x] T-5013 filter aria-hidden
+- [x] T-5014 filter 卡片焦点
+- [x] T-5015 filter 搜索焦点回退
+- [x] T-5016 空商店状态
+- [x] T-5017 移动商店断点
+- [x] T-5018 移动网格单列
+- [x] T-5019 移动网格间距
+- [x] T-5020 移动卡片宽度
+- [x] T-5021 移动卡片内边距
+- [x] T-5022 移动预览溢出
+- [x] T-5023 移动 Tab 横向滚动
+- [x] T-5024 移动 Tab 触控滚动
+- [x] T-5025 移动 Tab 不收缩
+- [x] T-5026 移动搜索换行
+- [x] T-5027 移动搜索可收缩
+- [x] T-5028 移动排序半行
+- [x] T-5029 移动指南半行
+- [x] T-5030 移动空结果换行
+- [x] T-5031 移动减弱动效布局
+- [x] T-5032 移动减弱动效可见
+- [x] T-5033 external 识别
+- [x] T-5034 external info tone
+- [x] T-5035 external network tone
+- [x] T-5036 external 禁止添加
+- [x] T-5037 external 允许预览
+- [x] T-5038 已添加允许配置
+- [x] T-5039 未添加禁止配置
+- [x] T-5040 已添加允许移除
+- [x] T-5041 未添加禁止移除
+- [x] T-5042 未添加动作顺序
+- [x] T-5043 已添加动作顺序
+- [x] T-5044 external 优先级
+- [x] T-5045 conditional 未添加优先级
+- [x] T-5046 conditional 已添加优先级
+- [x] T-5047 来源网络摘要
+- [x] T-5048 来源本机摘要
+- [x] T-5049 来源离线摘要
+- [x] T-5050 未知来源摘要
+- [x] T-5051 来源标签长度
+- [x] T-5052 状态标签长度
+- [x] T-5053 动作标题标签
+- [x] T-5054 未知动作回退
+- [x] T-5055 external action set
+- [x] T-5056 预览 integration 元数据
+- [x] T-5057 预览 privacy 元数据
+- [x] T-5058 预览来源 chip
+- [x] T-5059 预览 network tone
+- [x] T-5060 预览 local tone
+- [x] T-5061 预览 privacy chip
+- [x] T-5062 预览 body focus
+- [x] T-5063 预览描述关联
+- [x] T-5064 指南链接安全
+- [x] T-5065 预览移动宽度
+- [x] T-5066 天气位置隐私
+- [x] T-5067 Bangumi 网络来源
+- [x] T-5068 ActivityWatch 本地隐私
+- [x] T-5069 天气 HTTP 拒绝
+- [x] T-5070 天气 HTTPS 放行
+- [x] T-5071 节假日年份放行
+- [x] T-5072 节假日 query 拒绝
+- [x] T-5073 ActivityWatch loopback 放行
+- [x] T-5074 ActivityWatch 公网拒绝
+- [x] T-5075 资讯源凭据拒绝
+- [x] T-5076 本机资讯源放行
+- [x] T-5077 天气不推断位置
+- [x] T-5078 天气天数上限
+- [x] T-5079 Bangumi 数量上限
+- [x] T-5080 ActivityWatch 公网配置拒绝
++- [x] T-5081 life URL null
+- [x] T-5082 life URL array
+- [x] T-5083 life URL length
+- [x] T-5084 geocode prefix
+- [x] T-5085 forecast prefix
+- [x] T-5086 feed null
+- [x] T-5087 feed length
+- [x] T-5088 feed username
+- [x] T-5089 feed hash
+- [x] T-5090 feed source id
+- [x] T-5091 activity non-string
+- [x] T-5092 activity length
+- [x] T-5093 activity credentials
+- [x] T-5094 activity fragment
+- [x] T-5095 bounded Accept
+- [x] T-5096 bounded redirect
+- [x] T-5097 bounded signal
+- [x] T-5098 bounded opaque rejection
+- [x] T-5099 bounded missing length
+- [x] T-5100 bounded HTTP ordering
+- [x] T-5101 bounded listener cleanup
+- [x] T-5102 activity content type
+- [x] T-5103 activity body serialization
+- [x] T-5104 activity array serialization
+- [x] T-5105 activity null body
+- [x] T-5106 activity opaque rejection
+- [x] T-5107 activity malformed JSON
+- [x] T-5108 location cache key
+- [x] T-5109 weather TTL boundary
+- [x] T-5110 holiday lower clamp
+- [x] T-5111 holiday fractional year
+- [x] T-5112 holiday cache separation
+- [x] T-5113 Bangumi signal
+- [x] T-5114 feed fresh timestamp
+- [x] T-5115 feed cached timestamp
+- [x] T-5116 feed stale timestamp
+- [x] T-5117 feed HTTP stale
+- [x] T-5118 feed force refresh
+- [x] T-5119 feed provider isolation
+- [x] T-5120 activity fresh timestamp
+- [x] T-5121 activity cached timestamp
+- [x] T-5122 activity stale payload
+- [x] T-5123 activity force refresh
+- [x] T-5124 activity cache key isolation
+- [x] T-5125 activity missing request
+- [x] T-5126 activity endpoint rejection
+- [x] T-5127 cache capacity
+- [x] T-5128 cache clear idempotence
+- [x] T-5129 cache empty size
++- [x] T-5130 生活代理白名单
+- [x] T-5131 代理阻断
+- [x] T-5132 代理端点
+- [x] T-5133 代理方法
+- [x] T-5134 代理 GET
+- [x] T-5135 代理超时
+- [x] T-5136 代理 JSON
+- [x] T-5137 代理 POST 载荷
+- [x] T-5138 代理编码
+- [x] T-5139 代理 envelope
+- [x] T-5140 代理状态
+- [x] T-5141 代理 body
+- [x] T-5142 天气地理编码代理
+- [x] T-5143 天气预报代理
+- [x] T-5144 天气配置空态
+- [x] T-5145 天气城市空态
+- [x] T-5146 天气失败空态
+- [x] T-5147 天气取消
+- [x] T-5148 Bangumi 代理
+- [x] T-5149 Bangumi 空排期
+- [x] T-5150 Bangumi 失败空态
+- [x] T-5151 Bangumi 取消
+- [x] T-5152 Bangumi 非推荐
+- [x] T-5153 ActivityWatch 代理
+- [x] T-5154 ActivityWatch 配置空态
+- [x] T-5155 ActivityWatch 失败空态
+- [x] T-5156 ActivityWatch 取消
+- [x] T-5157 ActivityWatch 回环
+- [x] T-5158 ActivityWatch 启动说明
+- [x] T-5159 资讯源选择性联网
+- [x] T-5160 资讯源 stale
+- [x] T-5161 资讯源配置说明
+- [x] T-5162 隐私不外发
+- [x] T-5163 缓存说明
+- [x] T-5164 重试说明
+- [x] T-5165 天气模型
+- [x] T-5166 Bangumi 模型
+- [x] T-5167 ActivityWatch 模型
+- [x] T-5168 响应上限
+- [x] T-5169 缓存容量
+- [x] T-5170 重定向阻断
+- [x] T-5171 取消监听
+- [x] T-5172 监听清理
+- [x] T-5173 JSON 异常
+- [x] T-5174 组件商店用途分组复盘
+- [x] T-5175 日记与日历分组
+- [x] T-5176 任务与执行分组
+- [x] T-5177 文档与导航分组
+- [x] T-5178 统计与进展分组
+- [x] T-5179 学习与记忆分组
+- [x] T-5180 生活与资讯合并分组
+- [x] T-5181 系统与服务分组
+- [x] T-5182 倒计时归入任务
+- [x] T-5183 快速记录归入任务
+- [x] T-5184 剪藏待读归入任务
+- [x] T-5185 ActivityWatch 用途归类
+- [x] T-5186 外部资讯用途归类
+- [x] T-5187 移除空泛采集分组
+- [x] T-5188 移除重复资讯分组
+- [x] T-5189 移除单项专注分组
+- [x] T-5190 分组说明中文文案
+- [x] T-5191 分组说明英文文案
+- [x] T-5192 插件分组说明
+- [x] T-5193 未归类组件说明
+- [x] T-5194 分组与来源筛选正交
+- [x] T-5195 分组数量展示保持
+- [x] T-5196 分组折叠状态保持
+- [x] T-5197 分组键盘导航保持
+- [x] T-5198 分组 aria-describedby
+- [x] T-5199 分组说明文本节点
+- [x] T-5200 分组说明稳定 ID
+- [x] T-5201 分组说明窄屏换行
+- [x] T-5202 分组说明低视觉权重
+- [x] T-5203 分组语义契约测试
+- [x] T-5204 分组模块唯一性审计
+- [x] T-5205 组件商店指南分组表
+- [x] T-5206 商店预览语义类型
+- [x] T-5207 日历月视图预览
+- [x] T-5208 日历周末强调
+- [x] T-5209 今日日记文档预览
+- [x] T-5210 近期日记文档预览
+- [x] T-5211 往年今日文档预览
+- [x] T-5212 文档集文档预览
+- [x] T-5213 指定文档文档预览
+- [x] T-5214 近期编辑文档预览
+- [x] T-5215 关系摘要大纲预览
+- [x] T-5216 今日待办清单预览
+- [x] T-5217 待办完成态预览
+- [x] T-5218 闪卡圆点预览
+- [x] T-5219 随机回顾短行预览
+- [x] T-5220 近期预约任务预览
+- [x] T-5221 快速记录动作预览
+- [x] T-5222 剪藏排行预览
+- [x] T-5223 写作打卡进度预览
+- [x] T-5224 倒数日 hero 预览
+- [x] T-5225 笔记统计 hero 预览
+- [x] T-5226 年度进度色彩预览
+- [x] T-5227 ActivityWatch 多条用时预览
+- [x] T-5228 天气渐变预览
+- [x] T-5229 Bangumi 五封面预览
+- [x] T-5230 Bangumi 封面色彩变化
+- [x] T-5231 DailyHot 红色榜单预览
+- [x] T-5232 NewsNow 蓝色榜单预览
+- [x] T-5233 预览类型 CSS 语义类
+- [x] T-5234 预览 moduleId 语义类
+- [x] T-5235 个性化预览契约测试
+- [x] T-5236 预览文档压缩
+- [x] T-5237 预览包体复核
+- [x] T-5238 配置面板语义模型
+- [x] T-5239 配置组件类型映射
+- [x] T-5240 配置字段内容分组
+- [x] T-5241 配置字段数据源分组
+- [x] T-5242 配置字段时间范围分组
+- [x] T-5243 配置字段显示分组
+- [x] T-5244 配置字段其他选项分组
+- [x] T-5245 日历配置个性化
+- [x] T-5246 待办配置个性化
+- [x] T-5247 天气配置个性化
+- [x] T-5248 放送配置个性化
+- [x] T-5249 热搜配置个性化
+- [x] T-5250 资讯配置个性化
+- [x] T-5251 ActivityWatch 配置个性化
+- [x] T-5252 倒数日配置个性化
+- [x] T-5253 指定文档配置个性化
+- [x] T-5254 插件命令配置个性化
+- [x] T-5255 剪藏标签配置个性化
+- [x] T-5256 笔记本提示
+- [x] T-5257 网络端点提示
+- [x] T-5258 本机端点提示
+- [x] T-5259 城市隐私提示
+- [x] T-5260 月份偏移提示
+- [x] T-5261 日期计算提示
+- [x] T-5262 数值范围提示
+- [x] T-5263 组件说明头
+- [x] T-5264 组件来源徽章
+- [x] T-5265 组件联网徽章
+- [x] T-5266 组件配置状态徽章
+- [x] T-5267 配置变更摘要
+- [x] T-5268 配置未修改禁用保存
+- [x] T-5269 配置恢复默认摘要同步
+- [x] T-5270 配置输入实时摘要同步
+- [x] T-5271 配置无障碍描述关联
+- [x] T-5272 配置对话框移动端单列
+- [x] T-5273 配置对话框底部操作栏
+- [x] T-5274 配置对话框主题色
+- [x] T-5275 配置对话框来源安全降级
+- [x] T-5276 组件商店插件来源徽章
+- [x] T-5277 组件商店内置来源徽章
+- [x] T-5278 组件商店配置状态徽章
+- [x] T-5279 组件商店卡片元数据复用
+- [x] T-5280 配置模型边界测试
+- [x] T-5281 配置契约回归
+- [x] T-5282 TypeScript 门禁
+- [x] T-5483 依赖摘要模型
+- [x] T-5484 依赖必需数量统计
+- [x] T-5485 依赖可选数量统计
+- [x] T-5486 依赖类型直方图
+- [x] T-5487 依赖条目保序
+- [x] T-5488 依赖摘要过滤未知项
+- [x] T-5489 使用说明依赖章节
+- [x] T-5490 使用说明依赖总数
+- [x] T-5491 使用说明必需徽章
+- [x] T-5492 使用说明可选徽章
+- [x] T-5493 使用说明安装地址
+- [x] T-5494 使用说明外部链接安全属性
+- [x] T-5495 使用说明依赖名称
+- [x] T-5496 使用说明配置提示
+- [x] T-5497 使用说明滚动容器
+- [x] T-5498 使用说明桌面网格
+- [x] T-5499 使用说明移动端单列
+- [x] T-5500 使用说明移动端换行
+- [x] T-5501 依赖摘要专项测试
+- [x] T-5502 指南入口回归测试
+- [x] T-5503 文档链接回归测试
+- [x] T-5504 依赖地址非伪造校验
+- [x] T-5505 Open-Meteo 说明展示
+- [x] T-5506 Bangumi 说明展示
+- [x] T-5507 DailyHotApi 说明展示
+- [x] T-5508 NewsNow 说明展示
+- [x] T-5509 ActivityWatch 说明展示
+- [x] T-5510 holiday-cn 说明展示
+- [x] T-5511 插件依赖无地址安全回退
+- [x] T-5512 指南无障碍列表标签
+- [x] T-5513 指南外链 noopener
+- [x] T-5514 指南摘要动态生成
+- [x] T-5515 指南依赖清单动态生成
+- [x] T-5516 指南移动端布局适配
+- [x] T-5517 指南样式主题变量
+- [x] T-5518 指南样式紧凑间距
+- [x] T-5519 TypeScript 导入接线
+- [x] T-5520 依赖模型导出
+- [x] T-5521 依赖模型防御性复制
+- [x] T-5522 依赖模型未知项过滤
+- [x] T-5523 依赖模型回归兼容
+- [x] T-5524 生产构建前静态检查
+- [x] T-5525 构建后本地集市同步
+- [x] T-5526 集市包哈希核对
+- [x] T-5527 依赖页签枚举
+- [x] T-5528 需前置依赖筛选
+- [x] T-5529 可选数据源筛选
+- [x] T-5530 依赖筛选不触发联网
+- [x] T-5531 依赖筛选结果计数
+- [x] T-5532 依赖卡片元数据标记
+- [x] T-5533 依赖卡片必需状态
+- [x] T-5534 依赖卡片可选状态
+- [x] T-5535 依赖筛选未知回退
+- [x] T-5536 依赖筛选空结果
+- [x] T-5537 依赖筛选移动端可用
+- [x] T-5538 依赖筛选桌面端可用
+- [x] T-5539 依赖计数延迟生成
+- [x] T-5540 旧卡片计数兼容
+- [x] T-5541 旧筛选键兼容
+- [x] T-5542 依赖状态规范化
+- [x] T-5543 非法依赖状态隔离
+- [x] T-5544 依赖状态不改写源对象
+- [x] T-5545 依赖摘要模型复用
+- [x] T-5546 依赖筛选模型复用
+- [x] T-5547 依赖筛选 TypeScript 接线
+- [x] T-5548 依赖页签 i18n 中文
+- [x] T-5549 依赖页签 i18n 英文
+- [x] T-5550 依赖页签无障碍标签
+- [x] T-5551 依赖页签键盘导航
+- [x] T-5552 依赖页签焦点恢复
+- [x] T-5553 依赖文档筛选说明
+- [x] T-5554 依赖文档外链说明
+- [x] T-5555 依赖专项回归测试
+- [x] T-5556 依赖模型全量回归
+- [x] T-5557 依赖门禁 TypeScript
+- [x] T-5558 依赖门禁生产构建
+- [x] T-5559 依赖门禁包体审计
+- [x] T-5560 依赖功能进度记录
+- [x] T-5561 依赖状态解析
+- [x] T-5562 依赖状态必需
+- [x] T-5563 依赖状态可选
+- [x] T-5564 依赖状态未知回退
+- [x] T-5565 依赖标签解析
+- [x] T-5566 依赖标签长度限制
+- [x] T-5567 依赖摘要状态
+- [x] T-5568 依赖摘要名称
+- [x] T-5569 依赖摘要配置说明
+- [x] T-5570 依赖摘要联网边界
+- [x] T-5571 依赖摘要平台限制
+- [x] T-5572 依赖摘要安装地址
+- [x] T-5573 未知依赖安全摘要
+- [x] T-5574 卡片依赖状态绑定
+- [x] T-5575 卡片依赖名称绑定
+- [x] T-5576 卡片依赖配置绑定
+- [x] T-5577 卡片依赖徽章统一
+- [x] T-5578 卡片依赖筛选兼容
+- [x] T-5579 卡片旧元数据兼容
+- [x] T-5580 依赖筛选计数回归
+- [x] T-5581 依赖页签状态回归
+- [x] T-5582 依赖页签国际化中文
+- [x] T-5583 依赖页签国际化英文
+- [x] T-5584 依赖摘要专项测试
+- [x] T-5585 依赖标签专项测试
+- [x] T-5586 依赖安装地址专项测试
+- [x] T-5587 依赖联网边界专项测试
+- [x] T-5588 依赖平台限制专项测试
+- [x] T-5589 依赖卡片无障碍元数据
+- [x] T-5590 依赖摘要动态生成
+- [x] T-5591 依赖摘要模型导出
+- [x] T-5592 依赖摘要模型防御性复制
+- [x] T-5593 依赖文档筛选说明
+- [x] T-5594 依赖文档回退说明
+- [x] T-5595 TypeScript 依赖接线
+- [x] T-5596 生产构建依赖接线
+- [x] T-5597 发布资源依赖审计
+- [x] T-5598 本地集市依赖同步
+- [x] T-5599 本轮进度记录
+- [x] T-5600 本轮决策记录
+- [x] T-5601 同步开始事件接入
+- [x] T-5602 同步结束事件接入
+- [x] T-5603 同步失败事件接入
+- [x] T-5604 同步事件卸载清理
+- [x] T-5605 同步状态字段
+- [x] T-5606 同步状态根节点标记
+- [x] T-5607 同步状态 aria-busy
+- [x] T-5608 同步期间阻止交互抖动
+- [x] T-5609 同步期间延迟页签重建
+- [x] T-5610 同步结束侧栏刷新
+- [x] T-5611 同步失败侧栏恢复
+- [x] T-5612 组件面板同步提示
+- [x] T-5613 同步提示主题变量
+- [x] T-5614 同步提示定位
+- [x] T-5615 同步提示无障碍状态
+- [x] T-5616 同步提示指针隔离
+- [x] T-5617 同步期间布局稳定
+- [x] T-5618 同步期间数据不重绘
+- [x] T-5619 同步恢复刷新合并
+- [x] T-5620 同步事件幂等
+- [x] T-5621 同步监听生命周期
+- [x] T-5622 同步监听卸载回归
+- [x] T-5623 同步稳定性专项测试
+- [x] T-5624 同步稳定性 CSS 测试
+- [x] T-5625 同步稳定性 TypeScript
+- [x] T-5626 同步期间组件状态保持
+- [x] T-5627 同步失败组件恢复
+- [x] T-5628 同步提示布局适配
+- [x] T-5629 同步期间性能保护
+- [x] T-5630 同步后延迟刷新
+- [x] T-5631 同步事件文档记录
+- [x] T-5632 同步回归门禁
+- [x] T-5633 同步本地集市构建
+- [x] T-5634 同步构建包哈希
+- [x] T-5635 同步问题截图复现结论
+- [x] T-5636 新建侧栏继承同步状态
+- [x] T-5637 侧栏定时刷新同步门控
+- [x] T-5638 侧栏直接刷新同步门控
+- [x] T-5639 同步期间异步刷新保护
+- [x] T-5640 同步期间设置变更保护
+- [x] T-5641 同步期间重绘入口收敛
+- [x] T-5642 同步后恢复刷新路径
+- [x] T-5643 同步状态新侧栏回归
+- [x] T-5644 定时器门控回归
+- [x] T-5645 直接刷新门控回归
+- [x] T-5646 同步 CSS 稳定性回归
+- [x] T-5647 同步无障碍状态回归
+- [x] T-5648 同步提示定位回归
+- [x] T-5649 同步提示主题回归
+- [x] T-5650 同步提示指针回归
+- [x] T-5651 侧栏创建时状态同步
+- [x] T-5652 侧栏重建期间状态同步
+- [x] T-5653 侧栏销毁期间状态同步
+- [x] T-5654 定时刷新竞争防护
+- [x] T-5655 异步刷新竞争防护
+- [x] T-5656 设置刷新竞争防护
+- [x] T-5657 事件刷新竞争防护
+- [x] T-5658 同步失败重建防护
+- [x] T-5659 同步结束重建防护
+- [x] T-5660 同步状态字段复用
+- [x] T-5661 同步状态生命周期复用
+- [x] T-5662 同步回归测试扩展
+- [x] T-5663 同步发布门禁扩展
+- [x] T-5664 同步构建门禁扩展
+- [x] T-5665 同步本地集市更新
+- [x] T-5666 同步文档更新
+- [x] T-5667 同步决策记录
+- [x] T-5668 同步批次进度记录
+- [x] T-5669 同步嵌套深度字段
+- [x] T-5670 同步开始深度递增
+- [x] T-5671 同步结束深度递减
+- [x] T-5672 同步嵌套延迟解冻
+- [x] T-5673 同步失败深度清零
+- [x] T-5674 同步刷新意图字段
+- [x] T-5675 同步刷新意图开始标记
+- [x] T-5676 同步刷新意图结束清理
+- [x] T-5677 同步根节点 data 状态
+- [x] T-5678 同步状态卸载清理
+- [x] T-5679 同步重叠事件回归
+- [x] T-5680 同步失败事件回归
+- [x] T-5681 同步结束事件回归
+- [x] T-5682 同步深度门控回归
+- [x] T-5683 同步刷新意图回归
+- [x] T-5684 同步根节点状态回归
+- [x] T-5685 同步卸载状态回归
+- [x] T-5686 同步事件顺序回归
+- [x] T-5687 同步事件异常回归
+- [x] T-5688 同步交互冻结回归
+- [x] T-5689 同步侧栏重建回归
+- [x] T-5690 同步定时刷新回归
+- [x] T-5691 同步直接刷新回归
+- [x] T-5692 同步失败恢复回归
+- [x] T-5693 同步结束恢复回归
+- [x] T-5694 同步无障碍状态回归
+- [x] T-5695 同步 CSS 状态回归
+- [x] T-5696 同步性能边界回归
+- [x] T-5697 同步 TypeScript 门禁
+- [x] T-5698 同步发布门禁
+- [x] T-5699 同步本地集市同步
+- [x] T-5700 同步批次文档记录
+- [x] T-5701 同步 watchdog 常量
+- [x] T-5702 watchdog 定时器字段
+- [x] T-5703 watchdog 启动接线
+- [x] T-5704 watchdog 重置接线
+- [x] T-5705 watchdog 完成清理
+- [x] T-5706 watchdog 失败清理
+- [x] T-5707 watchdog 卸载清理
+- [x] T-5708 watchdog 状态检测
+- [x] T-5709 watchdog 深度清零
+- [x] T-5710 watchdog 刷新恢复
+- [x] T-5711 watchdog 重入防护
+- [x] T-5712 watchdog 结束事件回归
+- [x] T-5713 watchdog 失败事件回归
+- [x] T-5714 watchdog 丢失事件回归
+- [x] T-5715 watchdog 重叠事件回归
+- [x] T-5716 watchdog 定时器回归
+- [x] T-5717 watchdog 清理回归
+- [x] T-5718 watchdog 深度回归
+- [x] T-5719 watchdog 刷新回归
+- [x] T-5720 watchdog 状态回归
+- [x] T-5721 watchdog TypeScript 门禁
+- [x] T-5722 watchdog 完整测试门禁
+- [x] T-5723 watchdog 移动端门禁
+- [x] T-5724 watchdog Chromium 门禁
+- [x] T-5725 watchdog 包体审计
+- [x] T-5726 watchdog 文档同步
+- [x] T-5727 watchdog 决策记录
+- [x] T-5728 watchdog 进度记录
+- [x] T-5729 watchdog 本地集市构建
+- [x] T-5730 watchdog 本地集市哈希
+- [x] T-5731 watchdog 发布矩阵更新
+- [x] T-5732 watchdog 批次收尾
+- [x] T-5733 打开文档请求规划达到上限后提前终止遍历，降低高负载 p95 抖动
+- [x] T-5734 Agent 工作区时间戳归一化
+- [x] T-5735 Agent 工作区时间戳上限
+- [x] T-5736 Agent 工作区非法时间回退
+- [x] T-5737 Agent 工作区同步标志
+- [x] T-5738 Agent 工作区设备归一化
+- [x] T-5739 Agent 工作区 limit 传递
+- [x] T-5740 Agent 工作区页签上限
+- [x] T-5741 Agent 工作区关闭页签上限
+- [x] T-5742 Agent 工作区重复根文档过滤
+- [x] T-5743 Agent 工作区快照字段固定
+- [x] T-5744 Agent 工作区 schema 时间戳
+- [x] T-5745 Agent 工作区 schema 同步字段
+- [x] T-5746 Agent 工作区 schema 必填字段
+- [x] T-5747 Agent 工作区 schema 上限
+- [x] T-5748 Agent 工作区 schema 禁止未知字段
+- [x] T-5749 Agent 工作区输入兼容
+- [x] T-5750 Agent 工作区旧快照兼容
+- [x] T-5751 Agent 工作区源数据不变性
+- [x] T-5752 Agent 工作区数组隔离
+- [x] T-5753 Agent 工作区活动文档保留
+- [x] T-5754 Agent 工作区移动端语义
+- [x] T-5755 Agent 工作区非法设备回退
+- [x] T-5756 Agent 工作区文档集上限
+- [x] T-5757 Agent 工作区快捷入口上限
+- [x] T-5758 Agent 工作区同步期间只读提示
+- [x] T-5759 Agent 工作区快照生成时刻
+- [x] T-5760 Agent 工作区输出字段审计
+- [x] T-5761 Agent 工作区回归测试
+- [x] T-5762 Agent 工作区 TypeScript 门禁
+- [x] T-5763 Agent 工作区完整测试门禁
+- [x] T-5764 Agent 工作区发布构建门禁
+- [x] T-5765 Agent 工作区批次记录
+- [x] T-5766 今日日记状态枚举
+- [x] T-5767 今日日记未配置状态
+- [x] T-5768 今日日记已找到状态
+- [x] T-5769 今日日记缺失状态
+- [x] T-5770 今日日记不可用状态
+- [x] T-5771 今日日记同步中状态
+- [x] T-5772 今日日记状态旧输入回退
+- [x] T-5773 今日日记状态文档 ID 推导
+- [x] T-5774 今日日记状态配置归一化
+- [x] T-5775 今日日记状态未知值隔离
+- [x] T-5776 今日日记 schema 枚举
+- [x] T-5777 今日日记 schema 必填状态
+- [x] T-5778 今日日记 schema 未知字段隔离
+- [x] T-5779 同步期间跳过今日日记查询
+- [x] T-5780 同步期间状态提示
+- [x] T-5781 SQL 空结果缺失判定
+- [x] T-5782 SQL 空响应不可用判定
+- [x] T-5783 SQL 合法 ID 已找到判定
+- [x] T-5784 非法 ID 缺失判定
+- [x] T-5785 日记状态与快照时间共存
+- [x] T-5786 日记状态与同步标志共存
+- [x] T-5787 日记状态固定输出形状
+- [x] T-5788 日记状态数据不变性
+- [x] T-5789 日记状态枚举冻结
+- [x] T-5790 Agent 只读 effects 保持
+- [x] T-5791 Agent 日记状态容量审计
+- [x] T-5792 Agent 日记状态回归测试
+- [x] T-5793 Agent 日记状态 TypeScript 门禁
+- [x] T-5794 Agent 日记状态完整测试门禁
+- [x] T-5795 Agent 日记状态生产构建
+- [x] T-5796 Agent 日记状态本地集市同步
+- [x] T-5797 Agent 日记状态批次收尾
+- [x] T-6284 iCal 订阅只读组件纯模型（v0.21 生活信息支线，2026-09-17 第二十九批）
+  - 目标：按 ROADMAP v0.21「iCal 与 GitHub 贡献热力图再评估」落地 iCal 订阅的契约/纯模型层；宿主接入（adapter/catalog/i18n）待产品确认后另行接线（同 T-123/T-124 先例）
+  - 实现：新增 `src/ical-model.js`——`normalizeIcalSubscriptionConfig`（https/http+本机、.ics 路径、拒绝 URL 内嵌凭据、窗口 1~60 天、条目 1~12 钳制）、RFC 5545 折行展开与 VEVENT 有界解析（源 256 KiB 上限、解析 500 条上限、超限按 parse_failed 拒绝而非静默截断）、`upcomingIcalEvents`（结束不早于 now、开始不越 windowDays 窗口、按开始时间升序）、稳定失败 token（invalid_url/parse_failed/empty）
+  - 测试：`tests/ical-model.test.cjs` 17 项（配置归一化、三态日期解析、折行展开、字段提取、恶意值拒绝、超限拒绝、窗口过滤/排序/钳制）；负向验证：破坏折行展开 → 精确 FAIL，md5 还原
+  - 状态：done（2026-09-17）；接入 adapter/catalog 时复用本模块，无需改动解析层
+- [x] T-6285 倍增复杂度性能门禁边际重测加固（2026-09-17 第二十九批）
+  - 目标：本会话性能门禁假失败 4 次（3.06~3.42x vs 天花板 3，均单独复跑即绿）——min-of-N 采样下 LARGE 侧撞调度毛刺仍使比值边际超顶，彻底修复
+  - 实现：`tests/perf-complexity-gate.test.cjs` 新增 `measureDoublingRatio`（attempts=2）：比值超顶时两侧各重测一轮取最小比值；天花板语义不变（复杂度类别判据，非噪声余量）；内嵌 self-check 测试用可控 fake minTime 同时验证「毛刺被吸收」与「注入 O(n²)（实测 4.06x）仍被拦截」两方向，负向验证内建于测试文件
+  - 验证：连续 5 轮门禁运行全绿；README 双语计数同步（5844→5845）
+  - 状态：done（2026-09-17）；D-393「先单独复跑再判定」的人工兜底已自动化进门禁（D-396 入账）
+- [x] T-6286 iCal 订阅组件生产接入（v0.21 生活信息支线，2026-09-17 第三十批）
+  - 目标：把 T-6284 纯模型接入生产全链——adapter/catalog/store/网络/i18n/依赖目录/商店分组
+  - 实现：`src/life-widget-network.js` 新增 `allowedIcalFeedUrl`/`loadIcalText`/`fetchBoundedLifeText`（复用内核代理 + 30 分钟 TTL 缓存）；`src/home-external-adapters.ts` 新增 ical adapter（复用 `upcomingIcalEvents`）；`src/external-widget-model.js` catalog 第 17 条（category time、auth user-endpoint、privacy endpoint-only、sourceUrl=RFC 5545）；`src/home-store-model.js` 三处映射（kind/feed、SOURCE_INFO、DEPENDENCY_INFO user-feed required:false）；`src/home-store-ui.ts` 生活分组纳入；i18n 双语各 4 key（homeIcal/homeDescIcal/homeIcalConfigHint/homeIcalEmpty）
+  - 门禁级联修复：catalog 硬编码计数 16→17 共 17 处、home-model 41→42 与 39→40、依赖目录 12→13（optional 4→5）、production graph 天花板 42→43、生活分组源码契约正则
+  - 负向验证（天然级联实证）：接线中途 10 项门禁精确失败并逐一指向漂移点（adapter 计数 41≠40、availability 分区、依赖清单缺 ical、i18n 死 key ×4、生产图 43>42、生活分组契约正则）——各门禁判别力以真实漂移验证，非一次性注入
+  - 状态：done（2026-09-17）；真机联网渲染待 acceptance-runbook 验收
+- [x] T-6287 codex worktree 残留实验审计与收口（2026-09-17 第三十一批）
+  - 目标：分支收拢时保留的 a4d8/caf4 两个 worktree 含未提交实验（当时判"不可丢弃"），本轮逐项验证后收口
+  - 审计结论（a4d8，2026-09-09 的两处未提交修改）：
+    - `src/index.ts`（42 行）："多动作 provider 只自动注册首个默认快捷入口"（hasProviderDefault）——**已被 main 架构演进取代**：现行 `registerQuickAction` 改为注册表 + `actionValue=adapterId/value` + 只更新不自动新增条目的语义，实验针对的自动注册泛滥问题已不存在，应用反而会回归新设计
+    - `src/index.scss`（166 行）：history 下拉样式重写（.sw__history-trigger 28px 触发器等）——**main 已有更完整实现**（index.scss 2267~2299 含 3220/3461/4544 三处响应式变体，DOM 已用 trigger 结构）
+  - 审计结论（caf4）：仅 6 张未跟踪截图，与 main 已提交版本逐字节相同（md5 全 yes）
+  - 处置：a4d8 完整 diff 留档 `.workbuddy/memory/a4d8-experiment-2026-09-09.patch`（237 行）后移除两个 worktree；`git worktree list` 只剩 main，本地分支只剩 main；origin 远端 7 条 feature 分支未动（push 权限范围）
+  - 状态：done（2026-09-17）；分支/worktree 收口全部完成
+- [x] T-6288 GitHub 贡献热力图纯模型（v0.21 生活信息支线，2026-09-17 第三十二批）
+  - 目标：ROADMAP/source-audit 里 iCal 之后的第 ④ 位候选落地契约/纯模型层（同 T-6284 契约先行先例，宿主接入另行接线）
+  - 实现：新增 `src/github-model.js`——`normalizeGithubContribConfig`（username 遵循 GitHub 规则：字母/数字/内部连字符 ≤39；windowDays 钳 28~366 默认 84；可选 PAT 有界 200 字符、只允许走请求头）；`githubEventsEndpoint`（官方 REST `users/{u}/events/public` 的分页权威形状：per_page ≤100、≤3 页）；`parseGithubEvents` 有界解析（源 256 KiB、事件 ≤600、日期桶 ≤400，超限按 parse_failed 拒绝而非静默截断；带偏移时间戳归一 UTC 日期桶）；计数口径诚实声明：PushEvent 按 payload.size 加权（单事件钳 100、非法回退 1）、其余事件计 1、WatchEvent（star）不计——与 GitHub 官方口径的已知差异写入模块头注释；`buildContributionGrid` 周×7 渲染格子（周日对齐、窗口外与补位格 level -1、量化阈值 1/3/5/8、now 注入确定化）
+  - 测试：`tests/github-model.test.cjs` 18 项（username 边界、窗口钳制、token 有界、分页钳制、加权与 Watch 剔除、UTC 桶确定性、超限拒绝、非时间戳跳过、量化阈值、周对齐/窗口裁剪/now 注入）；负向验证：注入「WatchEvent 也计数」→ 仅目标项 8 精确 FAIL，md5 字节级还原
+  - 状态：done（2026-09-17）；网络层/adapter/catalog 接入待产品确认后复用本模块
+- [x] T-6289 GitHub 贡献组件生产接入 + iCal 文本抓取缺陷修复（2026-09-17 第三十三批）
+  - 目标：把 T-6288 纯模型接入生产全链（同 T-6286 模式）
+  - 实现：`src/life-widget-network.js` 新增 `allowedGithubEventsUrl`（仅 https://api.github.com 官方 events 路由、仅 per_page/page 参数）/`loadGithubEvents`（≤3 页顺序抓取、短页提前停、token 走 Authorization 头、按用户名缓存且 token 不进缓存键、60 分钟 TTL、stale 回退）；`src/life-widget-model.js` 新增 `buildGithubContribSnapshot`（周汇总列表：最近至多 6 周、最新在前、口径与模型一致、末行附 profile 链接）；adapter 注册（iconGraph，60 分钟缓存）；home-model 默认注册表 + configSchema（username/windowDays/token）；catalog 第 18 条（category activity、auth none、sourceUrl 官方 REST 文档）；store 三映射（external-api 可选依赖）+ 生活分组 + i18n 双语 4 key
+  - **真实缺陷修复（D-397）**：T-6286 引入的 `fetchBoundedLifeText` 传 `responseKind:"text"` 但 `fetchBoundedLifeJson` 从未读取该选项、恒走 JSON.parse——**iCal 卡片线上抓取必然抛 invalid_json**（合法 ics 文本复现实锤）。修复为文本变体跳过解析；新增回归门禁「text 变体返回原始文本」。该缺陷由本轮新增的 GitHub 网络测试**自然暴露**（假绿防线再次证明"新门禁对着真实输入跑"的价值）
+  - 门禁级联：catalog 17→18（15 处）、home-model 42→43 与 40→41、builtins 41→42、依赖 13→14（optional 5→6、external-api 4→5）、生产图 43→44、生活分组契约正则
+  - 负向验证：注入「白名单放行任意 https 主机」→ 仅目标项精确 FAIL，md5 还原
+  - 测试 5863→5872（171 文件，+9 项）；verify:release 全链绿（js 631610 / zip 318095，快照同步）
+  - 状态：done（2026-09-17）；热力图视觉呈现（格点渲染）留待后续批次，当前为周汇总列表卡

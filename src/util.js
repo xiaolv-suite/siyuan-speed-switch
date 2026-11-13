@@ -1,0 +1,1504 @@
+// 纯函数工具：与类实例状态解耦，便于单元测试与多模块复用
+//（plain JS 而非 TS：测试用 node 直接 require，无需编译步骤；类型由 jsdoc 注解保留）
+
+// T-6465：跨宿主确定性文本比较。localeCompare 缺省 locale 随宿主 ICU 环境漂移
+//（CI 镜像升级实证：同一 CJK 排序断言在新旧 Runner 上一绿一红），因此用户内容
+// 的排序一律显式钉定 zh 拼音 Collator；纯 ASCII 串（日期时间戳/ID/数字路径）的
+// localeCompare 在各 locale 下事实一致，可保留。
+const zhSortCollator = new Intl.Collator("zh-Hans-CN");
+const zhNumericCollator = new Intl.Collator("zh-Hans-CN", {numeric: true});
+
+// Keep user supplied image icons small enough to live safely inside settings
+// data.  This mirrors 小驴打卡's custom icon contract while making the image
+// grammar stricter: only base64 image data and HTTPS URLs without credentials
+// are accepted.  The renderer still treats this value as data, never as HTML.
+const MAX_CUSTOM_ICON_BYTES = 240_000;
+const MAX_CUSTOM_ICON_URL_LENGTH = 500;
+
+function normalizeCustomIcon(value) {
+    if (typeof value !== "string") return undefined;
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.length > MAX_CUSTOM_ICON_BYTES) return undefined;
+    if (/^data:/i.test(trimmed)) {
+        const compact = trimmed.replace(/\s+/g, "");
+        return /^data:image\/(png|jpeg|jpg|gif|webp|svg\+xml);base64,([A-Za-z0-9+/]+={0,2})$/i.test(compact)
+            && compact.length <= MAX_CUSTOM_ICON_BYTES ? compact : undefined;
+    }
+    if (!/^https:\/\//i.test(trimmed)) {
+        if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed) || /[\u0000-\u001f\u007f<>"'`]/.test(trimmed)) return undefined;
+        if (/^(?:icon[A-Za-z0-9_-]+|lucide-[A-Za-z0-9_-]+|siyuan-[A-Za-z0-9_-]*icon)$/.test(trimmed)) {
+            return trimmed.length <= 128 ? trimmed : undefined;
+        }
+        return graphemeLength(trimmed) <= 4 ? trimmed : undefined;
+    }
+    try {
+        const url = new URL(trimmed);
+        if (url.protocol !== "https:" || url.username || url.password || url.hostname.length < 2) return undefined;
+        const normalized = url.toString();
+        return normalized.length <= MAX_CUSTOM_ICON_URL_LENGTH ? normalized : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+function isImageIconReference(value) {
+    return typeof value === "string" && (/^https:\/\//i.test(value)
+        || /^data:image\/(?:png|jpeg|jpg|gif|webp|svg\+xml);base64,/i.test(value));
+}
+
+/**
+ * 用户可见文本（标题/名称/标签）的确定性比较：zh 拼音 Collator 单例。
+ * @param {string} a
+ * @param {string} b
+ * @returns {number}
+ */
+function compareText(a, b) {
+    return zhSortCollator.compare(String(a), String(b));
+}
+
+/**
+ * 数字夹紧：NaN / 非数字退回 fallback；否则限制在 [min, max] 区间
+ * @param {unknown} value
+ * @param {number} min
+ * @param {number} max
+ * @param {number} fallback
+ * @returns {number}
+ */
+function clampNum(value, min, max, fallback) {
+    const num = typeof value === "number" ? value : parseInt(String(value), 10);
+    if (Number.isNaN(num)) {
+        return fallback;
+    }
+    return Math.min(max, Math.max(min, num));
+}
+
+/**
+ * 插入排序稳定变体：稳定 = 相等 key 的项保持原有顺序（基于 originalIndex）
+ * 适合小列表（< 1000）；大列表应改用 stableSort / Map.groupBy
+ * @template T
+ * @param {T[]} arr
+ * @param {(item: T) => string | number} keyFn
+ * @returns {T[]}
+ */
+function stableSortBy(arr, keyFn) {
+    return arr
+        .map((item, idx) => ({item, idx, key: keyFn(item)}))
+        .sort((a, b) => {
+            if (a.key < b.key) return -1;
+            if (a.key > b.key) return 1;
+            return a.idx - b.idx;
+        })
+        .map((x) => x.item);
+}
+
+/**
+ * 与思源选项文本的标准化 sortBy 转换：null / 未知值退回默认
+ * @param {unknown} value
+ * @param {readonly string[]} allowed
+ * @param {string} fallback
+ * @returns {string}
+ */
+function normalizeSortBy(value, allowed, fallback) {
+    return allowed.includes(String(value)) ? String(value) : fallback;
+}
+
+/** Sort tab-like items without mutating the input array. */
+function sortItems(items, sortBy, mru = [], options = {}) {
+    const ordered = Array.from(items || []);
+    const titleOf = typeof options.titleOf === "function" ? options.titleOf : () => "";
+    const rootIdOf = typeof options.rootIdOf === "function" ? options.rootIdOf : () => "";
+    const pinKeyOf = typeof options.pinKeyOf === "function" ? options.pinKeyOf : rootIdOf;
+    const updatedMap = options.updatedMap && typeof options.updatedMap === "object" ? options.updatedMap : {};
+    if (sortBy === "titleAsc" || sortBy === "titleDesc") {
+        ordered.sort((a, b) => {
+            const result = zhNumericCollator.compare(String(titleOf(a) || ""), String(titleOf(b) || ""));
+            return sortBy === "titleAsc" ? result : -result;
+        });
+    } else if (sortBy === "layoutDesc") {
+        ordered.reverse();
+    } else if (sortBy === "updatedDesc") {
+        ordered.sort((a, b) => {
+            const ua = updatedMap[rootIdOf(a) || ""] || "";
+            const ub = updatedMap[rootIdOf(b) || ""] || "";
+            return ua < ub ? 1 : ua > ub ? -1 : 0;
+        });
+    } else if (sortBy === "mru") {
+        ordered.sort((a, b) => {
+            const ra = mru.indexOf(pinKeyOf(a));
+            const rb = mru.indexOf(pinKeyOf(b));
+            return (ra < 0 ? Number.MAX_SAFE_INTEGER : ra) - (rb < 0 ? Number.MAX_SAFE_INTEGER : rb);
+        });
+    }
+    return ordered;
+}
+
+/** Keep pinned items first, then apply the selected ordering to the remainder. */
+function sortGroupItems(group, sortBy, mru = [], pinned = new Set(), updatedMap = {}, callbacks = {}) {
+    const pinKeyOf = typeof callbacks.pinKeyOf === "function"
+        ? callbacks.pinKeyOf
+        : (typeof callbacks.rootIdOf === "function" ? callbacks.rootIdOf : () => "");
+    const pinnedSet = pinned instanceof Set ? pinned : new Set(pinned || []);
+    const pinnedItems = [];
+    const restItems = [];
+    Array.from(group || []).forEach((item) => {
+        (pinnedSet.has(pinKeyOf(item)) ? pinnedItems : restItems).push(item);
+    });
+    const orderedRest = sortItems(restItems, sortBy, mru, {...callbacks, updatedMap});
+    return [...pinnedItems, ...orderedRest];
+}
+
+/** Resolve the presentation state shared by quick-action surfaces. */
+function resolveQuickActionSurfaceState(surface, settings = {}, selector = ".sw__quick-actions") {
+    const normalizedSurface = surface === "sidebar" || surface === "mobile" ? surface : "desktop";
+    const display = normalizedSurface === "desktop" ? settings.quickActionsDisplayDesktop
+        : normalizedSurface === "sidebar" ? settings.quickActionsDisplaySidebar
+            : settings.quickActionsDisplayMobile;
+    const isRightRail = normalizedSurface === "desktop" && selector === ".sw__quick-rail";
+    const collapsed = normalizedSurface === "desktop"
+        ? (isRightRail ? settings.quickActionsCollapsedDesktopRight : settings.quickActionsCollapsedDesktopBottom)
+        : normalizedSurface === "sidebar" ? settings.quickActionsCollapsedSidebar : settings.quickActionsCollapsedMobile;
+    return {
+        surface: normalizedSurface,
+        display: display === "icons" || display === "hidden" ? display : "full",
+        isRightRail,
+        collapsed: collapsed === true,
+    };
+}
+
+/**
+ * 收藏按 group 分组聚合：
+ * - 注册表中的空分组会被保留（"先建组再添加"工作流）
+ * - 未命名项（fav.group 为空）收纳到 "" 组
+ * - 返回的 Map 保持插入顺序：先注册表分组、后未注册组（来自 fav.group），便于分组 UI 按序渲染
+ * @template {{group?: string}} T
+ * @param {T[]} favorites
+ * @param {string[]} groupNames
+ * @returns {Map<string, T[]>}
+ */
+function groupFavoritesByGroup(favorites, groupNames) {
+    const groups = new Map();
+    groupNames.forEach((name) => groups.set(name, []));
+    favorites.forEach((fav) => {
+        const name = fav.group || "";
+        if (!groups.has(name)) {
+            groups.set(name, []);
+        }
+        groups.get(name).push(fav);
+    });
+    return groups;
+}
+
+// 字素计数器：ZWJ 组合 emoji（👨‍👩‍👧）与肤色修饰（👍🏽）算 1 个图素；
+// Node 18+/现代 WebView 均支持 Intl.Segmenter，缺失环境退回码点展开
+const GRAPHEME_SEGMENTER = typeof Intl !== "undefined" && typeof Intl.Segmenter === "function"
+    ? new Intl.Segmenter()
+    : null;
+function graphemeLength(str) {
+    if (GRAPHEME_SEGMENTER) {
+        return [...GRAPHEME_SEGMENTER.segment(str)].length;
+    }
+    return [...str].length;
+}
+
+// 前 maxGraphemes 个字素的截断：码元长度 ≤ 上限时原样返回（一个字素至少占一个
+// UTF-16 码元，此时字素数必 ≤ 上限，截断结果与原串相同），热路径免付 Segmenter 成本。
+function graphemeSlice(text, maxGraphemes) {
+    if (text.length <= maxGraphemes) return text;
+    if (GRAPHEME_SEGMENTER) {
+        return [...GRAPHEME_SEGMENTER.segment(text)]
+            .slice(0, maxGraphemes)
+            .map((part) => part.segment)
+            .join("");
+    }
+    return [...text].slice(0, maxGraphemes).join("");
+}
+
+// 码点预算内的完整字素截断：累计字素码点数不超过 maxCodePoints（缺失环境按码点展开）。
+function graphemeSliceByCodePoints(text, maxCodePoints) {
+    if (!GRAPHEME_SEGMENTER) return [...text].slice(0, maxCodePoints).join("");
+    let result = "";
+    let codePoints = 0;
+    for (const part of GRAPHEME_SEGMENTER.segment(text)) {
+        const size = [...part.segment].length;
+        if (codePoints + size > maxCodePoints) break;
+        result += part.segment;
+        codePoints += size;
+    }
+    return result;
+}
+
+/** Normalize untrusted Dock/plugin metadata for compact controls. */
+function normalizeQuickActionText(value, max = 80) {
+    const text = typeof value === "string" ? value : "";
+    const normalized = text
+        .replace(/[\u0000-\u001F\u007F\uFFFD]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    return Array.from(normalized).slice(0, Math.max(1, max)).join("");
+}
+
+/**
+ * 解析思源页签图标字符串：svg 图标名 / emoji 字符 / 十六进制 codepoint / 空值兜底
+ * @param {string} raw
+ * @returns {{type: "svg", value: string} | {type: "emoji", value: string}}
+ */
+function resolveIconFallback(raw) {
+    const trimmed = (raw || "").trim();
+    if (!trimmed) {
+        return {type: "svg", value: "iconFile"};
+    }
+    // 思源 svg 图标名统一以 "icon" 开头且后面跟着具体名字（如 iconFile）
+    if (trimmed.startsWith("icon") && trimmed.length > 4) {
+        return {type: "svg", value: trimmed};
+    }
+    // 4-6 位十六进制视为 emoji codepoint（思源部分存储格式）
+    if (/^[0-9a-fA-F]{4,6}$/.test(trimmed)) {
+        try {
+            return {type: "emoji", value: String.fromCodePoint(parseInt(trimmed, 16))};
+        } catch {
+            // 解析失败继续走兜底
+        }
+    }
+    // 单个字素按 emoji 渲染（ZWJ 组合/肤色修饰算 1 个）；多位非法字符串回退文件图标
+    if (graphemeLength(trimmed) === 1) {
+        return {type: "emoji", value: trimmed};
+    }
+    return {type: "svg", value: "iconFile"};
+}
+
+/**
+ * Resolve an icon reference against the SVG symbols that are actually
+ * available in the current document.  Plugin icons are not required to use
+ * SiYuan's `icon*` prefix (for example `siyuan-media-player-icon` or
+ * `lucide-book-search`), so the persisted value must remain permissive while
+ * rendering must remain strict.  A Set of symbol ids keeps this function
+ * pure and prevents arbitrary element ids from being treated as SVG icons.
+ *
+ * @param {unknown} raw
+ * @param {Iterable<string>|null|undefined} availableSymbols
+ * @param {string|string[]} fallback
+ * @returns {{type: "svg", value: string} | {type: "emoji", value: string} | {type: "image", value: string}}
+ */
+function resolveIconReference(raw, availableSymbols, fallback = "iconFile") {
+    const value = typeof raw === "string" ? raw.trim() : "";
+    const symbols = availableSymbols == null ? null : new Set(availableSymbols);
+    const isSafeSymbolId = (candidate) => /^[A-Za-z][A-Za-z0-9_-]*$/.test(candidate);
+
+    const customIcon = normalizeCustomIcon(value);
+    if (customIcon && isImageIconReference(customIcon)) {
+        return {type: "image", value: customIcon};
+    }
+
+    if (value && isSafeSymbolId(value) && (!symbols || symbols.has(value))) {
+        return {type: "svg", value};
+    }
+
+    // Preserve user-selected emoji/codepoint icons when no valid SVG symbol
+    // exists for the stored value.
+    const parsed = resolveIconFallback(value);
+    if (parsed.type === "emoji") {
+        return parsed;
+    }
+    if (customIcon && !/^(?:icon[A-Za-z0-9_-]+|lucide-|siyuan-)/.test(customIcon)) {
+        return {type: "emoji", value: customIcon};
+    }
+
+    const fallbacks = Array.isArray(fallback) ? fallback : [fallback];
+    for (const candidate of fallbacks) {
+        if (typeof candidate === "string" && isSafeSymbolId(candidate)
+            && (!symbols || symbols.has(candidate))) {
+            return {type: "svg", value: candidate};
+        }
+    }
+    return {type: "svg", value: "iconFile"};
+}
+
+/**
+ * 按 tab.parent 分组页签，保持 getAllTabs 返回的布局顺序：
+ * - 同一 Wnd 的页签聚合到一组（支持分栏布局）
+ * - 没有 parent 时退到 scrollElement（手机端伪 Tab）
+ * @template {{parent?: {element?: HTMLElement, headersElement?: HTMLElement}}} T
+ * @param {T[]} tabs
+ * @param {HTMLElement} fallbackKey
+ * @returns {Map<HTMLElement, Array<{tab: T}>>}
+ */
+function buildTabGroupsByParent(tabs, fallbackKey) {
+    const groups = new Map();
+    tabs.forEach((tab) => {
+        const key = (tab.parent && (tab.parent.element || tab.parent.headersElement)) || fallbackKey;
+        if (!groups.has(key)) {
+            groups.set(key, []);
+        }
+        groups.get(key).push({tab});
+    });
+    return groups;
+}
+
+const tabRootIdCache = typeof WeakMap === "function" ? new WeakMap() : null;
+
+/**
+ * 解析页签当前文档 rootID：已加载模型优先于懒加载初始化数据。
+ * 每次调用都读取当前对象，确保同一 tab 导航到另一文档后不会沿用旧值。
+ * 针对未加载 protyle 的懒加载 Tab，引入 WeakMap 缓存避免在多页签启动和遍历时反复 JSON.parse。
+ * @param {{model?: object, headElement?: {getAttribute?: (name: string) => string|null}}} tab
+ * @returns {string|null}
+ */
+function resolveTabRootId(tab) {
+    if (!tab || typeof tab !== "object") return null;
+    const model = tab.model;
+    const loadedRootId = model?.editor?.protyle?.block?.rootID || model?.editor?.block?.rootID;
+    if (typeof loadedRootId === "string" && loadedRootId) {
+        return loadedRootId;
+    }
+    const head = tab.headElement;
+    if (!head || typeof head.getAttribute !== "function") return null;
+    const initData = head.getAttribute("data-initdata");
+    if (!initData) return null;
+    if (tabRootIdCache) {
+        const cached = tabRootIdCache.get(tab);
+        if (cached && cached.raw === initData) return cached.rootId;
+    }
+    try {
+        const data = JSON.parse(initData);
+        if (data?.instance !== "Editor") {
+            if (tabRootIdCache) tabRootIdCache.set(tab, {raw: initData, rootId: null});
+            return null;
+        }
+        const rootId = data.rootId || data.blockId;
+        const validRootId = typeof rootId === "string" && rootId ? rootId : null;
+        if (tabRootIdCache) tabRootIdCache.set(tab, {raw: initData, rootId: validRootId});
+        return validRootId;
+    } catch {
+        if (tabRootIdCache) tabRootIdCache.set(tab, {raw: initData, rootId: null});
+        return null;
+    }
+}
+
+/**
+ * 生成收藏分组的待打开项：按 rootID 去重，并排除已打开、无法解析的条目。
+ * @template {{key: string}} T
+ * @param {T[]} favorites
+ * @param {Set<string>} openedKeys
+ * @param {(favorite: T) => string} resolveRootId
+ * @returns {{targets: Array<{favorite: T, rootId: string}>, invalid: number}}
+ */
+function planGroupOpenFavorites(favorites, openedKeys, resolveRootId) {
+    const seen = new Set();
+    const targets = [];
+    let invalid = 0;
+    favorites.forEach((favorite) => {
+        const rootId = resolveRootId(favorite);
+        if (!rootId) {
+            invalid++;
+            return;
+        }
+        if (seen.has(rootId)) {
+            return;
+        }
+        seen.add(rootId);
+        if (openedKeys.has(favorite.key) || openedKeys.has(rootId)) {
+            return;
+        }
+        targets.push({favorite, rootId});
+    });
+    return {targets, invalid};
+}
+
+/**
+ * SQL IN 白名单净化：仅保留思源文档 ID 格式（14 位时间戳-7 位小写串）的条目并去重（保序）。
+ * 用于拼接 SQL 前过滤输入，杜绝引号等特殊字符破坏查询结构；全非法时返回空数组（调用方跳过查询）
+ * @param {unknown[]} values
+ * @returns {string[]}
+ */
+function sanitizeDocIds(values) {
+    const seen = new Set();
+    const out = [];
+    (values || []).forEach((value) => {
+        const id = typeof value === "string" ? value : "";
+        if (id && !seen.has(id) && /^[0-9]{14}-[0-9a-z]{7}$/.test(id)) {
+            seen.add(id);
+            out.push(id);
+        }
+    });
+    return out;
+}
+
+/**
+ * MRU 列表收敛：过滤非字符串/空值并去重（保序），超出上限时从尾部丢弃最旧条目。
+ * 用于 activateTab 写入侧与 getMru 读取侧（兼容历史已膨胀的存量数据），防止插件数据无限增长
+ * @param {unknown[]} values
+ * @param {number} max
+ * @returns {string[]}
+ */
+function normalizeCapacityLimit(max) {
+    const numeric = Number(max);
+    return Number.isFinite(numeric) && numeric > 0 ? Math.floor(numeric) : 0;
+}
+
+/** Return a bounded, serializable usage summary for a persisted list. */
+function buildCapacitySummary(values, max) {
+    const limit = normalizeCapacityLimit(max);
+    const size = Array.isArray(values) ? values.length : 0;
+    return {used: size, max: limit, truncated: limit > 0 && size > limit};
+}
+
+/** Build a read-only capacity snapshot for persisted user lists. */
+function buildStorageCapacitySnapshot(input, limits) {
+    const source = input && typeof input === "object" ? input : {};
+    const configured = limits && typeof limits === "object" ? limits : {};
+    const entries = [
+        ["favorites", source.favorites, configured.favorites],
+        ["pinned", source.pinned, configured.pinned],
+        ["favoriteGroups", source.favoriteGroups, configured.favoriteGroups],
+    ];
+    const snapshot = {};
+    entries.forEach(([name, values, max]) => {
+        const summary = buildCapacitySummary(values, max);
+        const ratio = summary.max > 0 ? summary.used / summary.max : 0;
+        snapshot[name] = {
+            used: Math.min(summary.used, 1000000),
+            max: summary.max,
+            truncated: summary.truncated,
+            status: summary.truncated ? "over" : (ratio >= 0.9 ? "near" : "ok"),
+        };
+    });
+    return snapshot;
+}
+
+/** Normalize an externally supplied capacity snapshot without trusting fields. */
+function normalizeStorageCapacitySnapshot(input) {
+    const source = input && typeof input === "object" ? input : {};
+    const output = {};
+    ["favorites", "pinned", "favoriteGroups"].forEach((name) => {
+        const raw = source[name] && typeof source[name] === "object" ? source[name] : {};
+        const max = normalizeCapacityLimit(raw.max);
+        const usedRaw = Number(raw.used);
+        const used = Number.isFinite(usedRaw) && usedRaw > 0 ? Math.min(Math.floor(usedRaw), 1000000) : 0;
+        const truncated = raw.truncated === true || (max > 0 && used > max);
+        const ratio = max > 0 ? used / max : 0;
+        output[name] = {
+            used,
+            max,
+            truncated,
+            status: truncated ? "over" : (ratio >= 0.9 ? "near" : "ok"),
+        };
+    });
+    return output;
+}
+
+/** Serialize a normalized capacity snapshot with deterministic key ordering. */
+function serializeStorageCapacitySnapshot(input) {
+    const normalized = normalizeStorageCapacitySnapshot(input);
+    return JSON.stringify(normalized);
+}
+
+/** Parse a serialized capacity snapshot and normalize untrusted payloads. */
+function parseStorageCapacitySnapshot(serialized) {
+    if (typeof serialized !== "string" || serialized.length > 256000) {
+        return normalizeStorageCapacitySnapshot({});
+    }
+    try {
+        return normalizeStorageCapacitySnapshot(JSON.parse(serialized));
+    } catch (_error) {
+        return normalizeStorageCapacitySnapshot({});
+    }
+}
+
+/** Merge multiple capacity snapshots conservatively by taking per-bucket maxima. */
+function mergeStorageCapacitySnapshots(...snapshots) {
+    const merged = {};
+    ["favorites", "pinned", "favoriteGroups"].forEach((name) => {
+        let used = 0;
+        let max = 0;
+        snapshots.forEach((snapshot) => {
+            const normalized = normalizeStorageCapacitySnapshot(snapshot);
+            const bucket = normalized[name];
+            used = Math.max(used, bucket.used);
+            max = Math.max(max, bucket.max);
+        });
+        merged[name] = {used, max};
+    });
+    return normalizeStorageCapacitySnapshot(merged);
+}
+
+/** Compute a bounded, deterministic diff between two capacity snapshots. */
+function diffStorageCapacitySnapshots(previous, current) {
+    const before = normalizeStorageCapacitySnapshot(previous);
+    const after = normalizeStorageCapacitySnapshot(current);
+    const diff = {};
+    ["favorites", "pinned", "favoriteGroups"].forEach((name) => {
+        const from = before[name];
+        const to = after[name];
+        diff[name] = {
+            usedDelta: to.used - from.used,
+            maxDelta: to.max - from.max,
+            statusChanged: from.status !== to.status,
+            truncatedChanged: from.truncated !== to.truncated,
+        };
+    });
+    return diff;
+}
+
+/** Summarize a capacity diff into bounded, UI-friendly change metadata. */
+function summarizeStorageCapacityDiff(previous, current) {
+    const diff = diffStorageCapacitySnapshots(previous, current);
+    const changedBuckets = [];
+    let increased = 0;
+    let decreased = 0;
+    let statusChanges = 0;
+    ["favorites", "pinned", "favoriteGroups"].forEach((name) => {
+        const item = diff[name];
+        if (item.usedDelta !== 0 || item.maxDelta !== 0 || item.statusChanged || item.truncatedChanged) {
+            changedBuckets.push(name);
+        }
+        if (item.usedDelta > 0) increased += 1;
+        if (item.usedDelta < 0) decreased += 1;
+        if (item.statusChanged || item.truncatedChanged) statusChanges += 1;
+    });
+    return {
+        changedBuckets,
+        changedCount: changedBuckets.length,
+        increased,
+        decreased,
+        statusChanges,
+        changed: changedBuckets.length > 0,
+    };
+}
+
+/** Classify aggregate capacity risk for lightweight UI/log consumers. */
+function classifyStorageCapacityRisk(snapshot) {
+    const normalized = normalizeStorageCapacitySnapshot(snapshot);
+    const buckets = [normalized.favorites, normalized.pinned, normalized.favoriteGroups];
+    if (buckets.some((bucket) => bucket.status === "over")) return "critical";
+    if (buckets.some((bucket) => bucket.status === "near")) return "warning";
+    return "normal";
+}
+
+/** Build a bounded health summary for all persisted capacity buckets. */
+function buildStorageCapacityHealth(snapshot) {
+    const normalized = normalizeStorageCapacitySnapshot(snapshot);
+    const names = ["favorites", "pinned", "favoriteGroups"];
+    let used = 0;
+    let max = 0;
+    const over = [];
+    const near = [];
+    names.forEach((name) => {
+        const bucket = normalized[name];
+        used += bucket.used;
+        max += bucket.max;
+        if (bucket.status === "over") over.push(name);
+        else if (bucket.status === "near") near.push(name);
+    });
+    const risk = classifyStorageCapacityRisk(normalized);
+    return {
+        risk,
+        used: Math.min(used, 3000000),
+        max,
+        over,
+        near,
+        recommendation: risk === "critical" ? "trim" : (risk === "warning" ? "monitor" : "none"),
+    };
+}
+
+/** Normalize externally supplied health summaries to a fixed, safe shape. */
+function normalizeStorageCapacityHealth(input) {
+    const source = input && typeof input === "object" ? input : {};
+    const allowed = new Set(["favorites", "pinned", "favoriteGroups"]);
+    const normalizeNames = (value) => Array.isArray(value)
+        ? [...new Set(value.filter((name) => allowed.has(name)))].slice(0, 3)
+        : [];
+    const over = normalizeNames(source.over);
+    const near = normalizeNames(source.near).filter((name) => !over.includes(name));
+    const usedRaw = Number(source.used);
+    const maxRaw = Number(source.max);
+    const used = Number.isFinite(usedRaw) && usedRaw > 0 ? Math.min(Math.floor(usedRaw), 3000000) : 0;
+    const max = Number.isFinite(maxRaw) && maxRaw > 0 ? Math.min(Math.floor(maxRaw), 3000000) : 0;
+    const risk = over.length > 0 ? "critical" : (near.length > 0 ? "warning" : "normal");
+    return {risk, used, max, over, near, recommendation: risk === "critical" ? "trim" : (risk === "warning" ? "monitor" : "none")};
+}
+
+function serializeStorageCapacityHealth(input) {
+    return JSON.stringify(normalizeStorageCapacityHealth(input));
+}
+
+function parseStorageCapacityHealth(serialized) {
+    if (typeof serialized !== "string" || serialized.length > 128000) return normalizeStorageCapacityHealth({});
+    try { return normalizeStorageCapacityHealth(JSON.parse(serialized)); } catch (_error) { return normalizeStorageCapacityHealth({}); }
+}
+
+/** Compare two normalized health summaries with bounded bucket change lists. */
+function diffStorageCapacityHealth(previous, current) {
+    const before = normalizeStorageCapacityHealth(previous);
+    const after = normalizeStorageCapacityHealth(current);
+    const added = (next, prior) => next.filter((name) => !prior.includes(name));
+    const removed = (prior, next) => prior.filter((name) => !next.includes(name));
+    const usedDelta = after.used - before.used;
+    return {
+        riskChanged: before.risk !== after.risk,
+        fromRisk: before.risk,
+        toRisk: after.risk,
+        recommendationChanged: before.recommendation !== after.recommendation,
+        usedDelta,
+        maxDelta: after.max - before.max,
+        direction: usedDelta > 0 ? "up" : (usedDelta < 0 ? "down" : "stable"),
+        addedOver: added(after.over, before.over),
+        removedOver: removed(before.over, after.over),
+        addedNear: added(after.near, before.near),
+        removedNear: removed(before.near, after.near),
+    };
+}
+
+/** Classify health direction from risk and aggregate utilization changes. */
+function assessStorageCapacityTrend(previous, current) {
+    const before = normalizeStorageCapacityHealth(previous);
+    const after = normalizeStorageCapacityHealth(current);
+    const rank = {normal: 0, warning: 1, critical: 2};
+    const riskDelta = rank[after.risk] - rank[before.risk];
+    const beforePressure = before.max > 0 ? before.used / before.max : 0;
+    const afterPressure = after.max > 0 ? after.used / after.max : 0;
+    const pressureDelta = afterPressure - beforePressure;
+    const degrading = riskDelta > 0 || (riskDelta === 0 && pressureDelta > 0.05);
+    const improving = riskDelta < 0 || (riskDelta === 0 && pressureDelta < -0.05);
+    const trend = degrading ? "degrading" : (improving ? "improving" : "stable");
+    return {trend, riskDelta, pressureDelta: Number(pressureDelta.toFixed(4)), action: after.recommendation};
+}
+
+/** Normalize a serialized trend result to fixed enums and bounded numbers. */
+function normalizeStorageCapacityTrend(input) {
+    const source = input && typeof input === "object" ? input : {};
+    const trends = new Set(["degrading", "improving", "stable"]);
+    const actions = new Set(["none", "monitor", "trim"]);
+    const riskRaw = Number(source.riskDelta);
+    const pressureRaw = Number(source.pressureDelta);
+    const riskDelta = Number.isFinite(riskRaw) ? Math.max(-2, Math.min(2, Math.trunc(riskRaw))) : 0;
+    const pressure = Number.isFinite(pressureRaw) ? Math.max(-1, Math.min(1, pressureRaw)) : 0;
+    return {
+        trend: trends.has(source.trend) ? source.trend : "stable",
+        riskDelta,
+        pressureDelta: Number(pressure.toFixed(4)),
+        action: actions.has(source.action) ? source.action : "none",
+    };
+}
+
+function serializeStorageCapacityTrend(input) {
+    return JSON.stringify(normalizeStorageCapacityTrend(input));
+}
+
+function parseStorageCapacityTrend(serialized) {
+    if (typeof serialized !== "string" || serialized.length > 64000) return normalizeStorageCapacityTrend({});
+    try { return normalizeStorageCapacityTrend(JSON.parse(serialized)); } catch (_error) { return normalizeStorageCapacityTrend({}); }
+}
+
+/** Compose snapshot health, trend, and change summary into one read-only report. */
+function buildStorageCapacityReport(previous, current) {
+    const previousHealth = buildStorageCapacityHealth(previous);
+    const health = buildStorageCapacityHealth(current);
+    const trend = assessStorageCapacityTrend(previousHealth, health);
+    const summary = summarizeStorageCapacityDiff(previous, current);
+    return {version: 1, health, trend, summary};
+}
+
+function normalizeStorageCapacityReport(input) {
+    const source = input && typeof input === "object" ? input : {};
+    const health = normalizeStorageCapacityHealth(source.health);
+    const trend = normalizeStorageCapacityTrend(source.trend);
+    const rawSummary = source.summary && typeof source.summary === "object" ? source.summary : {};
+    const changedBuckets = Array.isArray(rawSummary.changedBuckets)
+        ? [...new Set(rawSummary.changedBuckets.filter((name) => ["favorites", "pinned", "favoriteGroups"].includes(name)))].slice(0, 3)
+        : [];
+    const count = changedBuckets.length;
+    return {version: 1, health, trend, summary: {changedBuckets, changedCount: count, increased: Math.max(0, Math.min(3, Math.trunc(Number(rawSummary.increased) || 0))), decreased: Math.max(0, Math.min(3, Math.trunc(Number(rawSummary.decreased) || 0))), statusChanges: Math.max(0, Math.min(3, Math.trunc(Number(rawSummary.statusChanges) || 0))), changed: count > 0}};
+}
+
+function serializeStorageCapacityReport(input) {
+    return JSON.stringify(normalizeStorageCapacityReport(input));
+}
+
+function parseStorageCapacityReport(serialized) {
+    if (typeof serialized !== "string" || serialized.length > 192000) return normalizeStorageCapacityReport({});
+    try { return normalizeStorageCapacityReport(JSON.parse(serialized)); } catch (_error) { return normalizeStorageCapacityReport({}); }
+}
+
+/** Aggregate a bounded report history for trend/risk dashboards. */
+function summarizeStorageCapacityReports(reports) {
+    const list = Array.isArray(reports) ? reports.slice(0, 64) : [];
+    const riskCounts = {normal: 0, warning: 0, critical: 0};
+    const trendCounts = {stable: 0, improving: 0, degrading: 0};
+    list.forEach((report) => {
+        const normalized = normalizeStorageCapacityReport(report);
+        riskCounts[normalized.health.risk] += 1;
+        trendCounts[normalized.trend.trend] += 1;
+    });
+    const latest = list.length > 0 ? normalizeStorageCapacityReport(list[list.length - 1]) : normalizeStorageCapacityReport({});
+    return {
+        samples: list.length,
+        latestRisk: latest.health.risk,
+        latestTrend: latest.trend.trend,
+        riskCounts,
+        trendCounts,
+        criticalSamples: riskCounts.critical,
+        degradingSamples: trendCounts.degrading,
+        improvingSamples: trendCounts.improving,
+    };
+}
+
+/** Normalize, deduplicate, and cap report history while preserving newest entries. */
+function trimStorageCapacityReportHistory(reports, max = 64) {
+    if (!Array.isArray(reports)) return {reports: [], changed: false};
+    const limit = normalizeCapacityLimit(max) || 64;
+    const seen = new Set();
+    const normalized = [];
+    for (let index = reports.length - 1; index >= 0; index -= 1) {
+        const report = normalizeStorageCapacityReport(reports[index]);
+        const key = JSON.stringify(report);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        normalized.push(report);
+        if (normalized.length >= limit) break;
+    }
+    normalized.reverse();
+    return {reports: normalized, changed: normalized.length !== reports.length || normalized.some((report, index) => JSON.stringify(report) !== JSON.stringify(reports[index]))};
+}
+
+/** Select a recent bounded report window with explicit truncation metadata. */
+function selectStorageCapacityReportWindow(reports, max = 16) {
+    const trimmed = trimStorageCapacityReportHistory(reports, 64).reports;
+    const limit = normalizeCapacityLimit(max) || 16;
+    const start = Math.max(0, trimmed.length - limit);
+    const window = trimmed.slice(start);
+    return {reports: window, start, end: start + window.length, total: trimmed.length, truncated: start > 0};
+}
+
+/** Summarize a selected report window while retaining pagination metadata. */
+function summarizeStorageCapacityReportWindow(window) {
+    const source = window && typeof window === "object" ? window : {};
+    const reports = Array.isArray(source.reports) ? source.reports : [];
+    const summary = summarizeStorageCapacityReports(reports);
+    const startRaw = Number(source.start);
+    const endRaw = Number(source.end);
+    const totalRaw = Number(source.total);
+    const start = Number.isFinite(startRaw) && startRaw > 0 ? Math.min(Math.floor(startRaw), 64) : 0;
+    const end = Number.isFinite(endRaw) && endRaw >= start ? Math.min(Math.floor(endRaw), 64) : start + summary.samples;
+    const total = Number.isFinite(totalRaw) && totalRaw >= end ? Math.min(Math.floor(totalRaw), 64) : end;
+    return {start, end, total, truncated: source.truncated === true || start > 0, samples: summary.samples, latestRisk: summary.latestRisk, latestTrend: summary.latestTrend, criticalSamples: summary.criticalSamples, degradingSamples: summary.degradingSamples, improvingSamples: summary.improvingSamples};
+}
+
+/** Normalize a report window payload before persistence or transport. */
+function normalizeStorageCapacityReportWindow(input) {
+    const source = input && typeof input === "object" ? input : {};
+    const selected = selectStorageCapacityReportWindow(source.reports, 16);
+    const startRaw = Number(source.start);
+    const totalRaw = Number(source.total);
+    const start = Number.isFinite(startRaw) && startRaw >= 0 ? Math.min(Math.floor(startRaw), 64) : selected.start;
+    const total = Number.isFinite(totalRaw) && totalRaw >= start ? Math.min(Math.floor(totalRaw), 64) : selected.total;
+    const reports = selected.reports.slice(-Math.max(0, Math.min(16, total - start)));
+    return {reports, start, end: start + reports.length, total: Math.max(start + reports.length, total), truncated: source.truncated === true || start > 0};
+}
+
+function serializeStorageCapacityReportWindow(input) {
+    return JSON.stringify(normalizeStorageCapacityReportWindow(input));
+}
+
+function parseStorageCapacityReportWindow(serialized) {
+    if (typeof serialized !== "string" || serialized.length > 192000) return normalizeStorageCapacityReportWindow({});
+    try { return normalizeStorageCapacityReportWindow(JSON.parse(serialized)); } catch (_error) { return normalizeStorageCapacityReportWindow({}); }
+}
+
+/** Validate report-window structure without exposing payload details. */
+function validateStorageCapacityReportWindow(input) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) return {valid: false, reason: "invalid_input", size: 0};
+    if (!Array.isArray(input.reports)) return {valid: false, reason: "reports_missing", size: 0};
+    if (input.reports.length > 16) return {valid: false, reason: "reports_overflow", size: input.reports.length};
+    const integer = (value) => Number.isInteger(value) && value >= 0 && value <= 64;
+    if (!integer(input.start) || !integer(input.end) || !integer(input.total)) return {valid: false, reason: "invalid_bounds", size: input.reports.length};
+    if (input.end < input.start || input.total < input.end) return {valid: false, reason: "bounds_order", size: input.reports.length};
+    if (typeof input.truncated !== "boolean") return {valid: false, reason: "invalid_truncated", size: input.reports.length};
+    return {valid: true, reason: "ok", size: input.reports.length};
+}
+
+/** Validate report envelope sections while returning stable reasons only. */
+function validateStorageCapacityReport(input) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) return {valid: false, reason: "invalid_input"};
+    if (input.version !== 1) return {valid: false, reason: "invalid_version"};
+    if (!input.health || typeof input.health !== "object" || Array.isArray(input.health)) return {valid: false, reason: "health_missing"};
+    if (!input.trend || typeof input.trend !== "object" || Array.isArray(input.trend)) return {valid: false, reason: "trend_missing"};
+    if (!input.summary || typeof input.summary !== "object" || Array.isArray(input.summary)) return {valid: false, reason: "summary_missing"};
+    const trend = normalizeStorageCapacityTrend(input.trend);
+    if (trend.trend === "stable" && input.trend.trend !== "stable" && input.trend.trend !== undefined) return {valid: false, reason: "invalid_trend"};
+    const buckets = input.summary.changedBuckets;
+    if (!Array.isArray(buckets) || buckets.length > 3) return {valid: false, reason: "invalid_summary"};
+    return {valid: true, reason: "ok"};
+}
+
+/** Repair cross-section consistency in an untrusted capacity report. */
+function reconcileStorageCapacityReport(input) {
+    const report = normalizeStorageCapacityReport(input);
+    const changedBuckets = report.summary.changedBuckets;
+    return {
+        version: 1,
+        health: report.health,
+        trend: {...report.trend, action: report.health.recommendation},
+        summary: {...report.summary, changedCount: changedBuckets.length, changed: changedBuckets.length > 0},
+    };
+}
+
+/** Convert a report diff into a bounded, stable event list. */
+function buildStorageCapacityReportEvents(previous, current) {
+    const diff = diffStorageCapacityHealth(previous?.health || previous, current?.health || current);
+    const events = [];
+    if (diff.riskChanged) events.push({type: "risk_changed", from: diff.fromRisk, to: diff.toRisk});
+    if (diff.direction !== "stable") events.push({type: "usage_trend", direction: diff.direction});
+    if (diff.addedOver.length) events.push({type: "over_capacity", buckets: diff.addedOver.slice(0, 3)});
+    if (diff.removedOver.length) events.push({type: "over_capacity_cleared", buckets: diff.removedOver.slice(0, 3)});
+    if (diff.addedNear.length) events.push({type: "near_capacity", buckets: diff.addedNear.slice(0, 3)});
+    if (diff.removedNear.length) events.push({type: "near_capacity_cleared", buckets: diff.removedNear.slice(0, 3)});
+    return events.slice(0, 8);
+}
+
+function normalizeStorageCapacityReportEvents(input) {
+    const allowed = new Set(["risk_changed", "usage_trend", "over_capacity", "over_capacity_cleared", "near_capacity", "near_capacity_cleared"]);
+    const source = Array.isArray(input) ? input : [];
+    return source.filter((event) => event && typeof event === "object" && allowed.has(event.type)).slice(0, 8).map((event) => {
+        const normalized = {type: event.type};
+        if (event.type === "risk_changed") { normalized.from = ["normal", "warning", "critical"].includes(event.from) ? event.from : "normal"; normalized.to = ["normal", "warning", "critical"].includes(event.to) ? event.to : "normal"; }
+        if (event.type === "usage_trend") normalized.direction = ["up", "down"].includes(event.direction) ? event.direction : "up";
+        if (event.type !== "risk_changed" && event.type !== "usage_trend") normalized.buckets = [...new Set((Array.isArray(event.buckets) ? event.buckets : []).filter((name) => ["favorites", "pinned", "favoriteGroups"].includes(name)))].slice(0, 3);
+        return normalized;
+    });
+}
+
+function serializeStorageCapacityReportEvents(input) {
+    return JSON.stringify(normalizeStorageCapacityReportEvents(input));
+}
+
+function parseStorageCapacityReportEvents(serialized) {
+    if (typeof serialized !== "string" || serialized.length > 64000) return [];
+    try { return normalizeStorageCapacityReportEvents(JSON.parse(serialized)); } catch (_error) { return []; }
+}
+
+function createStorageCapacityReportEventQueue(max = 8) {
+    const limit = Math.max(1, Math.min(32, normalizeCapacityLimit(max) || 8));
+    let cursor = 0;
+    let disposed = false;
+    const events = [];
+    return {
+        enqueue(input) { if (disposed) return {accepted: 0, disposed: true}; const normalized = normalizeStorageCapacityReportEvents(input); normalized.forEach((event) => { cursor += 1; events.push({cursor, event}); }); while (events.length > limit) events.shift(); return {accepted: normalized.length, disposed: false}; },
+        read(after = 0) { if (disposed) return {events: [], cursor, disposed: true, truncated: false}; const base = Number.isInteger(after) && after >= 0 ? after : 0; const truncated = events.length > 0 && base < events[0].cursor - 1; return {events: events.filter((item) => item.cursor > base).map((item) => item.event), cursor, disposed: false, truncated}; },
+        peek(limit = 8) { if (disposed) return {events: [], cursor, disposed: true}; const count = Math.max(0, Math.min(8, Number.isInteger(limit) ? limit : 8)); return {events: events.slice(0, count).map((item) => item.event), cursor, disposed: false}; },
+        acknowledge(to = 0) { if (disposed) return {removed: 0, disposed: true}; const target = Number.isInteger(to) && to >= 0 ? to : 0; const before = events.length; while (events.length && events[0].cursor <= target) events.shift(); return {removed: before - events.length, disposed: false}; },
+        snapshot() { return {cursor, size: events.length, capacity: limit, disposed}; },
+        clear() { if (disposed) return {cleared: 0, disposed: true}; const count = events.length; events.length = 0; return {cleared: count, disposed: false}; },
+        reset() { if (disposed) return {reset: false, disposed: true}; const previous = cursor; events.length = 0; cursor = 0; return {reset: true, previousCursor: previous, disposed: false}; },
+        dispose() { disposed = true; events.length = 0; },
+    };
+}
+
+function replayStorageCapacityReportEvents(queue, options = {}) {
+    if (!queue || typeof queue.read !== "function") return {mode: "failed", reason: "queue_unavailable", events: []};
+    if (options.signal?.aborted) return {mode: "cancelled", reason: "cancelled", events: []};
+    if (Number.isFinite(options.deadline) && Date.now() >= options.deadline) return {mode: "timeout", reason: "timeout", events: []};
+    const read = queue.read(Number.isInteger(options.after) ? options.after : 0);
+    if (read.disposed) return {mode: "failed", reason: "queue_disposed", events: []};
+    const events = read.events.slice(0, Math.max(0, Math.min(8, Number.isInteger(options.limit) ? options.limit : 8)));
+    if (options.acknowledge === true && events.length > 0 && typeof queue.acknowledge === "function") queue.acknowledge(read.cursor);
+    return {mode: read.truncated ? "snapshot_required" : "events", reason: "ok", events, cursor: read.cursor, acknowledged: options.acknowledge === true ? events.length : 0};
+}
+
+function readStorageCapacityReportEventsWithSignal(queue, after, signal) {
+    if (signal?.aborted) return {mode: "cancelled", reason: "cancelled", events: []};
+    if (!queue || typeof queue.read !== "function") return {mode: "failed", reason: "queue_unavailable", events: []};
+    return queue.read(after);
+}
+
+function readStorageCapacityReportEventsWithDeadline(queue, after, deadline) {
+    if (Number.isFinite(deadline) && Date.now() >= deadline) return {mode: "timeout", reason: "timeout", events: []};
+    if (!queue || typeof queue.read !== "function") return {mode: "failed", reason: "queue_unavailable", events: []};
+    return queue.read(after);
+}
+
+function normalizeStorageCapacityReportEventQueueStatus(input) {
+    const source = input && typeof input === "object" ? input : {};
+    const n = (value, max) => Number.isFinite(Number(value)) && Number(value) >= 0 ? Math.min(Math.floor(Number(value)), max) : 0;
+    const capacity = Math.max(1, n(source.capacity, 32) || 8);
+    return {cursor: n(source.cursor, 1000000), size: Math.min(n(source.size, capacity), capacity), capacity, disposed: source.disposed === true, truncated: source.truncated === true};
+}
+
+function getStorageCapacityReportEventQueueStatus(queue) {
+    if (!queue || typeof queue.snapshot !== "function") return normalizeStorageCapacityReportEventQueueStatus({});
+    return normalizeStorageCapacityReportEventQueueStatus(queue.snapshot());
+}
+function normalizeStorageCapacityReportEventQueueSummary(input) {
+    const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
+    const number = (value, fallback, max) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) && parsed > 0 ? Math.min(Math.floor(parsed), max) : fallback;
+    };
+    const capacity = number(source.capacity, 8, 32);
+    const size = Math.min(number(source.size, 0, 32), capacity);
+    const utilization = Number((size / capacity).toFixed(4));
+    return {size, capacity, utilization, risk: utilization >= 0.9 ? "warning" : "normal", disposed: source.disposed === true};
+}
+function serializeStorageCapacityReportEventQueueSummary(input) {
+    return JSON.stringify(normalizeStorageCapacityReportEventQueueSummary(input));
+}
+function parseStorageCapacityReportEventQueueSummary(serialized) {
+    if (typeof serialized !== "string" || serialized.length > 32000) return normalizeStorageCapacityReportEventQueueSummary({});
+    try { return normalizeStorageCapacityReportEventQueueSummary(JSON.parse(serialized)); } catch (_error) { return normalizeStorageCapacityReportEventQueueSummary({}); }
+}
+function diffStorageCapacityReportEventQueueSummary(previous, current) {
+    const from = normalizeStorageCapacityReportEventQueueSummary(previous);
+    const to = normalizeStorageCapacityReportEventQueueSummary(current);
+    return {sizeDelta: to.size - from.size, utilizationDelta: Number((to.utilization - from.utilization).toFixed(4)), riskChanged: from.risk !== to.risk, disposedChanged: from.disposed !== to.disposed};
+}
+function buildStorageCapacityReportEventQueueSummaryEvents(previous, current) {
+    const diff = diffStorageCapacityReportEventQueueSummary(previous, current);
+    const events = [];
+    if (diff.sizeDelta !== 0) events.push({type: "size_changed", delta: diff.sizeDelta});
+    if (diff.riskChanged) events.push({type: "risk_changed"});
+    if (diff.disposedChanged) events.push({type: "lifecycle_changed"});
+    return events.slice(0, 3);
+}
+function normalizeStorageCapacityReportEventQueueSummaryHistory(input, max = 16) {
+    const limit = Math.max(1, Math.min(32, Number.isInteger(max) ? max : 16));
+    return (Array.isArray(input) ? input : []).slice(-limit).map(normalizeStorageCapacityReportEventQueueSummary);
+}
+function summarizeStorageCapacityReportEventQueueSummaryHistory(input) {
+    const history = normalizeStorageCapacityReportEventQueueSummaryHistory(input);
+    const latest = history[history.length - 1] || normalizeStorageCapacityReportEventQueueSummary({});
+    return {samples: history.length, warningSamples: history.filter((item) => item.risk === "warning").length, peakUtilization: history.reduce((peak, item) => Math.max(peak, item.utilization), 0), latestRisk: latest.risk, latestDisposed: latest.disposed};
+}
+function serializeStorageCapacityReportEventQueueSummaryHistory(input) { return JSON.stringify(normalizeStorageCapacityReportEventQueueSummaryHistory(input)); }
+function parseStorageCapacityReportEventQueueSummaryHistory(serialized) {
+    if (typeof serialized !== "string" || serialized.length > 64000) return [];
+    try { return normalizeStorageCapacityReportEventQueueSummaryHistory(JSON.parse(serialized)); } catch (_error) { return []; }
+}
+function validateStorageCapacityReportEventQueueSummary(input) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) return {valid: false, reason: "invalid_input"};
+    const normalized = normalizeStorageCapacityReportEventQueueSummary(input);
+    if (normalized.size !== input.size || normalized.capacity !== input.capacity || normalized.disposed !== input.disposed) return {valid: false, reason: "invalid_shape"};
+    if (normalized.utilization !== input.utilization || normalized.risk !== input.risk) return {valid: false, reason: "inconsistent"};
+    return {valid: true, reason: "ok"};
+}
+
+function recoverStorageCapacityReportEventQueue(queue, snapshot) {
+    if (!queue || typeof queue.read !== "function") return {mode: "failed", reason: "queue_unavailable"};
+    const read = queue.read(0);
+    if (read.disposed) return {mode: "failed", reason: "queue_disposed"};
+    if (!read.truncated) return {mode: "events", reason: "ok", events: read.events.slice(0, 8), cursor: read.cursor};
+    if (!snapshot || typeof snapshot !== "object") return {mode: "snapshot_required", reason: "snapshot_required"};
+    return {mode: "snapshot", reason: "ok", snapshot: normalizeStorageCapacityReport(snapshot), cursor: read.cursor};
+}
+
+function createStorageCapacityReportEventCoordinator(queue) {
+    let lastCursor = 0;
+    let disposed = false;
+    return {
+        recover(snapshot) { if (disposed) return {mode: "failed", reason: "coordinator_disposed"}; const result = recoverStorageCapacityReportEventQueue(queue, snapshot); if (Number.isInteger(result.cursor) && result.cursor < lastCursor) return {mode: "failed", reason: "stale_cursor"}; if (Number.isInteger(result.cursor)) lastCursor = result.cursor; return result; },
+        recoverWithSignal(snapshot, signal) { if (signal?.aborted) return {mode: "cancelled", reason: "cancelled"}; return this.recover(snapshot); },
+        recoverWithDeadline(snapshot, deadline) { if (Number.isFinite(deadline) && Date.now() >= deadline) return {mode: "timeout", reason: "timeout"}; return this.recover(snapshot); },
+        recoverAndCommit(snapshot) { const result = this.recover(snapshot); if (result.mode === "events" || result.mode === "snapshot") { const commit = this.commit(result.cursor); return {...result, committed: commit.committed === true}; } return {...result, committed: false}; },
+        recoverAndCommitWithSignal(snapshot, signal) { if (signal?.aborted) return {mode: "cancelled", reason: "cancelled", committed: false}; return this.recoverAndCommit(snapshot); },
+        recoverAndCommitWithDeadline(snapshot, deadline) { if (Number.isFinite(deadline) && Date.now() >= deadline) return {mode: "timeout", reason: "timeout", committed: false}; return this.recoverAndCommit(snapshot); },
+        commit(cursor) { if (disposed) return {committed: false, reason: "coordinator_disposed"}; if (!Number.isInteger(cursor) || cursor < lastCursor) return {committed: false, reason: "stale_cursor"}; lastCursor = cursor; if (typeof queue.acknowledge === "function") queue.acknowledge(cursor); return {committed: true, cursor}; },
+        snapshot() { return {lastCursor, disposed}; },
+        dispose() { disposed = true; },
+    };
+}
+
+function capMru(values, max) {
+    const limit = normalizeCapacityLimit(max);
+    if (!Array.isArray(values)) {
+        // 损坏/非法输入统一安全降级，与其余 sanitize 家族保持一致；
+        // 非数组的 truthy 值（如被写坏的字符串）此前会直接抛错。
+        return [];
+    }
+    const seen = new Set();
+    const out = [];
+    values.forEach((value) => {
+        if (typeof value !== "string" || !value || seen.has(value)) {
+            return;
+        }
+        seen.add(value);
+        out.push(value);
+    });
+    return limit > 0 && out.length > limit ? out.slice(0, limit) : out;
+}
+
+/**
+ * 字符串列表净化：过滤非字符串/空值并去重（保序）。
+ * 用于置顶列表、收藏分组注册表等纯字符串持久化数据的加载期清理；
+ * 入参不是数组时返回空列表且不标记 changed（首次运行无数据，避免无谓回写）
+ * @param {unknown} values
+ * @returns {{items: string[], changed: boolean}}
+ */
+function sanitizeStringList(values, max) {
+    if (!Array.isArray(values)) {
+        return {items: [], changed: false};
+    }
+    const seen = new Set();
+    const items = [];
+    values.forEach((value) => {
+        if (typeof value !== "string" || !value || seen.has(value)) {
+            return;
+        }
+        seen.add(value);
+        items.push(value);
+    });
+    const limit = normalizeCapacityLimit(max);
+    const bounded = limit > 0 ? items.slice(0, limit) : items;
+    return {items: bounded, changed: bounded.length !== values.length};
+}
+
+/**
+ * 收藏列表结构校验与净化（加载期，与 0.16.4 的运行时迁移互补清理历史脏数据）：
+ * - 丢弃非对象条目与 key 为空的条目（无法定位/跳转的废数据）
+ * - title 非 string 归一为 ""（渲染侧已有兜底）
+ * - rootId 非 string 或空串归一为 null（规范"无 rootId"表示；空串等价于没有）
+ * - group 非 string 归一为 ""（未分组）
+ * - 按 key 去重保序（历史数据可能因页签 id 退化对同一文档重复收藏）
+ * 入参不是数组时返回空列表且不标记 changed（首次运行无数据，避免无谓回写）
+ * @param {unknown} values
+ * @returns {{items: Array<{key: string, title: string, rootId: string|null, group: string}>, changed: boolean}}
+ */
+function sanitizeFavorites(values, max) {
+    if (!Array.isArray(values)) {
+        return {items: [], changed: false};
+    }
+    const seen = new Set();
+    const items = [];
+    let changed = false;
+    values.forEach((value) => {
+        if (!value || typeof value !== "object") {
+            changed = true;
+            return;
+        }
+        const key = typeof value.key === "string" ? value.key : "";
+        if (!key) {
+            changed = true;
+            return;
+        }
+        if (seen.has(key)) {
+            changed = true;
+            return;
+        }
+        seen.add(key);
+        const title = typeof value.title === "string" ? value.title : "";
+        const rootId = typeof value.rootId === "string" && value.rootId ? value.rootId : null;
+        const group = typeof value.group === "string" ? value.group : "";
+        if (title !== value.title || rootId !== value.rootId || group !== value.group) {
+            changed = true;
+        }
+        items.push({key, title, rootId, group});
+    });
+    const limit = normalizeCapacityLimit(max);
+    const bounded = limit > 0 ? items.slice(0, limit) : items;
+    return {items: bounded, changed: changed || bounded.length !== values.length};
+}
+
+/**
+ * MobileTabs.open/close compatibility result: older SiYuan versions return
+ * undefined, while newer versions return an explicit success/failure value.
+ * @param {unknown} result
+ * @returns {boolean}
+ */
+function isSuccessfulMobileTabsResult(result) {
+    return result === undefined || result === "success";
+}
+
+/** Resolve the stable root document ID stored by a favorite entry. */
+function resolveFavoriteRootId(favorite) {
+    const rootId = typeof favorite?.rootId === "string" ? favorite.rootId : "";
+    if (/^\d{14}-[0-9a-z]+$/i.test(rootId)) return rootId;
+    const key = typeof favorite?.key === "string" ? favorite.key : "";
+    return /^\d{14}-[0-9a-z]+$/i.test(key) ? key : "";
+}
+
+/**
+ * Open-history storage normalization. Document roots are stable across tab
+ * instances, so old tab-id entries are migrated to the root key when one is
+ * available; non-document/plugin entries retain their original key.
+ * @param {unknown} values
+ * @param {number} max
+ * @returns {{items: Array<{key: string, rootId: string|null, title: string, ts: number}>, changed: boolean}}
+ */
+function sanitizeOpenHistory(values, max = 50) {
+    if (!Array.isArray(values)) return {items: [], changed: false};
+    const limit = Number.isFinite(max) && max > 0 ? Math.floor(max) : 50;
+    const seenKeys = new Set();
+    const seenRoots = new Set();
+    const items = [];
+    let changed = false;
+    for (let index = 0; index < values.length; index += 1) {
+        if (items.length >= limit) {
+            changed = true;
+            break;
+        }
+        const value = values[index];
+        if (!value || typeof value !== "object") {
+            changed = true;
+            continue;
+        }
+        const raw = value;
+        const rawKey = typeof raw.key === "string" ? raw.key.trim() : "";
+        if (!rawKey) {
+            changed = true;
+            continue;
+        }
+        let rootId = typeof raw.rootId === "string" && /^\d{14}-[0-9a-z]+$/i.test(raw.rootId.trim())
+            ? raw.rootId.trim() : null;
+        if (!rootId && /^\d{14}-[0-9a-z]+$/i.test(rawKey)) rootId = rawKey;
+        const key = rootId || rawKey;
+        if (seenKeys.has(key) || (rootId && seenRoots.has(rootId))) {
+            changed = true;
+            continue;
+        }
+        const title = typeof raw.title === "string" && raw.title.trim()
+            ? raw.title.trim().slice(0, 200) : key;
+        const ts = typeof raw.ts === "number" && Number.isFinite(raw.ts) ? raw.ts : 0;
+        if (key !== raw.key || rootId !== (raw.rootId || null) || title !== raw.title || ts !== raw.ts) changed = true;
+        seenKeys.add(key);
+        if (rootId) seenRoots.add(rootId);
+        items.push({key, rootId, title, ts});
+    }
+    if (items.length !== values.length) changed = true;
+    return {items: items.slice(0, limit), changed};
+}
+
+/**
+ * 缩略图缓存的读取侧归一化（v0.20 数据连续性，D-392）。
+ *
+ * 为什么需要：sw_thumb_cache 此前只有**写入侧**上限（宿主 setThumbCache 在写入时
+ * 拒绝超长 html 并按最旧 ts 淘汰），而写入侧只拦新增、不清理存量；读取侧
+ * getThumbCache() 更只做"是不是对象"的粗判（连数组都放行）。于是磁盘上的畸形条目
+ * 无处回收，会一直占着持久化存储。来源有二：
+ * - 结构损坏：手动改过 data 文件、同步冲突、写入中断留下的半条记录；
+ * - 上限语义变化（仅手机端）：v0.7.0 的 setThumbCache 硬编码桌面常量，手机端常量
+ *   （20 条 / 80 KiB）当时定义了却**未被写入侧使用**，实际按 40 条 / 200 KiB 收；
+ *   v0.8.0 起才按端型选择到 30 条 / 80 KiB。故手机端可能滞留 31~40 条、或单条
+ *   80~200 KiB 的条目。
+ * 桌面 40 条 / 200 KiB 自 v0.2.0 引入起从未变过，手机端 html 常量也一直是 80 KiB
+ * ——不存在"桌面或 html 上限曾被调大"的残留。
+ *
+ * 规则刻意与 setThumbCache 镜像，避免出现第二套语义：
+ * - 非对象（数组、字符串、primitive）→ 整体重置为空对象；
+ * - 条目不是对象、html 不是字符串、或 html 超过上限 → 丢弃该条目；
+ * - 条目数超过上限 → 按 ts 淘汰最旧，ts 相同时按原有键顺序（`Object.keys` 顺序）；
+ * - title 非字符串 → 归一为空串；ts 非正有限数 → 归一为 0。
+ *
+ * 默认值仅作兜底保护：宿主与迁移演练都会显式传入 constants.ts 的上限
+ * （桌面 40 / 200 KiB，手机 30 / 80 KiB），由契约测试锁定。
+ *
+ * @returns {{cache: Object, kept: number, removed: number, changed: boolean}}
+ */
+function normalizeThumbCache(values, options = {}) {
+    const max = Number.isFinite(options.max) && options.max > 0 ? Math.floor(options.max) : 40;
+    const htmlMax = Number.isFinite(options.htmlMax) && options.htmlMax > 0 ? Math.floor(options.htmlMax) : 200 * 1024;
+    if (!values || typeof values !== "object" || Array.isArray(values)) {
+        return {cache: {}, kept: 0, removed: 0, changed: false};
+    }
+    let removed = 0;
+    let repaired = false;
+    const kept = [];
+    Object.keys(values).forEach((key) => {
+        const raw = values[key];
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+            removed += 1;
+            return;
+        }
+        const html = typeof raw.html === "string" ? raw.html : null;
+        if (html === null || html.length > htmlMax) {
+            removed += 1;
+            return;
+        }
+        const title = typeof raw.title === "string" ? raw.title : "";
+        const ts = typeof raw.ts === "number" && Number.isFinite(raw.ts) && raw.ts > 0 ? raw.ts : 0;
+        if (title !== raw.title || ts !== raw.ts) repaired = true;
+        kept.push({key, entry: {title, html, ts}});
+    });
+    // 容量控制与 setThumbCache 同规则：按 ts 淘汰最旧，ts 相同按原有键顺序，行为可预测
+    let survivors = kept;
+    if (kept.length > max) {
+        const ordered = kept.map((item, index) => ({...item, index}))
+            .sort((left, right) => left.entry.ts - right.entry.ts || left.index - right.index);
+        const evicted = new Set(ordered.slice(0, ordered.length - max).map((item) => item.key));
+        survivors = kept.filter((item) => !evicted.has(item.key));
+        removed += evicted.size;
+    }
+    const cache = {};
+    survivors.forEach((item) => {
+        cache[item.key] = item.entry;
+    });
+    return {cache, kept: survivors.length, removed, changed: removed > 0 || repaired};
+}
+
+/**
+ * 列表分组纯函数：按模式把打开页签聚成有序组。纯数据进纯数据出，
+ * 标签/图标/排序上下文由宿主注入（DOM 与 i18n 留在 index.ts）。
+ * ctx: {
+ *   pinKeyOf(tab) -> string                     // 页签持久键（与收藏 key 同键域）
+ *   isFavorite(pinKey) -> boolean
+ *   favoriteGroupOf(pinKey) -> string           // 收藏分组名，""=未分组
+ *   favoriteGroupOrder: string[]                // 收藏分组注册表顺序
+ *   notebookIdOf(tab) -> string
+ *   notebookNameOf(id) -> string
+ *   notebookOrder: string[]                     // 思源笔记本列表顺序（id）
+ *   createdOf(pinKey) -> string                 // "YYYYMMDDHHmmss"，""=未知
+ *   labels: { unknownNotebook, ungroupedFavorite, unfavorited, unknownMonth }
+ * }
+ * 返回 Array<{key, label, icon, items}>，key 稳定可作折叠状态键。
+ */
+function groupTabsByMode(tabs, mode, ctx) {
+    const labels = ctx.labels || {};
+    if (mode === "path") {
+        const groups = new Map();
+        tabs.forEach((tab) => {
+            const parts = String(ctx.pathOf?.(tab) || "").replace(/\\/g, "/").split("/").filter(Boolean);
+            const notebook = String(ctx.notebookIdOf(tab) || "");
+            if (parts[0] === notebook) parts.shift();
+            const name = parts.length > 1 ? parts[0] : (labels.rootPath || "根目录");
+            if (!groups.has(name)) groups.set(name, []);
+            groups.get(name).push(tab);
+        });
+        const rootLabel = labels.rootPath || "根目录";
+        return [...groups.entries()].map(([name, items]) => ({key: `path:${name}`, label: name, icon: "iconFolder", items}))
+            .sort((a, b) => a.label === rootLabel ? 1 : b.label === rootLabel ? -1 : compareText(a.label, b.label));
+    }
+    if (mode === "notebook") {
+        const groups = new Map();
+        tabs.forEach((tab) => {
+            const id = String(ctx.notebookIdOf(tab) || "");
+            if (!groups.has(id)) groups.set(id, []);
+            groups.get(id).push(tab);
+        });
+        const order = new Map((ctx.notebookOrder || []).map((id, index) => [id, index]));
+        return [...groups.entries()]
+            .map(([id, items]) => ({
+                key: `nb:${id || "none"}`,
+                label: ctx.notebookNameOf(id) || labels.unknownNotebook || id || "—",
+                icon: "iconFile",
+                items,
+            }))
+            .sort((a, b) => {
+                const ia = order.has(ctx.notebookIdOf(a.items[0])) ? order.get(ctx.notebookIdOf(a.items[0])) : Number.MAX_SAFE_INTEGER;
+                const ib = order.has(ctx.notebookIdOf(b.items[0])) ? order.get(ctx.notebookIdOf(b.items[0])) : Number.MAX_SAFE_INTEGER;
+                return ia !== ib ? ia - ib : compareText(a.label, b.label);
+            });
+    }
+    if (mode === "favorites") {
+        const groups = new Map();
+        tabs.forEach((tab) => {
+            const pinKey = ctx.pinKeyOf(tab);
+            const favorited = ctx.isFavorite(pinKey);
+            const name = favorited ? String(ctx.favoriteGroupOf(pinKey) ?? "") : "";
+            const key = favorited ? `fg:${name}` : "__unfavorited__";
+            if (!groups.has(key)) groups.set(key, {name, items: []});
+            groups.get(key).items.push(tab);
+        });
+        const order = new Map((ctx.favoriteGroupOrder || []).map((name, index) => [name, index]));
+        return [...groups.entries()]
+            .map(([key, bucket]) => ({
+                key,
+                label: key === "__unfavorited__"
+                    ? (labels.unfavorited || "未收藏")
+                    : (bucket.name || labels.ungroupedFavorite || "未分组"),
+                icon: key === "__unfavorited__" ? "iconFile" : "iconStar",
+                items: bucket.items,
+            }))
+            .sort((a, b) => {
+                if (a.key === "__unfavorited__") return 1;
+                if (b.key === "__unfavorited__") return -1;
+                const oa = order.has(a.label) ? order.get(a.label) : Number.MAX_SAFE_INTEGER;
+                const ob = order.has(b.label) ? order.get(b.label) : Number.MAX_SAFE_INTEGER;
+                return oa !== ob ? oa - ob : compareText(a.label, b.label);
+            });
+    }
+    if (mode === "createdMonth") {
+        const groups = new Map();
+        tabs.forEach((tab) => {
+            const created = String(ctx.createdOf(ctx.pinKeyOf(tab)) || "");
+            const match = created.match(/^(\d{4})(\d{2})/);
+            const key = match ? `${match[1]}-${match[2]}` : "__unknown__";
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push(tab);
+        });
+        return [...groups.entries()]
+            .map(([key, items]) => ({
+                key: `cm:${key}`,
+                label: key === "__unknown__" ? (labels.unknownMonth || "更早") : key,
+                icon: "iconCalendar",
+                items,
+            }))
+            .sort((a, b) => {
+                if (a.key === "cm:__unknown__") return 1;
+                if (b.key === "cm:__unknown__") return -1;
+                return compareText(b.key, a.key);
+            });
+    }
+    return [{key: "all", label: "", icon: "", items: [...tabs]}];
+}
+
+// ==================== 移动端图标尺寸兜底 ====================
+// 与 index.ts 的 CARD_ICON_SPRITE 是同一类问题的两半：symbol 有了兜底，但**尺寸**
+// 仍完全依赖插件 CSS。手机 WebView 首次打开弹窗（同步占用主线程时更慢）时，
+// index.css 可能尚未作用到新插入的节点，裸 <svg> 会退回浏览器默认尺寸 300×150，
+// 把顶栏撑成"巨型图标 + 控件竖排"的错乱首帧——即用户反馈的"刚进去出现大图标"。
+// 同一帧里带 b3-button 类的图标有思源基础样式兜底，所以只有裸图标
+// （放大镜/筛选/关闭/星标/齿轮/时钟/排序）会失控。
+// 表中尺寸与 src/index.scss 中同名控件的声明值一一对应，由契约测试锁定两者一致，
+// 避免日后改样式却漏改兜底表。
+const MOBILE_ICON_SIZE_FALLBACKS = Object.freeze([
+    {selector: ".sw__search-icon", size: 14},
+    {selector: ".sw__search-filter-btn svg", size: 15},
+    {selector: ".sw__sort-btn svg", size: 18},
+    {selector: ".sw__mobile-close-btn svg", size: 16},
+    {selector: ".sw__mobile-fav-btn svg", size: 16},
+    {selector: ".sw__settings-btn svg", size: 16},
+    {selector: ".sw__history-trigger svg", size: 13},
+    {selector: ".sw__icon-btn svg", size: 16},
+]);
+// 32px 是移动端顶栏所有图标的上限（其中最大的排序图标为 18px）；
+// 实测超过它即说明样式未生效、图标退回了浏览器默认尺寸，可判定为异常。
+const OVERSIZED_ICON_THRESHOLD_PX = 32;
+const DEFAULT_ICON_FALLBACK_PX = 16;
+
+// 在弹窗可见前扫描容器，只修正**实测已异常**的图标，返回修正数量（0 表示一切正常）。
+// 判定依据是实测矩形而非 CSS 声明值，因此不受样式是否就绪影响；
+// jsdom 等无布局环境实测恒为 0，天然不会误触发，可安全用于任意容器。
+function clampOversizedIcons(root) {
+    if (!root || typeof root.querySelectorAll !== "function") return 0;
+    const toFix = [];
+    const svgs = Array.from(root.querySelectorAll("svg"));
+    // Phase 1: 纯读取阶段（集中读取几何尺寸，无任何 DOM 写入，杜绝交替回流）
+    for (let i = 0; i < svgs.length; i++) {
+        const svg = svgs[i];
+        if (typeof svg.getBoundingClientRect !== "function") continue;
+        const rect = svg.getBoundingClientRect();
+        if (!rect) continue;
+        if (rect.width <= OVERSIZED_ICON_THRESHOLD_PX && rect.height <= OVERSIZED_ICON_THRESHOLD_PX) continue;
+        let size = DEFAULT_ICON_FALLBACK_PX;
+        for (const entry of MOBILE_ICON_SIZE_FALLBACKS) {
+            try {
+                if (svg.matches(entry.selector)) {
+                    size = entry.size;
+                    break;
+                }
+            } catch (_) {
+                // 单条选择器不受支持时继续尝试下一条，不能因此放弃整轮兜底
+            }
+        }
+        toFix.push({svg, size});
+    }
+    // Phase 2: 纯写入阶段（批量应用属性与重要内联样式）
+    for (let i = 0; i < toFix.length; i++) {
+        const {svg, size} = toFix[i];
+        svg.setAttribute("width", String(size));
+        svg.setAttribute("height", String(size));
+        svg.style.setProperty("width", `${size}px`, "important");
+        svg.style.setProperty("height", `${size}px`, "important");
+    }
+    return toFix.length;
+}
+
+/**
+ * 全局快捷键宿主就绪判定：内核 sendGlobalShortcut 固定读取
+ * window.siyuan.languages["_trayMenu"]，languages 未就绪的宿主时序下
+ * 注册带 globalCallback 的命令会抛 TypeError（issue #1）。
+ * @param {{languages?: unknown} | undefined | null} siyuanLike
+ * @returns {boolean}
+ */
+function isGlobalShortcutHostReady(siyuanLike) {
+    return Boolean(siyuanLike && siyuanLike.languages);
+}
+
+/**
+ * 安全注册插件命令：宿主 addCommand 抛错（如全局快捷键 IPC 读取未就绪）
+ * 不得中断插件 onload，否则后续全部能力注册都会被跳过（issue #1 实测损害面）。
+ * 语义：① 首次注册成功即返回 true；② 抛错但命令已进入 host.commands（内核先
+ * push 后发全局快捷键 IPC）时不再重试，避免重复注册，仅降级丢失全局热键；
+ * ③ 未进入且命令带 globalCallback 时，去掉 globalCallback 重试一次保住应用内热键。
+ * @param {{addCommand: Function, commands?: Array<Object>}} host
+ * @param {Object} command - 至少含 langKey: string；通常含 hotkey 与 callback，可选 globalCallback
+ * @param {string} command.langKey
+ * @param {string} [command.hotkey]
+ * @param {string} [command.langText] - 命令显示文本覆盖（思源 ICommand.langText）
+ * @param {Function} [command.callback]
+ * @param {Function} [command.globalCallback]
+ * @param {(langKey: string, error: unknown) => void} [onError]
+ * @returns {boolean}
+ */
+function safeRegisterPluginCommand(host, command, onError) {
+    if (!host || typeof host.addCommand !== "function" || !command || typeof command.langKey !== "string") {
+        return false;
+    }
+    try {
+        host.addCommand(command);
+        return true;
+    } catch (error) {
+        if (typeof onError === "function") {
+            onError(command.langKey, error);
+        }
+    }
+    const alreadyPushed = Array.isArray(host.commands) && host.commands.indexOf(command) !== -1;
+    if (alreadyPushed || !command.globalCallback) {
+        return false;
+    }
+    const fallback = Object.assign({}, command);
+    delete fallback.globalCallback;
+    try {
+        host.addCommand(fallback);
+        return true;
+    } catch (error) {
+        if (typeof onError === "function") {
+            onError(command.langKey, error);
+        }
+    }
+    return false;
+}
+
+// 内核 /api/query/sql 返回归一化：行数组 + 截断标志 + 生效上限。
+// 依据上游契约：成功响应必带顶层 limit 与 truncated；未写外层 LIMIT 时内核按
+// search.limit（默认 64、下限 32）截断，调用方必须把 truncated 传下去，否则静默少行。
+function normalizeSqlResult(json) {
+    const rows = json && Array.isArray(json.data) ? json.data : [];
+    return {
+        rows,
+        truncated: Boolean(json && json.truncated === true),
+        limit: Number.isFinite(json && json.limit) ? json.limit : 0,
+    };
+}
+
+// T-6970（真机反馈）：缩略图克隆内容以纯空段落/空文本开头时，缩放后整框只剩空白，
+// 用户看到"有图区的空卡片"。判定一个节点是否视觉空白：无可见文本，且不含
+// 图片/媒体/表格等天然可见的子元素。文本节点按文本判空；HR 虽可见但作为首块
+// 装饰线无信息量，一并视为可裁剪。
+function isBlankThumbNode(node) {
+    if (!node) return false;
+    if (node.nodeType === 3) return (node.textContent || "").trim() === "";
+    if (node.nodeType !== 1) return false;
+    const tag = (node.tagName || "").toUpperCase();
+    if (tag === "IMG" || tag === "VIDEO" || tag === "IFRAME" || tag === "CANVAS" || tag === "SVG" || tag === "TABLE") {
+        return false;
+    }
+    if ((node.textContent || "").trim() !== "") return false;
+    return !(node.querySelector && node.querySelector("img,video,iframe,canvas,svg,table"));
+}
+
+// 裁剪缩略图克隆内容的前导空白块（日记等文档常见开头空行）；上限防御病态结构。
+// 返回裁掉的数量；裁剪后是否整体空白由调用方用 hasVisibleThumbContent 兜底成标题占位。
+function trimLeadingBlankThumbNodes(root, max) {
+    const limit = Number.isFinite(max) && max > 0 ? max : 32;
+    let removed = 0;
+    while (root.firstChild && removed < limit && isBlankThumbNode(root.firstChild)) {
+        root.removeChild(root.firstChild);
+        removed++;
+    }
+    return removed;
+}
+
+function hasVisibleThumbContent(root) {
+    if (!root) return false;
+    if ((root.textContent || "").trim() !== "") return true;
+    return Boolean(root.querySelector && root.querySelector("img,video,iframe,canvas,svg,table"));
+}
+
+module.exports = {isGlobalShortcutHostReady, safeRegisterPluginCommand, MOBILE_ICON_SIZE_FALLBACKS, clampOversizedIcons, graphemeLength, graphemeSlice, graphemeSliceByCodePoints, clampNum, stableSortBy, normalizeSortBy, sortItems, sortGroupItems, resolveQuickActionSurfaceState, groupFavoritesByGroup, groupTabsByMode, resolveIconFallback, resolveIconReference, normalizeCustomIcon, isImageIconReference, buildTabGroupsByParent, resolveTabRootId, resolveFavoriteRootId, planGroupOpenFavorites, sanitizeDocIds, normalizeSqlResult, normalizeCapacityLimit, buildCapacitySummary, buildStorageCapacitySnapshot, normalizeStorageCapacitySnapshot, serializeStorageCapacitySnapshot, parseStorageCapacitySnapshot, mergeStorageCapacitySnapshots, diffStorageCapacitySnapshots, summarizeStorageCapacityDiff, classifyStorageCapacityRisk, buildStorageCapacityHealth, normalizeStorageCapacityHealth, serializeStorageCapacityHealth, parseStorageCapacityHealth, diffStorageCapacityHealth, assessStorageCapacityTrend, normalizeStorageCapacityTrend, serializeStorageCapacityTrend, parseStorageCapacityTrend, buildStorageCapacityReport, normalizeStorageCapacityReport, serializeStorageCapacityReport, parseStorageCapacityReport, summarizeStorageCapacityReports, trimStorageCapacityReportHistory, selectStorageCapacityReportWindow, summarizeStorageCapacityReportWindow, normalizeStorageCapacityReportWindow, serializeStorageCapacityReportWindow, parseStorageCapacityReportWindow, validateStorageCapacityReportWindow, validateStorageCapacityReport, reconcileStorageCapacityReport, buildStorageCapacityReportEvents, normalizeStorageCapacityReportEvents, serializeStorageCapacityReportEvents, parseStorageCapacityReportEvents, createStorageCapacityReportEventQueue, replayStorageCapacityReportEvents, recoverStorageCapacityReportEventQueue, createStorageCapacityReportEventCoordinator, readStorageCapacityReportEventsWithSignal, readStorageCapacityReportEventsWithDeadline, normalizeStorageCapacityReportEventQueueStatus, getStorageCapacityReportEventQueueStatus, normalizeStorageCapacityReportEventQueueSummary, serializeStorageCapacityReportEventQueueSummary, parseStorageCapacityReportEventQueueSummary, diffStorageCapacityReportEventQueueSummary, buildStorageCapacityReportEventQueueSummaryEvents, normalizeStorageCapacityReportEventQueueSummaryHistory, summarizeStorageCapacityReportEventQueueSummaryHistory, serializeStorageCapacityReportEventQueueSummaryHistory, parseStorageCapacityReportEventQueueSummaryHistory, validateStorageCapacityReportEventQueueSummary, capMru, sanitizeStringList, sanitizeFavorites, sanitizeOpenHistory, isSuccessfulMobileTabsResult, normalizeQuickActionText, normalizeThumbCache, compareText, isBlankThumbNode, trimLeadingBlankThumbNodes, hasVisibleThumbContent};

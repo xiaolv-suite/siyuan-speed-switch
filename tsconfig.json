@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "noImplicitAny": true,
+    "module": "commonjs",
+    "target": "ES2022",
+    "skipLibCheck": true,
+    "allowJs": true
+  },
+  "include": [
+    "src/**/*.ts"
+  ]
+}

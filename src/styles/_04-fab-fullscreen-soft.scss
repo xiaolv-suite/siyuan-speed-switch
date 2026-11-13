@@ -1,0 +1,1021 @@
+@use "00-tokens" as *;
+.sw__fab {
+    position: fixed;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 120px);
+    right: 14px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background-color: var(--b3-theme-primary);
+    color: var(--b3-theme-on-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.88;
+    box-shadow: var(--sw-shadow-sm);
+    z-index: 999;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform $sw-dur-panel $sw-ease, opacity $sw-dur-panel $sw-ease, box-shadow $sw-dur-slow $sw-ease;
+
+    svg {
+        width: var(--sw-icon-md, 18px);
+        height: 18px;
+        color: var(--b3-theme-on-primary);
+    }
+
+    &:active {
+        transform: scale(0.92);
+        opacity: 1;
+        box-shadow: var(--sw-shadow-sm);
+    }
+
+    // 打开切换器时隐藏（缩放淡出）
+    &.sw__fab--hidden {
+        opacity: 0;
+        transform: scale(0.7) translateY(10px);
+        pointer-events: none;
+    }
+
+    // 滚动手势隐藏（上滑隐藏，下滑出现）：下滑移出屏幕 + 淡出，与思源底部工具条动效一致
+    &.sw__fab--scroll-hidden {
+        opacity: 0;
+        transform: translateY(140%);
+        pointer-events: none;
+    }
+}
+
+// T-6757 floating-ball portal.  The portal root owns placement and lifecycle;
+// the real button owns hit testing so host redraws cannot leave a dead control.
+.sw-fab-root.sw__fab {
+    --sw-fab-safe-top: env(safe-area-inset-top, 0px);
+    --sw-fab-safe-bottom: env(safe-area-inset-bottom, 0px);
+    --sw-fab-safe-left: env(safe-area-inset-left, 0px);
+    --sw-fab-safe-right: env(safe-area-inset-right, 0px);
+    top: 72%;
+    right: auto;
+    bottom: auto;
+    width: var(--sw-fab-size, 48px);
+    height: var(--sw-fab-size, 48px);
+    padding: 0;
+    overflow: visible;
+    pointer-events: none;
+    transform: translateY(-50%);
+    background: transparent;
+    box-shadow: none;
+    opacity: 1;
+
+    &[data-edge="right"] {
+        .sw__floating-ball-first-layer,
+        .sw__floating-ball-more { right: calc(100% + 10px); }
+    }
+
+    &[data-edge="left"] {
+        .sw__floating-ball-first-layer,
+        .sw__floating-ball-more { left: calc(100% + 10px); }
+    }
+
+    .sw-fab-trigger {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: var(--b3-theme-primary);
+        color: var(--b3-theme-on-primary);
+        box-shadow: 0 4px 16px color-mix(in srgb, var(--b3-theme-primary) 35%, transparent);
+        cursor: pointer;
+        touch-action: none;
+        pointer-events: auto;
+        -webkit-tap-highlight-color: transparent;
+        transform: translateX(var(--sw-fab-idle-x, 0));
+        transition: transform $sw-dur-panel cubic-bezier(0.16, 1, 0.3, 1), opacity $sw-dur-panel $sw-ease, box-shadow $sw-dur-slow $sw-ease;
+
+        svg {
+            width: var(--sw-icon-md, 18px);
+            height: 18px;
+            color: var(--b3-theme-on-primary);
+        }
+
+        &:hover {
+            transform: translateX(var(--sw-fab-idle-x, 0)) scale(1.05);
+            box-shadow: 0 6px 20px color-mix(in srgb, var(--b3-theme-primary) 45%, transparent);
+        }
+
+        &:active {
+            transform: scale(.92);
+            box-shadow: var(--sw-shadow-sm);
+        }
+
+        &:focus-visible {
+            outline: 2px solid var(--b3-theme-primary);
+            outline-offset: 3px;
+        }
+    }
+
+    &[data-state="dragging"] .sw-fab-trigger,
+    &[data-state="targeting"] .sw-fab-trigger { cursor: grabbing; }
+
+    &[data-state="dragging"] .sw-fab-trigger,
+    &[data-state="targeting"] .sw-fab-trigger {
+        opacity: .72;
+        transform: translate(var(--sw-fab-drag-x, 0), var(--sw-fab-drag-y, 0)) scale(.94);
+        transition: none;
+        pointer-events: none;
+    }
+
+    &[data-state="executing"] .sw-fab-trigger {
+        outline: 3px solid var(--sw-accent-soft, var(--b3-border-color));
+        outline-offset: 3px;
+    }
+
+    .sw-fab-target-caption {
+        position: absolute;
+        box-sizing: border-box;
+        padding: var(--sw-space-xs, 4px) var(--sw-space-md, 8px);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        border-radius: $sw-radius-md;
+        background: var(--b3-theme-surface);
+        color: var(--b3-theme-on-surface);
+        box-shadow: var(--sw-shadow-sm);
+        font-size: var(--sw-font-sm, 12px);
+        line-height: 20px;
+        text-align: center;
+        pointer-events: none;
+        z-index: 2;
+        &[hidden] { display: none; }
+    }
+
+    // B4 idle presentation: keep the 44px hit target available while making
+    // the resting ball quiet.  Half-hide is edge-aware and never applies to
+    // focused/dragging/action states, so keyboard and touch users can always
+    // wake it predictably.
+    &[data-idle="true"] {
+        .sw-fab-trigger {
+            opacity: var(--sw-fab-idle-opacity, .4);
+        }
+
+        &[data-half-hide="true"][data-edge="right"] .sw-fab-trigger {
+            --sw-fab-idle-x: 42%;
+        }
+
+        &[data-half-hide="true"][data-edge="left"] .sw-fab-trigger {
+            --sw-fab-idle-x: -42%;
+        }
+
+        &:focus-within .sw-fab-trigger,
+        &:hover .sw-fab-trigger {
+            opacity: 1;
+            --sw-fab-idle-x: 0;
+        }
+    }
+
+    &[data-state="suspended"],
+    &[data-state="hidden"],
+    &.sw__fab--hidden {
+        display: none !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+    }
+
+    // B2 action viewport.  The panel lives inside the portal so it follows
+    // edge/position updates without a second fixed-position singleton.  The
+    // root remains pointer-transparent until a target or the overflow card
+    // is explicitly opened by the controller.
+    .sw__floating-ball-panel {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        pointer-events: none;
+        font-size: var(--sw-font-md, 13px);
+        color: var(--b3-theme-on-background, var(--b3-theme-on-surface));
+
+        button {
+            font: inherit;
+        }
+    }
+
+    .sw__floating-ball-first-layer {
+        position: absolute;
+        top: 50%;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--sw-space-md, 8px);
+        min-width: 44px;
+        transform: translateY(-50%);
+        opacity: 1;
+        visibility: visible;
+        transition: opacity $sw-dur-panel $sw-ease, transform $sw-dur-panel $sw-ease;
+
+        // Keep the targets inside the window: edge-specific offsets are set
+        // on the portal root above so both hosts share one geometry rule.
+    }
+
+    &[data-edge-flip="top"] .sw__floating-ball-first-layer:not(.is-positioned) {
+        top: 0;
+        transform: translateY(0);
+    }
+    &[data-edge-flip="bottom"] .sw__floating-ball-first-layer:not(.is-positioned) {
+        top: auto;
+        bottom: 0;
+        transform: translateY(0);
+    }
+
+    // Targets only become interactive during the explicit targeting state;
+    // this prevents an always-mounted panel from stealing document clicks.
+    &:not([data-state="dragging"]):not([data-state="targeting"]):not([data-state="more"]) {
+        .sw__floating-ball-first-layer {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transform: translateY(-50%) scale(.94);
+        }
+    }
+
+    .sw__floating-ball-action {
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        justify-content: flex-start;
+        gap: var(--sw-space-md, 8px);
+        min-width: 44px;
+        min-height: 44px;
+        padding: var(--sw-space-sm, 6px) 10px;
+        border: 1px solid color-mix(in srgb, var(--b3-border-color) 64%, transparent);
+        border-radius: var(--sw-radius-card, 14px);
+        background: var(--sw-card-float-bg, var(--b3-theme-surface, var(--b3-theme-background)));
+        color: var(--b3-theme-on-background, var(--b3-theme-on-surface));
+        box-shadow: var(--sw-shadow-bento);
+        cursor: pointer;
+        pointer-events: auto;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        transition: background-color $sw-dur-fast $sw-ease, border-color $sw-dur-fast $sw-ease,
+            box-shadow $sw-dur-fast $sw-ease, transform $sw-dur-fast $sw-ease, opacity $sw-dur-fast $sw-ease;
+
+        &.is-recommended {
+            border-color: color-mix(in srgb, #f59e0b 50%, var(--b3-theme-primary));
+            box-shadow: 0 0 10px color-mix(in srgb, #f59e0b 25%, transparent);
+
+        .sw__floating-ball-action-badge {
+            position: absolute;
+            top: -6px;
+            right: -4px;
+            font-size: var(--sw-font-2xs, 10px);
+            line-height: 1;
+            padding: var(--sw-space-2xs, 2px) var(--sw-space-xs, 4px);
+            border-radius: var(--sw-platform-radius-pill, 999px);
+            background: #f59e0b;
+            color: #000;
+            font-weight: 700;
+            white-space: nowrap;
+            pointer-events: none;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+        }
+        }
+
+        &.is-disabled {
+            opacity: 0.55;
+            filter: grayscale(0.7);
+        }
+
+        &:hover,
+        &:focus-visible {
+            border-color: color-mix(in srgb, var(--b3-theme-primary, #6e62c6) 44%, var(--b3-border-color));
+            background: var(--sw-color-surface-muted, var(--b3-theme-surface-lighter, var(--b3-theme-surface)));
+            box-shadow: var(--sw-shadow-bento), 0 4px 12px color-mix(in srgb, var(--b3-theme-primary) 14%, transparent);
+            transform: translateY(-1px);
+            outline: none;
+        }
+
+        &:focus-visible {
+            box-shadow: var(--sw-focus-ring, 0 0 0 3px color-mix(in srgb, var(--b3-theme-primary) 24%, transparent)),
+                0 7px 20px rgba(35, 42, 75, .2);
+        }
+
+        &:active { transform: scale(.94); }
+        &[hidden] { display: none; }
+
+        &.is-more {
+            border-color: color-mix(in srgb, var(--b3-theme-primary, #6e62c6) 24%, var(--b3-border-color));
+            background: var(--sw-accent-soft, var(--b3-theme-surface));
+        }
+
+        &:disabled,
+        &.is-unavailable {
+            opacity: .56;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        svg {
+            flex: 0 0 20px;
+            width: var(--sw-icon-md, 20px);
+            height: var(--sw-icon-md, 20px);
+            color: var(--b3-theme-primary, var(--b3-theme-on-surface));
+        }
+
+        .sw__floating-ball-action-image {
+            flex: 0 0 20px;
+            width: var(--sw-icon-md, 20px);
+            height: var(--sw-icon-md, 20px);
+            object-fit: contain;
+            border-radius: 4px;
+        }
+
+        .sw__floating-ball-action-label {
+            max-width: 112px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    }
+
+    // Compact side rail keeps icon targets easy to scan; labels remain in
+    // the accessible name/title and are shown on keyboard focus.
+    &[data-surface="sidebar"] {
+        width: 44px;
+        height: 44px;
+        --sw-fab-size: 44px;
+
+        .sw__floating-ball-action {
+            justify-content: center;
+            padding: 0;
+
+            .sw__floating-ball-action-label { display: none; }
+        }
+
+        .sw__floating-ball-first-layer { gap: var(--sw-space-sm, 6px); }
+
+        // Keep the drawer inside a narrow dock; the controller refreshes the
+        // host width variable on divider and viewport changes.
+        .sw__floating-ball-more {
+            width: min(320px, calc(var(--sw-fab-host-width, 320px) - 16px));
+        }
+    }
+
+    // The mobile overflow card is a bottom sheet.  Removing the translated
+    // containing block lets position:fixed resolve against the viewport; the
+    // negative margin preserves the ball's center at the inline top ratio.
+    &[data-surface="mobile"] {
+        transform: none;
+
+        // The portal itself must stay untransformed so the bottom sheet can
+        // use viewport-fixed positioning; offset only the trigger to retain
+        // the normalized yRatio's centre semantics.
+        .sw-fab-trigger {
+            position: relative;
+            transform: translateY(-50%) translateX(var(--sw-fab-idle-x, 0));
+
+            &::before {
+                content: "";
+                position: absolute;
+                inset: -6px;
+                border-radius: 50%;
+            }
+        }
+        &[data-state="dragging"] .sw-fab-trigger,
+        &[data-state="targeting"] .sw-fab-trigger {
+            transform: translate(var(--sw-fab-drag-x, 0), calc(-50% + var(--sw-fab-drag-y, 0px))) scale(.94);
+        }
+        .sw-fab-trigger:active { transform: translateY(-50%) scale(.92); }
+
+        .sw__floating-ball-more {
+            position: fixed;
+            inset: auto 8px calc(8px + env(safe-area-inset-bottom, 0px));
+            width: auto;
+            max-width: 520px;
+            max-height: min(74vh, 560px);
+            margin-inline: auto;
+
+            .sw__floating-ball-more-handle { display: block; }
+            .sw__floating-ball-hub-tab { min-height: var(--sw-control-h, 36px); padding: 0 var(--sw-space-lg, 12px); }
+            .sw__floating-ball-more-pin { min-width: 40px; min-height: 40px; flex-basis: 40px; }
+        }
+
+        .sw__floating-ball-action {
+            min-height: 48px;
+        }
+    }
+
+    .sw__floating-ball-more {
+        position: absolute;
+        bottom: 0;
+        width: min(320px, calc(100vw - 72px));
+        max-height: min(70vh, 520px);
+        overflow: auto;
+        overscroll-behavior: contain;
+        padding: var(--sw-space-md, 8px);
+        border: 1px solid color-mix(in srgb, var(--b3-border-color) 70%, transparent);
+        border-radius: 16px;
+        background: var(--b3-theme-surface, var(--b3-theme-background));
+        box-shadow: var(--sw-float-shadow, 0 14px 36px rgba(35, 42, 75, .2));
+        pointer-events: auto;
+        opacity: 1;
+        transform: translateY(0);
+        transition: opacity $sw-dur-panel $sw-ease, transform $sw-dur-panel $sw-ease;
+
+        &[hidden] {
+            display: block;
+            visibility: hidden;
+            pointer-events: none;
+            opacity: 0;
+            transform: translateY(8px);
+        }
+    }
+
+    .sw__floating-ball-more-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 36px;
+        padding: 0 var(--sw-space-xs, 4px) var(--sw-space-sm, 6px) var(--sw-space-md, 8px);
+        color: var(--b3-theme-on-background, var(--b3-theme-on-surface));
+        font-size: 14px;
+        font-weight: var(--sw-weight-semibold, 600);
+    }
+
+    .sw__floating-ball-more-close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        min-width: 44px;
+        height: 44px;
+        padding: 0;
+        border: 0;
+        border-radius: 10px;
+        background: transparent;
+        color: var(--b3-theme-on-surface-light, var(--b3-theme-on-surface));
+        cursor: pointer;
+        pointer-events: auto;
+
+        &:hover,
+        &:focus-visible {
+            background: var(--b3-list-hover, var(--b3-theme-surface-lighter));
+            color: var(--b3-theme-on-background, var(--b3-theme-on-surface));
+            outline: none;
+        }
+    }
+
+    .sw__floating-ball-more-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--sw-space-xs, 4px);
+
+        .sw__floating-ball-action {
+            width: 100%;
+            border-color: transparent;
+            border-radius: 10px;
+            background: transparent;
+            box-shadow: none;
+
+            &:hover,
+            &:focus-visible { background: var(--b3-list-hover, var(--b3-theme-surface-lighter)); }
+        }
+    }
+
+    .sw__floating-ball-more-empty {
+        margin: 0;
+        padding: 18px var(--sw-space-md, 8px);
+        color: var(--b3-theme-on-surface-light, var(--b3-theme-on-surface));
+        text-align: center;
+    }
+
+    // Hover labels are useful on desktop without widening the collapsed
+    // target rail.  More-actions rows always retain their text labels.
+    &[data-surface="desktop"] .sw__floating-ball-first-layer {
+        .sw__floating-ball-action-label {
+            max-width: 0;
+            opacity: 0;
+            transition: max-width $sw-dur-fast $sw-ease, opacity $sw-dur-fast $sw-ease;
+        }
+
+        .sw__floating-ball-action:hover .sw__floating-ball-action-label,
+        .sw__floating-ball-action:focus-visible .sw__floating-ball-action-label {
+            max-width: 112px;
+            opacity: 1;
+        }
+    }
+
+    // Targets are laid out once per gesture in viewport coordinates. The
+    // trigger follows the pointer independently, so targets never chase it.
+    .sw__floating-ball-first-layer.is-positioned {
+        inset: 0;
+        transform: none;
+        display: block;
+        .sw__floating-ball-action {
+            position: absolute;
+            box-sizing: border-box;
+            padding: 0;
+            justify-content: center;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            .sw__floating-ball-action-label { display: none; }
+            &.is-targeted {
+                transform: translate(-50%, -50%) scale(1.1);
+                outline: 2px solid var(--b3-theme-primary);
+                outline-offset: 2px;
+                background: var(--sw-accent-soft, var(--b3-theme-surface));
+            }
+        }
+    }
+}
+
+.sw-fab-root.sw__fab.sw__fab--hidden,
+.sw-fab-root[data-state="suspended"],
+.sw-fab-root[data-state="hidden"],
+body:has(.b3-dialog--open, .sw-mobile-switcher-dialog, .sw-settings-dialog) :is(.sw-fab-root, .sw-fab-recovery) {
+    display: none !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+.sw-fab-recovery {
+    position: fixed;
+    box-sizing: border-box;
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+    border: 1px solid var(--b3-border-color);
+    border-radius: 12px;
+    color: var(--b3-theme-on-surface);
+    background: var(--b3-theme-surface);
+    opacity: .65;
+    touch-action: manipulation;
+    cursor: pointer;
+    &[hidden] { display: none; }
+    &:focus-visible { outline: 2px solid var(--b3-theme-primary); outline-offset: -2px; opacity: 1; }
+}
+
+// ==================== 电脑端全屏模式（设置 → 行为 → 全屏模式） ====================
+
+// 全屏模式下切换按钮改显"退出全屏"角标内收图标
+// （sw--fullscreen 与 .speed-switch 在同一元素上，必须写复合类选择器而非后代选择器）
+.speed-switch.sw--fullscreen {
+    .sw__toolbar .sw__fullscreen-btn {
+        .sw__fs-enter {
+            display: none;
+        }
+
+        .sw__fs-exit {
+            display: block;
+        }
+    }
+}
+
+// Final desktop overrides: the modern visual layer above must not undo the
+// compact rail dimensions selected by the runtime.
+.speed-switch .sw__dock.sw__dock--collapsed {
+    width: 52px;
+    min-width: 52px;
+    padding: var(--sw-space-lg, 12px) var(--sw-space-sm, 6px);
+    overflow: visible;
+
+    .sw__dock-toggle { margin-inline: auto; }
+    .sw__dock-item { padding-inline: 0; }
+}
+
+.speed-switch .sw__history-trigger {
+    justify-content: center;
+    line-height: 1;
+
+    .sw__history-trigger-text {
+        display: inline-flex;
+        align-items: center;
+        height: 100%;
+        line-height: 1;
+    }
+}
+
+.speed-switch:not(.sw__mobile) .sw__meta {
+    min-height: var(--sw-control-h);
+    padding-block: var(--sw-space-xs, 4px);
+}
+
+.sw-document-set-guide {
+    margin-bottom: 14px;
+    padding: var(--sw-space-lg, 12px) 14px;
+    border: 1px solid color-mix(in srgb, var(--b3-theme-primary) 20%, var(--b3-border-color));
+    border-radius: 12px;
+    background: var(--sw-accent-soft, var(--b3-theme-surface-lighter));
+    color: var(--b3-theme-on-background);
+    font-size: var(--sw-font-sm, 12px);
+    line-height: 1.55;
+
+    > p { margin: var(--sw-space-sm, 6px) 0; }
+    ol { margin: var(--sw-space-sm, 6px) 0; padding-left: 20px; }
+    li + li { margin-top: var(--sw-space-xs, 4px); }
+    .sw-document-set-guide__note { color: var(--b3-theme-on-surface-light); }
+}
+
+@media (max-width: 560px) {
+    // The switcher owns an explicit close button. Hide SiYuan's floating
+    // dialog close control, which otherwise overlaps the settings button.
+    .b3-dialog__container.sw-mobile-switcher-dialog > .b3-dialog__header,
+    .b3-dialog__container.sw-mobile-switcher-dialog .b3-dialog__close {
+        display: none !important;
+    }
+
+    .b3-dialog__container.sw-mobile-switcher-dialog .b3-dialog__body {
+        padding-top: 0 !important;
+    }
+
+    .speed-switch.sw__mobile .sw__mobile-toolbar {
+        padding-right: var(--sw-space-md, 8px);
+
+        .sw__search-wrap { flex-basis: 84px; }
+        .sw__mobile-close-btn {
+            position: relative;
+            display: inline-flex;
+            flex: none;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 32px;
+            padding: 0;
+            border: 0;
+            border-radius: var(--sw-radius-control);
+            background: transparent;
+            color: var(--b3-theme-on-surface);
+            touch-action: manipulation;
+
+            // T-7704: 放大触控热区到 44px（34×32 → 46×44）
+            &::after {
+                content: "";
+                position: absolute;
+                inset: -6px;
+            }
+
+            svg { width: var(--sw-icon-sm, 16px); height: 16px; }
+        }
+    }
+
+    .b3-dialog__container.sw-settings-dialog {
+        // The native title stays visible, while the plugin tab strip remains
+        // one compact, full-width horizontal row below it.
+        .b3-dialog__header { flex: none; min-height: 48px; }
+
+        &:not(.sw-dialog--fullscreen) {
+            border-radius: var(--sw-radius-panel, 18px);
+            border: 1px solid color-mix(in srgb, var(--sw-color-accent, var(--b3-theme-primary)) 22%, var(--b3-border-color));
+            box-shadow: var(--sw-shadow-bento), inset 0 0 0 1px color-mix(in srgb, var(--b3-theme-surface) 60%, transparent);
+            overflow: hidden;
+        }
+
+        &.sw-dialog--fullscreen {
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+        }
+    }
+
+    .sw-settings .sw-settings__tabs {
+        flex: 0 0 auto;
+        width: 100%;
+        max-width: 100%;
+        min-height: 48px;
+        height: auto;
+        padding: var(--sw-space-sm, 6px) var(--sw-space-md, 8px);
+        overflow-x: auto;
+        overflow-y: hidden;
+        box-sizing: border-box;
+    }
+
+    .sw-settings .sw-settings__tab {
+        min-height: 36px;
+        padding: var(--sw-space-md, 8px) var(--sw-space-lg, 12px);
+        white-space: nowrap;
+    }
+
+    .sw-second-panel { grid-template-columns: 1fr; padding: var(--sw-space-lg, 12px); }
+}
+
+.sw__home-module-meta {
+    flex: none;
+    max-width: 42%;
+    overflow: hidden;
+    color: var(--b3-theme-on-surface-light);
+    font-size: var(--sw-font-2xs, 10px);
+    font-weight: var(--sw-weight-regular, 400);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sw__home-module-icon {
+    flex: none;
+    width: var(--sw-icon-sm, 16px);
+    height: 16px;
+    color: var(--b3-theme-primary);
+    fill: currentColor;
+    stroke: currentColor;
+
+    &--text {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        line-height: 1;
+    }
+}
+
+// Keep the sync freeze rule before the reduced-motion blocks. This prevents
+// the accessibility contract from mistaking sync stabilization for a global
+// input policy while preserving the computed pointer freeze on the panel.
+.sw-home {
+    &.sw--syncing {
+        pointer-events: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .speed-switch,
+    .speed-switch *,
+    .sw-fab-root.sw__fab,
+    .sw-fab-root.sw__fab * {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+
+    // 按下反馈里的缩放属于位移类动效，即便过渡被压到 0.01ms 仍会瞬间跳变。
+    // 减弱动效时改用纯颜色反馈（背景仍会加深，功能提示不丢失）。
+    .speed-switch .sw__icon-btn:active {
+        transform: none;
+    }
+
+    .sw-fab-root.sw__fab .sw__floating-ball-action:active,
+    .sw-fab-root.sw__fab .sw-fab-trigger:active {
+        transform: none;
+    }
+}
+
+// ==================== 现代柔和视觉层（第一面板 / 第二面板 / 移动端共享） ====================
+// 这些是结构样式之上的轻量覆盖，集中维护便于主题适配和后续微调。
+.speed-switch {
+    color: var(--b3-theme-on-background);
+    background: var(--sw-page-bg);
+
+    .sw__main,
+    .sw__content {
+        background: var(--sw-page-bg);
+    }
+
+    .sw__toolbar {
+        overflow: visible;
+        min-height: 58px;
+        padding: 10px 14px;
+        border-bottom: 1px solid color-mix(in srgb, var(--b3-border-color) 62%, transparent);
+        background: var(--b3-theme-surface);
+        box-shadow: 0 1px 0 color-mix(in srgb, var(--b3-theme-surface) 70%, transparent), var(--sw-shadow-sm);
+
+        .sw__search {
+            height: 38px;
+            border-color: color-mix(in srgb, var(--b3-theme-primary, var(--sw-accent-fallback)) 18%, var(--b3-border-color));
+            border-radius: 12px;
+            background: var(--sw-surface-muted);
+            box-shadow: inset 0 1px 1px rgba(50, 60, 90, .03);
+
+            &:focus {
+                border-color: var(--b3-theme-primary, var(--sw-accent-fallback));
+                background: var(--b3-theme-surface);
+                box-shadow: var(--sw-focus-ring), 0 4px 14px rgba(91, 82, 174, .08);
+            }
+        }
+
+        .sw__select-wrap .sw__sort,
+        .sw__fav-trigger,
+        .sw__history-trigger {
+            height: 36px;
+            border-radius: 10px;
+            border-color: color-mix(in srgb, var(--b3-border-color) 72%, transparent);
+            background: var(--sw-surface-muted);
+            transition: border-color $sw-dur-base $sw-ease, background-color $sw-dur-base $sw-ease, box-shadow $sw-dur-base $sw-ease;
+
+            &:hover,
+            &:focus-visible {
+                border-color: color-mix(in srgb, var(--b3-theme-primary, var(--sw-accent-fallback)) 56%, var(--b3-border-color));
+                background: var(--b3-theme-surface);
+                box-shadow: 0 2px 8px rgba(85, 78, 160, .08);
+                outline: none;
+            }
+        }
+
+        .sw__icon-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--sw-radius-lg, 12px);
+            transition: transform $sw-dur-fast $sw-ease, background-color $sw-dur-fast $sw-ease;
+
+            &:hover,
+            &:focus-visible {
+                background: var(--sw-accent-soft);
+            }
+
+            // 按下反馈：此前只有 hover，点击瞬间没有任何可见变化——按下去"没反应"，
+            // 手感偏钝。Apple 流体设计的首要原则是响应必须立刻开始，故补上即时缩放。
+            // 120ms 令牌保证按下与释放都跟手。
+            &:active {
+                background: var(--sw-accent-soft);
+                transform: scale(0.94);
+            }
+
+            > svg {
+                width: var(--sw-icon-sm, 16px) !important;
+                height: 16px !important;
+                max-width: 16px;
+                max-height: 16px;
+                flex: 0 0 16px;
+            }
+        }
+    }
+
+    .sw__dock {
+        width: 168px;
+        padding: 14px 10px 14px 14px;
+        border-right: 1px solid color-mix(in srgb, var(--b3-border-color) 52%, transparent);
+        background: color-mix(in srgb, var(--b3-theme-surface) 58%, var(--sw-page-bg));
+    }
+
+    .sw__dock-label {
+        margin: var(--sw-space-2xs, 2px) var(--sw-space-md, 8px) var(--sw-space-md, 8px);
+        color: var(--b3-theme-on-surface-light);
+        font-size: var(--sw-font-2xs, 10px);
+        font-weight: var(--sw-weight-semibold, 600);
+        letter-spacing: .08em;
+        text-transform: uppercase;
+    }
+
+    .sw__dock-item {
+        min-height: 36px;
+        margin: var(--sw-space-2xs, 2px) 0;
+        padding: var(--sw-space-md, 8px) 10px;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        color: var(--b3-theme-on-surface);
+        transition: background-color $sw-dur-base $sw-ease, color $sw-dur-base $sw-ease, border-color $sw-dur-base $sw-ease;
+
+        &:hover,
+        &:focus {
+            background: var(--sw-accent-soft);
+            border-color: color-mix(in srgb, var(--b3-theme-primary, var(--sw-accent-fallback)) 15%, transparent);
+            color: var(--b3-theme-primary, var(--sw-accent-fallback));
+        }
+
+        &.sw__active {
+            background: var(--sw-accent-soft);
+            border-color: color-mix(in srgb, var(--b3-theme-primary, var(--sw-accent-fallback)) 22%, transparent);
+            color: var(--b3-theme-primary, var(--sw-accent-fallback));
+            font-weight: var(--sw-weight-semibold, 600);
+        }
+    }
+
+    .sw__scroll {
+        padding: var(--sw-space-xl, 16px) var(--sw-space-xl, 16px) 20px;
+        background: var(--sw-page-bg);
+    }
+
+    .sw__window-label {
+        margin: var(--sw-space-sm, 6px) var(--sw-space-xs, 4px) 10px;
+        color: var(--b3-theme-on-surface-light);
+        font-size: var(--sw-font-xs, 11px);
+        font-weight: var(--sw-weight-semibold, 600);
+        letter-spacing: .06em;
+    }
+
+    .sw__card,
+    .sw__doc-item,
+    .sw__home-module {
+        border-radius: var(--sw-radius-card);
+        border-color: color-mix(in srgb, var(--b3-border-color) 70%, transparent);
+        box-shadow: var(--sw-card-shadow);
+    }
+
+    .sw__card {
+        &:hover {
+            border-color: color-mix(in srgb, var(--b3-theme-primary, var(--sw-accent-fallback)) 62%, var(--b3-border-color));
+            box-shadow: var(--sw-float-shadow);
+        }
+
+        &.sw__active,
+        &.sw__focused {
+            border-color: var(--b3-theme-primary, var(--sw-accent-fallback));
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--b3-theme-primary, var(--sw-accent-fallback)) 38%, transparent), var(--sw-card-shadow);
+        }
+    }
+
+    .sw__meta {
+        min-height: 42px;
+        padding: var(--sw-space-md, 8px) var(--sw-space-lg, 12px);
+        background: color-mix(in srgb, var(--b3-theme-surface) 94%, var(--sw-accent-soft));
+    }
+
+    .sw__doc-results {
+        margin-top: 18px;
+
+        .sw__doc-grid { gap: var(--sw-space-lg, 12px); }
+
+        .sw__doc-item {
+            min-height: 84px;
+            padding: var(--sw-space-lg, 12px);
+            background: var(--b3-theme-surface);
+
+            &:hover {
+                background: color-mix(in srgb, var(--b3-theme-surface) 90%, var(--sw-accent-soft));
+                box-shadow: var(--sw-float-shadow);
+            }
+
+            .sw__doc-icon {
+                width: 36px;
+                height: 36px;
+                border-radius: var(--sw-radius-lg, 12px);
+                background: var(--sw-accent-soft);
+                color: var(--b3-theme-primary, var(--sw-accent-fallback));
+            }
+        }
+
+        .sw__doc-status {
+            border-radius: var(--sw-radius-card);
+            background: var(--sw-surface-muted);
+        }
+    }
+
+    .sw__home-panel {
+        gap: 14px;
+    }
+
+    .sw__home-module {
+        border-radius: var(--sw-radius-panel);
+        background: var(--b3-theme-surface);
+
+        &[data-status="error"] {
+            border-color: color-mix(in srgb, var(--b3-theme-error) 38%, var(--b3-border-color));
+        }
+    }
+
+    .sw__home-module-header {
+        min-height: 44px;
+        padding: 10px var(--sw-space-lg, 12px);
+        border-bottom-color: color-mix(in srgb, var(--b3-border-color) 58%, transparent);
+        background: color-mix(in srgb, var(--b3-theme-surface) 84%, var(--sw-accent-soft));
+    }
+
+    .sw__home-module-item-action {
+        min-height: 36px;
+        padding: var(--sw-space-md, 8px) 10px;
+        border-radius: 10px;
+
+        &:hover,
+        &:focus-visible {
+            border-color: color-mix(in srgb, var(--b3-theme-primary, var(--sw-accent-fallback)) 18%, transparent);
+            background: var(--sw-accent-soft);
+        }
+    }
+
+    .sw__quick-actions,
+    .sw__quick-rail {
+        min-height: 52px;
+        padding: var(--sw-space-md, 8px) 14px;
+        border-top-color: color-mix(in srgb, var(--b3-border-color) 60%, transparent);
+        background: color-mix(in srgb, var(--b3-theme-surface) 78%, var(--sw-page-bg));
+    }
+
+    .sw__quick-action {
+        min-height: 36px;
+        height: 36px;
+        padding-inline: 10px;
+        border-radius: var(--sw-radius-lg, 12px);
+
+        &:hover,
+        &:focus-visible {
+            border-color: color-mix(in srgb, var(--b3-theme-primary, var(--sw-accent-fallback)) 20%, transparent);
+            background: var(--sw-accent-soft);
+        }
+
+        &--add {
+            color: var(--sw-warm-accent);
+            background: var(--sw-warm-soft);
+        }
+    }
+}
+
+// 设置页与主面板共享同一套卡片感，但保留思源设置弹窗的紧凑密度。
+
+// ==================== T-6778b/T-6780 手机端加固 ====================
+// 球体交互面禁用长按选中/系统呼出/文本选择：拖动时不再弹出 WebView
+// 的文本选择菜单，也不干扰思源长按菜单（球根子树之外不受影响）。
+.sw-fab-root.sw__fab,
+.sw-fab-root .sw-fab-trigger,
+.sw-fab-root .sw-fab-recovery,
+.sw-fab-root .sw__floating-ball-more {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}

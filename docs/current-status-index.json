@@ -1,0 +1,4591 @@
+{
+  "schemaVersion": 1,
+  "updated": "2026-10-21",
+  "currentTask": "T-7360",
+  "sourceOfTruth": "docs/current-status-index.json",
+  "activePlan": "docs/dev-plan-2026-10-06.md",
+  "productReview": "docs/product-review-2026-10-06.md",
+  "nextLocalTask": "T-7360",
+  "localExecutionOrder": [
+    "T-7125",
+    "T-7126",
+    "T-7127",
+    "T-7128",
+    "T-7129",
+    "T-7130",
+    "T-7131",
+    "T-7132",
+    "T-7167",
+    "T-7168",
+    "T-7169",
+    "T-7170",
+    "T-7171",
+    "T-7172",
+    "T-7173",
+    "T-7174",
+    "T-7175",
+    "T-7176",
+    "T-7177",
+    "T-7178",
+    "T-7179",
+    "T-7181",
+    "T-7182",
+    "T-7183",
+    "T-7184",
+    "T-7185",
+    "T-7186",
+    "T-7187",
+    "T-7188",
+    "T-7189",
+    "T-7143",
+    "T-7150",
+    "T-7147",
+    "T-7148",
+    "T-7162",
+    "T-7155",
+    "T-7135",
+    "T-7133",
+    "T-7134",
+    "T-7136",
+    "T-7137",
+    "T-7138",
+    "T-7151",
+    "T-7140",
+    "T-7141",
+    "T-7142",
+    "T-7139",
+    "T-7145",
+    "T-7146",
+    "T-7149",
+    "T-7163",
+    "T-7164",
+    "T-7166",
+    "T-7152",
+    "T-7153",
+    "T-7144",
+    "T-7156",
+    "T-7158",
+    "T-7157",
+    "T-7159",
+    "T-7160",
+    "T-7161",
+    "T-7165",
+    "T-7154",
+    "T-7190",
+    "T-7191",
+    "T-7192",
+    "T-7193",
+    "T-7194",
+    "T-7195",
+    "T-7196",
+    "T-7197",
+    "T-7198",
+    "T-7199",
+    "T-7225",
+    "T-7226",
+    "T-7234",
+    "T-7236",
+    "T-7238",
+    "T-7242",
+    "T-7243",
+    "T-7244",
+    "T-7245",
+    "T-7246",
+    "T-7247",
+    "T-7248",
+    "T-7249",
+    "T-7250",
+    "T-7251",
+    "T-7252",
+    "T-7253",
+    "T-7254",
+    "T-7255",
+    "T-7256",
+    "T-7257",
+    "T-7258",
+    "T-7259",
+    "T-7260",
+    "T-7261",
+    "T-7262",
+    "T-7263",
+    "T-7264",
+    "T-7265",
+    "T-7266",
+    "T-7267",
+    "T-7268",
+    "T-7269",
+    "T-7270",
+    "T-7271",
+    "T-7272",
+    "T-7273",
+    "T-7274",
+    "T-7275",
+    "T-7276",
+    "T-7277",
+    "T-7278",
+    "T-7279",
+    "T-7280",
+    "T-7281",
+    "T-7282",
+    "T-7283",
+    "T-7284",
+    "T-7285",
+    "T-7286",
+    "T-7287",
+    "T-7288",
+    "T-7289",
+    "T-7290",
+    "T-7291",
+    "T-7292",
+    "T-7293",
+    "T-7294",
+    "T-7295",
+    "T-7296",
+    "T-7297",
+    "T-7298",
+    "T-7299",
+    "T-7300",
+    "T-7301",
+    "T-7302",
+    "T-7303",
+    "T-7334",
+    "T-7335",
+    "T-7336",
+    "T-7337",
+    "T-7338",
+    "T-7339",
+    "T-7340",
+    "T-7341",
+    "T-7342",
+    "T-7343",
+    "T-7344",
+    "T-7345",
+    "T-7346",
+    "T-7347",
+    "T-7348",
+    "T-7349",
+    "T-7350",
+    "T-7351",
+    "T-7352",
+    "T-7353",
+    "T-7354",
+    "T-7355",
+    "T-7356",
+    "T-7357",
+    "T-7358",
+    "T-7359",
+    "T-7360"
+  ],
+  "tasks": [
+    {
+      "id": "T-7112",
+      "status": "completed",
+      "priority": "P0",
+      "owner": "local",
+      "evidence": [
+        "scripts/e2e/background-orchestrator.mjs",
+        "tests/background-e2e-orchestrator.test.cjs",
+        "docs/adr/0140-isolated-background-e2e-orchestration.md",
+        ".artifacts/t7112-background/20261004180200-17436-e43ae9"
+      ],
+      "next": "T-7113"
+    },
+    {
+      "id": "T-7113",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "evidence": [
+        "docs/current-status-index.json",
+        "scripts/current-status-audit.cjs",
+        "tests/current-status-index.test.cjs",
+        "docs/adr/0141-current-status-index-governance.md"
+      ],
+      "next": "T-7114"
+    },
+    {
+      "id": "T-7114",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "evidence": [
+        "tests/fixtures/siyuan-compatibility-probes.json",
+        "scripts/siyuan-compatibility-probe.cjs",
+        "tests/siyuan-compatibility-probe.test.cjs",
+        "tests/e2e/compatibility-probe.spec.mjs",
+        "docs/siyuan-compatibility-matrix.md",
+        "docs/adr/0142-siyuan-38-compatibility-probes.md",
+        ".artifacts/t7114-compatibility/compatibility-probe.json"
+      ],
+      "next": "T-7115"
+    },
+    {
+      "id": "T-7115",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "environment",
+      "blockedBy": [
+        "B-005"
+      ],
+      "evidence": [
+        "BLOCKERS.md",
+        "docs/dev-plan-2026-09-27.md",
+        "docs/desktop-acceptance-template.md",
+        "docs/desktop-acceptance-matrix.md",
+        "tests/fixtures/desktop-acceptance-matrix.json",
+        "scripts/desktop-acceptance-matrix.cjs",
+        "tests/desktop-acceptance-matrix.test.cjs",
+        "tests/e2e/native-sidebar.spec.mjs",
+        "tests/native-sidebar-e2e-contract.test.cjs",
+        "docs/native-sidebar-host-evidence.md",
+        "docs/adr/0143-desktop-acceptance-matrix.md",
+        "docs/adr/0145-real-native-sidebar-e2e.md",
+        "src/second-panel-ui.ts",
+        "src/home-config-form.ts",
+        "tests/home-lifecycle.test.cjs",
+        ".artifacts/t7115-desktop/results.json",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7125"
+    },
+    {
+      "id": "T-7116",
+      "status": "blocked",
+      "priority": "P1",
+      "owner": "environment",
+      "blockedBy": [
+        "B-004"
+      ],
+      "evidence": [
+        "BLOCKERS.md",
+        "docs/dev-plan-2026-09-27.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7117"
+    },
+    {
+      "id": "T-7117",
+      "status": "blocked",
+      "priority": "P1",
+      "owner": "external",
+      "blockedBy": [
+        "B-007",
+        "B-008",
+        "B-009",
+        "B-010",
+        "B-011"
+      ],
+      "evidence": [
+        "BLOCKERS.md",
+        "docs/dev-plan-2026-09-27.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7118"
+    },
+    {
+      "id": "T-7118",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "release",
+      "evidence": [
+        "docs/dev-plan-2026-09-27.md",
+        "docs/release-readiness.md",
+        "docs/install-upgrade-rollback-2026-10-06.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7119"
+    },
+    {
+      "id": "T-7119",
+      "status": "deferred",
+      "priority": "P2",
+      "owner": "product",
+      "deferredBy": [
+        "ADR-0129"
+      ],
+      "evidence": [
+        "docs/adr/0129-snippet-code-editor.md",
+        "docs/dev-plan-2026-09-27.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7120"
+    },
+    {
+      "id": "T-7120",
+      "status": "deferred",
+      "priority": "P2",
+      "owner": "product",
+      "deferredBy": [
+        "ADR-0133",
+        "B-011"
+      ],
+      "evidence": [
+        "docs/adr/0133-snippet-ai-context-and-receipts.md",
+        "BLOCKERS.md",
+        "docs/dev-plan-2026-09-27.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": null
+    },
+    {
+      "id": "T-7121",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "evidence": [
+        ".github/workflows/release.yml",
+        "tests/host/release-dry-run.test.cjs",
+        "docs/adr/0144-release-browser-runtime.md",
+        "docs/dev-plan-2026-09-27.md"
+      ],
+      "next": "T-7122"
+    },
+    {
+      "id": "T-7122",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "evidence": [
+        "src/home-config-form.ts",
+        "tests/home-lifecycle.test.cjs",
+        "docs/dev-plan-2026-09-27.md"
+      ],
+      "next": "T-7123",
+      "title": "配置弹窗迟到回调与定时器清理"
+    },
+    {
+      "id": "T-7123",
+      "title": "小驴常用独立插件研究（原重复编号T-7122勘误）",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "evidence": [
+        "docs/research-common-phrases-2026-10-05.md",
+        "docs/adr/0146-common-phrases-plugin-boundary.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7124"
+    },
+    {
+      "id": "T-7124",
+      "title": "全景评审与精品化待办规划",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "evidence": [
+        "docs/product-review-2026-10-06.md",
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0147-product-quality-roadmap.md",
+        "tests/current-status-index.test.cjs"
+      ],
+      "next": "T-7125"
+    },
+    {
+      "id": "T-7125",
+      "title": "切换器 Tab 路径退出卡片循环",
+      "status": "completed",
+      "priority": "P0",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "src/index.ts",
+        "src/mobile-switcher-ui.ts",
+        "src/settings-sections.ts",
+        "tests/keyboard-navigation-contract.test.cjs"
+      ],
+      "next": "T-7126"
+    },
+    {
+      "id": "T-7126",
+      "title": "Ctrl+左右筛选被普通方向分支截获",
+      "status": "completed",
+      "priority": "P0",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7125"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "src/index.ts",
+        "src/mobile-switcher-ui.ts",
+        "src/settings-sections.ts",
+        "tests/keyboard-navigation-contract.test.cjs"
+      ],
+      "next": "T-7127"
+    },
+    {
+      "id": "T-7127",
+      "title": "设置搜索及局部查找的输入法组合态",
+      "status": "completed",
+      "priority": "P0",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7125"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "src/index.ts",
+        "src/mobile-switcher-ui.ts",
+        "src/settings-sections.ts",
+        "src/doc-search-ui.ts",
+        "src/snippet-studio-preview.js",
+        "src/snippet-studio-ui.js",
+        "tests/doc-preview-behavior.test.cjs",
+        "tests/snippet-studio-mount.test.cjs",
+        "tests/fixtures/local-find-ime-probes.json"
+      ],
+      "next": "T-7128"
+    },
+    {
+      "id": "T-7128",
+      "title": "设置控件可访问名称与描述",
+      "status": "completed",
+      "priority": "P0",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "src/index.ts",
+        "src/mobile-switcher-ui.ts",
+        "src/settings-sections.ts",
+        "src/settings-control-dom.js",
+        "src/i18n/zh-CN.json",
+        "src/i18n/en.json",
+        "tests/keyboard-navigation-contract.test.cjs",
+        "docs/adr/0148-settings-control-graph-budget.md",
+        "tests/settings-search-ux-contract.test.cjs"
+      ],
+      "next": "T-7129"
+    },
+    {
+      "id": "T-7129",
+      "title": "移动排序/分组 modal 名称与焦点",
+      "status": "completed",
+      "priority": "P0",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7128"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "src/index.ts",
+        "src/mobile-switcher-ui.ts",
+        "src/settings-sections.ts",
+        "src/i18n/zh-CN.json",
+        "src/i18n/en.json",
+        "tests/mobile-sort-modal.test.cjs",
+        ".artifacts/T-7129-mobile-sort/negative-summary.json"
+      ],
+      "next": "T-7130"
+    },
+    {
+      "id": "T-7130",
+      "title": "默认开发分支 CI 覆盖",
+      "status": "completed",
+      "priority": "P0",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        ".github/workflows/ci.yml",
+        ".github/workflows/release.yml",
+        "docs/development-toolchain.md",
+        "tests/host/development-toolchain.test.cjs"
+      ],
+      "next": "T-7131"
+    },
+    {
+      "id": "T-7131",
+      "title": "Node/pnpm/锁文件与文档契约",
+      "status": "completed",
+      "priority": "P0",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "package.json",
+        "pnpm-lock.yaml",
+        ".github/workflows/ci.yml",
+        ".github/workflows/release.yml",
+        "docs/development-toolchain.md",
+        "tests/host/development-toolchain.test.cjs"
+      ],
+      "next": "T-7132"
+    },
+    {
+      "id": "T-7132",
+      "title": "对外功能事实与安装包链接",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "README.md",
+        "README.en-US.md",
+        "plugin.json"
+      ],
+      "next": "T-7167"
+    },
+    {
+      "id": "T-7133",
+      "title": "任务式轻量上手",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "conditional",
+      "dependsOn": [],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/onboarding-audit-2026-10-07.md",
+        "docs/usability-tasks-2026-10-06.md",
+        "tests/home-empty-guide.test.cjs",
+        "tests/doc-search-state.test.cjs",
+        "tests/home-store-discovery.test.cjs",
+        "tests/favorite-actions.test.cjs",
+        "tests/recent-closed.test.cjs",
+        "tests/document-sets.test.cjs",
+        "tests/snippet-leave-intent.test.cjs",
+        "tests/snippet-backup-restore.test.cjs"
+      ],
+      "next": "T-7134",
+      "inputsFrom": [
+        "T-7168"
+      ]
+    },
+    {
+      "id": "T-7134",
+      "title": "默认工作台与场景预设",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "conditional",
+      "dependsOn": [
+        "T-7143"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "src/second-panel-ui.ts",
+        "src/styles/_05-settings-widgets.scss",
+        "src/i18n/zh-CN.json",
+        "src/i18n/en.json",
+        "tests/home-empty-guide.test.cjs",
+        "tests/home-store-contract.test.cjs",
+        "tests/home-store-discovery.test.cjs",
+        "tests/home-model.test.cjs",
+        "tests/home-tile-spec-audit.test.cjs",
+        "tests/host/component-readiness-contract.test.cjs"
+      ],
+      "next": "T-7136",
+      "inputsFrom": [
+        "T-7168"
+      ]
+    },
+    {
+      "id": "T-7135",
+      "title": "可发现的快捷键与动作帮助",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7125",
+        "T-7126",
+        "T-7127",
+        "T-7132"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "src/index.ts",
+        "src/settings-sections.ts",
+        "src/i18n/zh-CN.json",
+        "src/i18n/en.json",
+        "src/styles/_02-settings.scss",
+        "tests/t7001-settings-fields-contract.test.cjs",
+        "tests/e2e/t7001-settings-fields.spec.mjs"
+      ],
+      "next": "T-7133"
+    },
+    {
+      "id": "T-7136",
+      "title": "搜索结果来源/范围可解释",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "conditional",
+      "dependsOn": [],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "src/index.ts",
+        "src/doc-search-ui.ts",
+        "src/styles/_03-switcher-mobile.scss",
+        "src/i18n/zh-CN.json",
+        "src/i18n/en.json",
+        "tests/doc-search-state.test.cjs",
+        "tests/doc-search-fetch-behavior.test.cjs",
+        "tests/search-model.test.cjs",
+        "tests/search-orchestration-composition.test.cjs"
+      ],
+      "next": "T-7137",
+      "inputsFrom": [
+        "T-7168"
+      ]
+    },
+    {
+      "id": "T-7137",
+      "title": "工作中断和返回现场",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "conditional",
+      "dependsOn": [
+        "T-7125"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "src/index.ts",
+        "src/doc-search-ui.ts",
+        "src/second-panel-ui.ts",
+        "src/mobile-switcher-ui.ts",
+        "docs/work-interruption-audit-2026-10-07.md",
+        "tests/kernel-widgets-wiring.test.cjs"
+      ],
+      "next": "T-7138"
+    },
+    {
+      "id": "T-7138",
+      "title": "对象旁的状态与行动文案",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "conditional",
+      "dependsOn": [
+        "T-7136",
+        "T-7143"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "src/index.ts",
+        "src/doc-search-ui.ts",
+        "src/second-panel-ui.ts",
+        "src/home-controller.js",
+        "src/home-view.js",
+        "src/styles/_05-settings-widgets.scss",
+        "src/i18n/zh-CN.json",
+        "src/i18n/en.json",
+        "tests/home-controller.test.cjs",
+        "tests/home-view.test.cjs",
+        "tests/home-health-report.test.cjs",
+        "tests/home-health-wiring.test.cjs",
+        "tests/kernel-widgets-wiring.test.cjs",
+        "docs/home-state-copy-audit-2026-10-07.md"
+      ],
+      "next": "T-7151"
+    },
+    {
+      "id": "T-7139",
+      "title": "统一外壳下的信息密度和操作层级",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "conditional",
+      "dependsOn": [],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "src/platform-dom.js",
+        "src/mobile-switcher-ui.ts",
+        "src/styles/_11-ui-polish.scss",
+        "docs/design-system-v1-2026-09-27.md",
+        "docs/ui-redesign-r4-2026-10-03.md",
+        ".tmp/baseline-switcher.png",
+        ".tmp/baseline-workbench.png",
+        ".tmp/baseline-studio.png",
+        ".artifacts/e2e-polish",
+        ".artifacts/e2e-second-pass-5/second-pass-narrow.png",
+        ".tmp/review-real-dark-narrow.png"
+      ],
+      "next": "T-7145",
+      "inputsFrom": [
+        "T-7168"
+      ]
+    },
+    {
+      "id": "T-7140",
+      "title": "主题、缩放、短窗与长双语布局",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "conditional",
+      "dependsOn": [
+        "T-7128",
+        "T-7129"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "src/platform-dom.js",
+        "src/mobile-switcher-ui.ts",
+        "docs/desktop-acceptance-matrix.md",
+        "src/styles/_11-ui-polish.scss",
+        ".artifacts/e2e-third-pass-after/short-switcher.png",
+        ".artifacts/e2e-third-pass-after/short-studio.png",
+        ".artifacts/e2e-third-pass-after/short-studio-element.png",
+        ".artifacts/e2e-third-pass-host-4/third-pass-dark-narrow.png",
+        ".artifacts/e2e-fourth-pass/switcher-narrow.png",
+        ".artifacts/e2e-fourth-pass/workbench-narrow.png",
+        ".artifacts/e2e-fourth-pass/studio-narrow.png",
+        ".artifacts/e2e-fifth-pass/studio-960x600.png",
+        ".artifacts/e2e-sixth-pass/studio-960x600.png",
+        ".artifacts/e2e-seventh-pass/studio-960x600.png",
+        ".artifacts/e2e-eighth-pass/studio-960x600.png",
+        ".artifacts/e2e-ninth-pass/studio-960x600.png",
+        ".artifacts/e2e-tenth-pass/studio-960x600.png",
+        ".artifacts/e2e-tenth-pass/workbench-1440x900.png",
+        ".artifacts/e2e-twelfth-pass/studio-960x600.png",
+        ".artifacts/e2e-twelfth-pass/workbench-1440x900.png",
+        ".artifacts/e2e-thirteenth-pass/studio-dark-960x600.png",
+        ".artifacts/e2e-thirteenth-pass/workbench-dark-1440x900.png",
+        ".artifacts/e2e-fourteenth-pass/studio-960x600.png",
+        ".artifacts/e2e-fourteenth-pass/workbench-1440x900.png",
+        ".artifacts/e2e-fifteenth-pass/studio-960x600.png",
+        ".artifacts/e2e-fifteenth-pass/workbench-1440x900.png",
+        ".artifacts/e2e-final-polish-pass/studio-960x600.png",
+        ".artifacts/e2e-final-polish-pass/workbench-1440x900.png",
+        ".artifacts/e2e-sixteenth-pass/studio-960x600.png",
+        ".artifacts/e2e-sixteenth-pass/workbench-1440x900.png",
+        ".artifacts/e2e-seventeenth-pass/switcher-focus.png",
+        ".artifacts/e2e-seventeenth-pass/studio-960x600.png"
+      ],
+      "next": "T-7141"
+    },
+    {
+      "id": "T-7141",
+      "title": "全平台焦点与动态播报审计",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "conditional",
+      "dependsOn": [
+        "T-7125",
+        "T-7126",
+        "T-7127",
+        "T-7128",
+        "T-7129"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0173-t7141-focus-live-feedback.md",
+        ".artifacts/t7141-a11y-audit.txt",
+        "src/home-controller.js",
+        "src/snippet-studio-ui.js",
+        "src/doc-search-ui.ts",
+        "tests/home-controller.test.cjs",
+        "tests/doc-preview-behavior.test.cjs",
+        "tests/snippet-conflict-wiring.test.cjs",
+        "docs/product-review-2026-10-06.md",
+        "src/platform-dom.js",
+        "src/mobile-switcher-ui.ts",
+        "docs/desktop-acceptance-matrix.md",
+        ".artifacts/T-7141-negative-probe.log",
+        ".artifacts/T-7141-full-tests.log",
+        ".artifacts/T-7141-verify-release.log"
+      ],
+      "next": "T-7142"
+    },
+    {
+      "id": "T-7142",
+      "title": "手机高频操作和手势的可理解性",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "conditional",
+      "dependsOn": [],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "src/platform-dom.js",
+        "src/mobile-switcher-ui.ts",
+        "docs/desktop-acceptance-matrix.md",
+        "src/floating-ball-ui.ts",
+        "tests/floating-ball-ui.test.cjs",
+        "tests/floating-ball-browser-smoke.cjs",
+        "docs/adr/0174-t7142-mobile-flick-after-slop.md",
+        ".artifacts/T-7142-negative-probe.log",
+        ".artifacts/T-7142-verify-release.log"
+      ],
+      "next": "T-7146"
+    },
+    {
+      "id": "T-7143",
+      "title": "组件就绪条件和来源表",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7132"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "src/home-model.js",
+        "src/home-store-ui.ts",
+        "src/snippet-studio-ui.js",
+        "docs/widget-protocol.md",
+        "docs/component-readiness-map-2026-10-06.md",
+        "tests/host/component-readiness-contract.test.cjs",
+        "tests/external-widget-availability-contract.test.cjs"
+      ],
+      "next": "T-7150"
+    },
+    {
+      "id": "T-7144",
+      "title": "少量高价值组件二轮精修",
+      "status": "in_progress",
+      "priority": "P2",
+      "owner": "local",
+      "workType": "conditional",
+      "dependsOn": [
+        "T-7143"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "docs/component-availability-audit.md",
+        "src/home-model.js",
+        "src/home-store-ui.ts",
+        "src/snippet-studio-ui.js",
+        "docs/widget-protocol.md",
+        "tests/kernel-widget-model.test.cjs",
+        "tests/insight-widgets.test.cjs",
+        "tests/component-specs-batch8-wiring.test.cjs",
+        "tests/kernel-widgets-wiring.test.cjs",
+        "docs/adr/0219-core-widgets-content-first-glance-decoupling.md",
+        "docs/adr/0220-optimistic-task-toggle-and-zero-latency-interaction.md",
+        "docs/adr/0225-t7144-outline-host-fallback-and-toggle-race.md",
+        "tests/home-view.test.cjs",
+        "tests/outline-endpoint-preview-contract.test.cjs",
+        "tests/document-context-wiring.test.cjs",
+        "tests/agent-outline.test.cjs",
+        "tests/e2e/t7144-widgets.spec.mjs",
+        ".artifacts/e2e/probe-outline-2026-10-18.log"
+      ],
+      "next": "T-7156",
+      "inputsFrom": [
+        "T-7168"
+      ]
+    },
+    {
+      "id": "T-7145",
+      "title": "片段普通用户路径和安全词义",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "conditional",
+      "dependsOn": [],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "src/home-model.js",
+        "src/home-store-ui.ts",
+        "src/snippet-studio-ui.js",
+        "docs/widget-protocol.md",
+        "docs/snippet-user-path-audit-2026-10-06.md",
+        "tests/doc-preview-behavior.test.cjs",
+        "tests/snippet-studio-mount.test.cjs"
+      ],
+      "next": "T-7146",
+      "inputsFrom": [
+        "T-7168"
+      ]
+    },
+    {
+      "id": "T-7146",
+      "title": "provider 接入与可选家族入口的用户/作者说明",
+      "status": "completed",
+      "priority": "P2",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "src/home-model.js",
+        "src/home-store-ui.ts",
+        "src/snippet-studio-ui.js",
+        "docs/widget-protocol.md",
+        "docs/provider-integration-guide-2026-10-06.md",
+        "docs/adr/0175-provider-docs-and-family-entry-boundary.md",
+        "src/index.ts"
+      ],
+      "next": "T-7149"
+    },
+    {
+      "id": "T-7147",
+      "title": "用户数据位置与设备范围说明",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "docs/storage-compatibility-matrix.md",
+        "src/config-pack-model.js",
+        "src/snippet-gist.js",
+        "docs/data-scope-2026-10-06.md",
+        "src/constants.ts",
+        "src/storage-migration.js"
+      ],
+      "next": "T-7148"
+    },
+    {
+      "id": "T-7148",
+      "title": "现有备份能力的覆盖盘点与故障恢复剧本",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7147"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "docs/storage-compatibility-matrix.md",
+        "src/config-pack-model.js",
+        "src/snippet-gist.js",
+        "docs/data-scope-2026-10-06.md",
+        "docs/backup-recovery-playbook-2026-10-06.md",
+        "tests/config-pack.test.cjs",
+        "tests/snippet-backup-restore.test.cjs",
+        "tests/snippet-recycle.test.cjs"
+      ],
+      "next": "T-7162"
+    },
+    {
+      "id": "T-7149",
+      "title": "面向用户的脱敏诊断导出/复制",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "conditional",
+      "dependsOn": [
+        "T-7147",
+        "T-7150"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "src/home-controller.js",
+        "src/second-panel-ui.ts",
+        "src/types.ts",
+        "webpack.config.js",
+        "src/i18n/zh-CN.json",
+        "src/i18n/en.json",
+        "tests/home-health-report.test.cjs",
+        "tests/home-health-wiring.test.cjs",
+        "tests/e2e/home-health-diagnostics.spec.mjs",
+        "docs/adr/0213-t7288-diagnostics-preview-and-field-boundary.md",
+        ".artifacts/T-7288-verify-release-final.log"
+      ],
+      "next": "T-7163"
+    },
+    {
+      "id": "T-7150",
+      "title": "可选联网与凭据的实际数据流清单",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "docs/storage-compatibility-matrix.md",
+        "src/config-pack-model.js",
+        "src/snippet-gist.js",
+        "docs/data-flow-inventory-2026-10-06.md"
+      ],
+      "next": "T-7147"
+    },
+    {
+      "id": "T-7151",
+      "title": "扩展已有真实端到端性能基准，修正 interactive/p95 命名",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7131"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "tests/e2e/first-open.spec.mjs",
+        "scripts/release-readiness-metrics.cjs",
+        "docs/t7151-performance-evidence-2026-10-07.md",
+        ".artifacts/t7151-pass/target.json",
+        "tests/e2e/t7151-scale.spec.mjs",
+        ".artifacts/e2e-background/20261007112850-7332-4e7505/artifacts/t7151-scale-32/results.json",
+        ".artifacts/e2e-background/20261007120330-19600-562033/artifacts/t7151-scale-32/results.json"
+      ],
+      "next": "T-7152"
+    },
+    {
+      "id": "T-7152",
+      "title": "只优化测量成立的主流程瓶颈",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "conditional",
+      "dependsOn": [
+        "T-7151"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/t7151-performance-evidence-2026-10-07.md",
+        "ROADMAP.md",
+        "tests/search-filter-perf.test.cjs",
+        "tests/search-orchestration-perf.test.cjs",
+        "tests/perf-complexity-gate.test.cjs",
+        "tests/tab-pipeline-perf.test.cjs",
+        ".artifacts/e2e-background/20261007120330-19600-562033/artifacts/t7151-scale-32/results.json"
+      ],
+      "next": "T-7153"
+    },
+    {
+      "id": "T-7153",
+      "title": "真实持续会话与资源趋势",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7151"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "tests/e2e/resource-trend.spec.mjs",
+        "playwright.e2e.resource-trend.config.mjs",
+        "tests/e2e/resource-trend-global-setup.mjs",
+        "tests/e2e/resource-trend.cjs",
+        "tests/resource-trend-probe.browser.js",
+        "tests/resource-trend-probe.test.cjs",
+        "tests/home-store-render-listeners.test.cjs",
+        "src/home-store-ui.ts",
+        "src/home-adapters.js",
+        "src/home-runtime.js",
+        "src/index.ts",
+        "tests/home-adapters.test.cjs",
+        "tests/home-runtime.test.cjs",
+        "docs/t7153-resource-trend-probe-2026-10-07.md",
+        "docs/adr/0150-t7153-render-listener-lifecycle.md",
+        "docs/adr/0151-t7153-provider-cache-generation.md",
+        "docs/adr/0152-t7153-long-run-checkpoints.md",
+        ".artifacts/e2e-background/20261007132726-21184-5874f0/artifacts/t7153-resource-trend/results.json",
+        ".artifacts/e2e-background/20261007171037-38896-64a829/artifacts/t7153-resource-trend-final/results.json",
+        ".artifacts/e2e-background/20261007162443-39152-aaeb4e/artifacts/t7153-negative/runner.stdout.log",
+        ".artifacts/e2e-background/20261008030619-2464-72e951/artifacts/t7203-resource-trend/test-results/resource-trend-T-7153-真实宿主资源趋势-商店重绘时释放旧渲染监听并在关闭后归零/resource-trend.json",
+        ".artifacts/e2e-background/20261008030619-2464-72e951/artifacts/t7203-resource-trend/test-results/resource-trend-T-7153-真实宿主资源趋势-商店重绘时释放旧渲染监听并在关闭后归零/resource-trend-checkpoints.ndjson",
+        ".artifacts/e2e-background/20261008030619-2464-72e951/summary.json"
+      ],
+      "next": "T-7232"
+    },
+    {
+      "id": "T-7232",
+      "title": "R5 顶栏原型、真实侧栏回归与配置失败回执",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7231"
+      ],
+      "evidence": [
+        "src/index.ts",
+        "src/home-config-form.ts",
+        "src/notebook-load-ui.js",
+        "src/styles/_platform-shell.scss",
+        "src/styles/_11-ui-polish.scss",
+        "docs/design/platform-topbar-redesign-r5-2026-10-09.html",
+        "tests/platform-topbar-layout-contract.test.cjs",
+        "tests/surface-switch-browser-smoke.cjs",
+        "tests/home-config-notebook-retry-behavior.test.cjs",
+        "tests/notebook-failure-contract.test.cjs",
+        "docs/adr/0159-topbar-r5-and-notebook-retry-v0467.md",
+        "docs/dev-plan-2026-10-06.md",
+        "docs/release-readiness.md",
+        "ROADMAP.md"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7233",
+      "title": "全量 UI 复核与交互契约收口",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7232"
+      ],
+      "evidence": [
+        "src/styles/_platform-shell.scss",
+        "src/styles/_11-ui-polish.scss",
+        "src/home-config-form.ts",
+        "src/notebook-load-ui.js",
+        "tests/home-lifecycle.test.cjs",
+        "tests/home-store-contract.test.cjs",
+        "docs/adr/0160-comprehensive-ui-contract-closeout-v0467.md",
+        "docs/dev-plan-2026-10-06.md",
+        "package.json",
+        "plugin.json",
+        "README.md",
+        "README.en-US.md",
+        "docs/CHANGELOG.md",
+        "docs/CHANGELOG.en-US.md",
+        "docs/release-readiness.md"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7234",
+      "title": "第一面板预览填充可用高度",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7233"
+      ],
+      "evidence": [
+        "src/styles/_11-ui-polish.scss",
+        "tests/e2e/doc-preview-layout.spec.mjs",
+        "tests/panel1-urgent-fix.test.cjs",
+        "docs/adr/0161-tab-preview-available-height.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7140"
+    },
+    {
+      "id": "T-7154",
+      "title": "生产资源和入包素材成本审查",
+      "status": "completed",
+      "priority": "P2",
+      "owner": "local",
+      "workType": "conditional",
+      "dependsOn": [
+        "T-7158",
+        "T-7159"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/production-bundle-and-asset-audit-2026-10-17.md",
+        "docs/product-review-2026-10-06.md",
+        "tests/e2e/first-open.spec.mjs",
+        "scripts/release-readiness-metrics.cjs"
+      ],
+      "next": "T-7118"
+    },
+    {
+      "id": "T-7155",
+      "title": "品牌 brief",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "product",
+      "workType": "deliverable",
+      "dependsOn": [],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "docs/brand-brief-2026-10-06.md",
+        "icon.png",
+        "preview.png",
+        "docs/interface-map.svg",
+        "docs/architecture.svg",
+        "docs/install-upgrade-rollback-2026-10-06.md"
+      ],
+      "next": "T-7133"
+    },
+    {
+      "id": "T-7156",
+      "title": "图标/产品头像精修及可维护源",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "product",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7155"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "icon.png",
+        "preview.png",
+        "docs/assets/lvspeed-switch-master.svg",
+        "docs/asset-export-manifest-2026-10-07.md",
+        "docs/assets/icon-16.png",
+        "docs/assets/icon-24.png",
+        "docs/assets/icon-32.png",
+        "docs/assets/icon-48.png",
+        "docs/assets/icon-160.png",
+        ".artifacts/t7156-assets/asset-preview.png",
+        "docs/interface-map.svg",
+        "docs/architecture.svg"
+      ],
+      "next": "T-7158"
+    },
+    {
+      "id": "T-7157",
+      "title": "preview 首图更新",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7139",
+        "T-7155",
+        "T-7158"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "icon.png",
+        "preview.png",
+        "docs/interface-map.svg",
+        "docs/architecture.svg"
+      ],
+      "next": "T-7159"
+    },
+    {
+      "id": "T-7158",
+      "title": "真实截图/短演示、界面图和架构图",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7139",
+        "T-7167"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "icon.png",
+        "preview.png",
+        "docs/interface-map.svg",
+        "docs/architecture.svg"
+      ],
+      "next": "T-7157"
+    },
+    {
+      "id": "T-7159",
+      "title": "中文 README 分层，首先帮助普通用户",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7132",
+        "T-7157",
+        "T-7162"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "README.md",
+        "README.en-US.md",
+        "plugin.json",
+        "package.json",
+        "docs/github-repository-audit-2026-10-07.md"
+      ],
+      "next": "T-7160"
+    },
+    {
+      "id": "T-7160",
+      "title": "英文 README 与术语/快捷键同步",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7159",
+        "T-7135"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "README.md",
+        "README.en-US.md",
+        "plugin.json",
+        "package.json",
+        "docs/github-repository-audit-2026-10-07.md"
+      ],
+      "next": "T-7161"
+    },
+    {
+      "id": "T-7161",
+      "title": "manifest/package/GitHub About/Topics/集市介绍包",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7155",
+        "T-7159",
+        "T-7167"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "README.md",
+        "README.en-US.md",
+        "plugin.json",
+        "package.json",
+        "docs/github-repository-audit-2026-10-07.md",
+        ".github/PULL_REQUEST_TEMPLATE.md",
+        ".github/SECURITY.md",
+        ".github/dependabot.yml"
+      ],
+      "next": "T-7165"
+    },
+    {
+      "id": "T-7162",
+      "title": "安装、升级、停用、卸载与回退手册",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7147",
+        "T-7148"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "docs/storage-compatibility-matrix.md",
+        ".github/ISSUE_TEMPLATE/bug_report.yml",
+        "LICENSE",
+        "AGENTS.md",
+        "docs/data-scope-2026-10-06.md",
+        "docs/backup-recovery-playbook-2026-10-06.md",
+        "docs/install-upgrade-rollback-2026-10-06.md",
+        "tests/host/release-docs-safety.test.cjs",
+        "tests/host/package-integrity.test.cjs",
+        "tests/host/rollback-preflight.test.cjs"
+      ],
+      "next": "T-7155"
+    },
+    {
+      "id": "T-7163",
+      "title": "FAQ 与脱敏问题反馈",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7149",
+        "T-7162"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/faq-and-troubleshooting.md",
+        ".github/ISSUE_TEMPLATE/config.yml",
+        ".github/ISSUE_TEMPLATE/bug_report.yml",
+        "docs/product-review-2026-10-06.md",
+        "docs/storage-compatibility-matrix.md",
+        "LICENSE",
+        "AGENTS.md",
+        "docs/install-upgrade-rollback-2026-10-06.md"
+      ],
+      "next": "T-7164"
+    },
+    {
+      "id": "T-7164",
+      "title": "集中隐私说明与漏洞报告入口",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7150"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/privacy-and-security.md",
+        ".github/SECURITY.md",
+        "docs/product-review-2026-10-06.md",
+        "docs/storage-compatibility-matrix.md",
+        ".github/ISSUE_TEMPLATE/bug_report.yml",
+        "LICENSE",
+        "AGENTS.md",
+        ".github/ISSUE_TEMPLATE/config.yml",
+        "docs/data-flow-inventory-2026-10-06.md",
+        "docs/data-scope-2026-10-06.md"
+      ],
+      "next": "T-7166"
+    },
+    {
+      "id": "T-7165",
+      "title": "原作者、vendor、图像/数据源授权清单",
+      "status": "completed",
+      "priority": "P2",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7156",
+        "T-7158"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/licenses-and-attributions.md",
+        "docs/product-review-2026-10-06.md",
+        "docs/storage-compatibility-matrix.md",
+        ".github/ISSUE_TEMPLATE/bug_report.yml",
+        "LICENSE",
+        "AGENTS.md"
+      ],
+      "next": "T-7154"
+    },
+    {
+      "id": "T-7166",
+      "title": "维护者贡献/发布/排障手册",
+      "status": "completed",
+      "priority": "P2",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7130",
+        "T-7131",
+        "T-7162"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "docs/storage-compatibility-matrix.md",
+        ".github/ISSUE_TEMPLATE/bug_report.yml",
+        "LICENSE",
+        "AGENTS.md",
+        "docs/install-upgrade-rollback-2026-10-06.md",
+        "CONTRIBUTING.md",
+        ".github/PULL_REQUEST_TEMPLATE.md",
+        ".github/workflows/ci.yml",
+        ".github/workflows/release.yml",
+        "docs/gate-audit-checklist.md",
+        "docs/release-readiness.md",
+        "docs/acceptance-runbook.md"
+      ],
+      "next": "T-7152"
+    },
+    {
+      "id": "T-7167",
+      "title": "平台×版本×能力的支持清单",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/product-review-2026-10-06.md",
+        "docs/siyuan-compatibility-matrix.md",
+        "plugin.json",
+        "docs/support-matrix-2026-10-06.md",
+        "tests/support-matrix-contract.test.cjs"
+      ],
+      "next": "T-7168"
+    },
+    {
+      "id": "T-7168",
+      "title": "五条主路径可用性与反馈闭环",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "product",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7125",
+        "T-7126",
+        "T-7127",
+        "T-7128",
+        "T-7129"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/usability-evaluation-runbook-2026-10-17.md",
+        "docs/product-review-2026-10-06.md",
+        "README.md",
+        "docs/desktop-acceptance-matrix.md",
+        "tests/keyboard-navigation-contract.test.cjs",
+        "tests/mobile-sort-modal.test.cjs",
+        "tests/surface-close-contract.test.cjs",
+        "docs/snippet-user-path-audit-2026-10-06.md",
+        "docs/usability-tasks-2026-10-06.md"
+      ],
+      "next": "T-7169"
+    },
+    {
+      "id": "T-7169",
+      "title": "R4 原型与生产新增能力对账及入口层级适配",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7140"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/ui-r4-added-capability-audit-2026-10-06.md",
+        "docs/design/platform-ui-redesign-r4-2026-10-03.html",
+        "docs/ui-redesign-r4-2026-10-03.md",
+        "src/snippet-studio-ui.js",
+        "src/index.ts",
+        "src/styles/_11-ui-polish.scss",
+        "tests/snippet-studio-mount.test.cjs",
+        "tests/snippet-gist-ui.test.cjs",
+        "tests/snippet-groups-ui.test.cjs",
+        "tests/keyboard-navigation-contract.test.cjs",
+        ".artifacts/e2e/snippet-gist.png",
+        ".artifacts/e2e/studio-editing-footer.png"
+      ],
+      "next": "T-7170"
+    },
+    {
+      "id": "T-7170",
+      "title": "Workbench 卡片圆角与 Studio 桌面目录层级统一",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7169"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "src/snippet-studio-ui.js",
+        "src/styles/_snippet-studio.scss",
+        "src/styles/_11-ui-polish.scss",
+        "tests/snippet-studio-mount.test.cjs",
+        "tests/snippet-gist-ui.test.cjs",
+        "tests/snippet-groups-ui.test.cjs",
+        "tests/e2e/snippet-gist.spec.mjs",
+        "tests/e2e/studio-editing-state.spec.mjs",
+        "tests/e2e/workbench-information.spec.mjs",
+        ".artifacts/e2e/snippet-gist.png",
+        ".artifacts/e2e/workbench-information.png"
+      ],
+      "next": "T-7171"
+    },
+    {
+      "id": "T-7171",
+      "title": "统一平台外壳状态与设置入口",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7170"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "src/index.ts",
+        "src/second-panel-ui.ts",
+        "src/mobile-switcher-ui.ts",
+        "src/snippet-studio-ui.js",
+        "src/styles/_platform-shell.scss",
+        "src/styles/_11-ui-polish.scss",
+        "src/i18n/zh-CN.json",
+        "src/i18n/en.json",
+        "tests/current-status-index.test.cjs",
+        "tests/style-slice-coverage.test.cjs",
+        "tests/e2e/panel-header-layout.spec.mjs",
+        "tests/e2e/panel-interaction-layout.spec.mjs",
+        "tests/e2e/snippet-gist.spec.mjs",
+        "tests/e2e/studio-editing-state.spec.mjs",
+        "tests/e2e/workbench-information.spec.mjs",
+        ".artifacts/e2e"
+      ],
+      "next": "T-7172"
+    },
+    {
+      "id": "T-7172",
+      "title": "侧栏平台头部补齐关闭动作",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7171"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "src/index.ts",
+        "tests/e2e/native-sidebar.spec.mjs",
+        "tests/e2e/panel-header-layout.spec.mjs",
+        "tests/surface-close-contract.test.cjs"
+      ],
+      "next": "T-7173"
+    },
+    {
+      "id": "T-7173",
+      "title": "退出提示与模块开关入口一致性",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7172"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "src/index.ts",
+        "src/second-panel-ui.ts",
+        "src/mobile-switcher-ui.ts",
+        "src/snippet-studio-ui.js",
+        "src/settings-sections.ts",
+        "src/styles/_platform-shell.scss",
+        "src/styles/_02-settings.scss",
+        "src/styles/_11-ui-polish.scss",
+        "src/i18n/zh-CN.json",
+        "src/i18n/en.json",
+        "tests/module-visibility.test.cjs",
+        "tests/surface-close-contract.test.cjs",
+        "tests/current-status-index.test.cjs",
+        "tests/style-slice-coverage.test.cjs"
+      ],
+      "next": "T-7174"
+    },
+    {
+      "id": "T-7174",
+      "title": "窄端退出提示与侧栏模块入口视觉闭环",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7173"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "src/index.ts",
+        "src/settings-sections.ts",
+        "src/styles/_platform-shell.scss",
+        "src/styles/_11-ui-polish.scss",
+        "src/i18n/zh-CN.json",
+        "src/i18n/en.json",
+        "tests/module-visibility.test.cjs",
+        "tests/surface-close-contract.test.cjs",
+        "tests/e2e/panel-header-layout.spec.mjs",
+        "tests/e2e/surface-close.spec.mjs",
+        "tests/e2e/t7001-settings-fields.spec.mjs",
+        "tests/e2e/t7006-settings-polish.spec.mjs",
+        ".artifacts/e2e-next"
+      ],
+      "next": "T-7175"
+    },
+    {
+      "id": "T-7175",
+      "title": "主工作室 Esc 退出与模块开关即时回执",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7174"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "src/snippet-studio-ui.js",
+        "src/settings-sections.ts",
+        "tests/module-visibility.test.cjs",
+        "tests/surface-close-contract.test.cjs",
+        "tests/e2e/surface-close.spec.mjs",
+        "tests/e2e/t7001-settings-fields.spec.mjs",
+        "tests/e2e/t7006-settings-polish.spec.mjs"
+      ],
+      "next": "T-7176"
+    },
+    {
+      "id": "T-7176",
+      "title": "工作台失效组件占位层级与触控关闭命中区",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7175"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "src/second-panel-ui.ts",
+        "src/styles/_05-settings-widgets.scss",
+        "src/styles/_platform-shell.scss",
+        "src/i18n/zh-CN.json",
+        "src/i18n/en.json",
+        "tests/module-visibility.test.cjs",
+        "tests/current-status-index.test.cjs"
+      ],
+      "next": "T-7177"
+    },
+    {
+      "id": "T-7177",
+      "title": "快速记录弹窗关闭入口与 Esc 提示",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7176"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "src/index.ts",
+        "src/styles/_08-home-store-cards.scss",
+        "tests/t7001-settings-fields-contract.test.cjs",
+        "tests/surface-close-contract.test.cjs"
+      ],
+      "next": "T-7178"
+    },
+    {
+      "id": "T-7178",
+      "title": "工作台回执与设置保存状态语义收口",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7177"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "src/second-panel-ui.ts",
+        "src/index.ts",
+        "src/styles/_02-settings.scss",
+        "src/styles/_05-settings-widgets.scss",
+        "src/styles/_08-home-store-cards.scss",
+        "src/styles/_11-ui-polish.scss",
+        "src/i18n/zh-CN.json",
+        "src/i18n/en.json",
+        "tests/kernel-widgets-wiring.test.cjs",
+        "tests/t7001-settings-fields-contract.test.cjs",
+        "tests/module-visibility.test.cjs",
+        "tests/surface-close-contract.test.cjs",
+        ".tmp/audit/11-workbench.png",
+        ".tmp/audit/12-quick-capture.png"
+      ],
+      "next": "T-7179"
+    },
+    {
+      "id": "T-7179",
+      "title": "原生 Dialog 退出提示一致性",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7178"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "src/platform-dom.js",
+        "src/home-store-ui.ts",
+        "src/home-config-form.ts",
+        "src/index.ts",
+        "src/styles/_platform-shell.scss",
+        "tests/platform-dom.test.cjs",
+        "tests/kernel-widgets-wiring.test.cjs",
+        "tests/store-inline-preview-contract.test.cjs"
+      ],
+      "next": "T-7181"
+    },
+    {
+      "id": "T-7181",
+      "title": "短生命周期 Dialog 退出提示覆盖",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7179"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "src/platform-dom.js",
+        "src/second-panel-ui.ts",
+        "src/doc-search-ui.ts",
+        "src/settings-sections.ts",
+        "src/index.ts",
+        "tests/platform-dom.test.cjs",
+        "tests/kernel-widgets-wiring.test.cjs",
+        "tests/surface-close-contract.test.cjs",
+        "tests/settings-save-receipt-contract.test.cjs"
+      ],
+      "next": "T-7182"
+    },
+    {
+      "id": "T-7182",
+      "title": "设置提示统一、商店详情回焦与 Studio 加载态退出",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7181"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "ROADMAP.md",
+        "src/index.ts",
+        "src/home-store-ui.ts",
+        "src/mobile-switcher-ui.ts",
+        "src/styles/_02-settings.scss",
+        "src/styles/_05-settings-widgets.scss",
+        "src/styles/_snippet-studio.scss",
+        "tests/kernel-widgets-wiring.test.cjs",
+        "tests/store-mobile-layout-contract.test.cjs",
+        "tests/platform-dom.test.cjs",
+        "tests/surface-close-contract.test.cjs"
+      ],
+      "next": "T-7183"
+    },
+    {
+      "id": "T-7183",
+      "title": "移动 Sheet 退出提示与焦点连续性",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7182"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "ROADMAP.md",
+        "src/index.ts",
+        "src/mobile-switcher-ui.ts",
+        "src/styles/_05-settings-widgets.scss",
+        "tests/surface-close-contract.test.cjs"
+      ],
+      "next": "T-7155"
+    },
+    {
+      "id": "T-7184",
+      "title": "快速记录弹窗底部留白与触控关闭命中区",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7183"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "ROADMAP.md",
+        "src/index.ts",
+        "src/styles/_08-home-store-cards.scss",
+        "tests/kernel-widgets-wiring.test.cjs"
+      ],
+      "next": "T-7155"
+    },
+    {
+      "id": "T-7185",
+      "title": "切换器卡片键盘操作可达性",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7184"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "ROADMAP.md",
+        "src/styles/_03-switcher-mobile.scss",
+        "tests/kernel-widgets-wiring.test.cjs"
+      ],
+      "next": "T-7155"
+    },
+    {
+      "id": "T-7186",
+      "title": "收藏下拉键盘焦点反馈",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7185"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "ROADMAP.md",
+        "src/styles/_03-switcher-mobile.scss",
+        "tests/kernel-widgets-wiring.test.cjs"
+      ],
+      "next": "T-7155"
+    },
+    {
+      "id": "T-7187",
+      "title": "桌面收藏与最近下拉退出语义",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7186"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "ROADMAP.md",
+        "src/index.ts",
+        "tests/kernel-widgets-wiring.test.cjs"
+      ],
+      "next": "T-7155"
+    },
+    {
+      "id": "T-7188",
+      "title": "命令模式激活提示视觉收口",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7187"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "ROADMAP.md",
+        "src/styles/_03-switcher-mobile.scss",
+        "tests/kernel-widgets-wiring.test.cjs"
+      ],
+      "next": "T-7155"
+    },
+    {
+      "id": "T-7189",
+      "title": "短视口关闭按钮触控命中区",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7188"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "ROADMAP.md",
+        "src/styles/_platform-shell.scss",
+        "src/styles/_11-ui-polish.scss",
+        "tests/kernel-widgets-wiring.test.cjs"
+      ],
+      "next": "T-7134"
+    },
+    {
+      "id": "T-7190",
+      "title": "开发分支同步到 GitHub（不合并主干/不推集市）",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "release",
+      "dependsOn": [
+        "T-7159",
+        "T-7160",
+        "T-7161",
+        "T-7164",
+        "T-7166"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/github-repository-audit-2026-10-07.md",
+        "CONTRIBUTING.md",
+        "README.md"
+      ],
+      "next": "T-7151"
+    },
+    {
+      "id": "T-7191",
+      "title": "桌面验收矩阵区分本机 evidence 与 clean checkout",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7115",
+        "T-7190"
+      ],
+      "evidence": [
+        "scripts/desktop-acceptance-matrix.cjs",
+        "tests/desktop-acceptance-matrix.test.cjs",
+        "docs/desktop-acceptance-matrix.md"
+      ],
+      "next": "T-7151"
+    },
+    {
+      "id": "T-7192",
+      "title": "校准 GitHub 同步与 CI 状态文档",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "release",
+      "dependsOn": [
+        "T-7190",
+        "T-7191"
+      ],
+      "evidence": [
+        "ROADMAP.md",
+        "docs/github-repository-audit-2026-10-07.md",
+        "docs/dev-plan-2026-10-06.md",
+        "CONTRIBUTING.md"
+      ],
+      "next": "T-7151"
+    },
+    {
+      "id": "T-7193",
+      "title": "去除同步状态文档中的动态提交号",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "release",
+      "dependsOn": [
+        "T-7192"
+      ],
+      "evidence": [
+        "ROADMAP.md",
+        "docs/github-repository-audit-2026-10-07.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7151"
+    },
+    {
+      "id": "T-7194",
+      "title": "校准历史同步回执与远端分支事实",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "release",
+      "dependsOn": [
+        "T-7193"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/github-repository-audit-2026-10-07.md"
+      ],
+      "next": "T-7151"
+    },
+    {
+      "id": "T-7195",
+      "title": "明确 T-7151 宿主规模性能证据边界",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "performance",
+      "dependsOn": [
+        "T-7151"
+      ],
+      "evidence": [
+        "docs/adr/0149-t7151-host-scale-benchmark-boundaries.md",
+        "docs/t7151-performance-evidence-2026-10-07.md",
+        "tests/e2e/global-setup.mjs",
+        "scripts/e2e/lib.mjs"
+      ],
+      "next": "T-7151"
+    },
+    {
+      "id": "T-7196",
+      "title": "验证隔离规模探针的启动前安全链路",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "performance",
+      "dependsOn": [
+        "T-7195"
+      ],
+      "evidence": [
+        "scripts/e2e/background-orchestrator.mjs",
+        "scripts/e2e/host-scale-probe.mjs",
+        "docs/adr/0149-t7151-host-scale-benchmark-boundaries.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7151"
+    },
+    {
+      "id": "T-7197",
+      "title": "完成隔离桌面页签配置上限探针",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "performance",
+      "dependsOn": [
+        "T-7196"
+      ],
+      "evidence": [
+        "scripts/e2e/host-scale-probe.mjs",
+        "docs/t7151-performance-evidence-2026-10-07.md",
+        "docs/adr/0149-t7151-host-scale-benchmark-boundaries.md"
+      ],
+      "next": "T-7151"
+    },
+    {
+      "id": "T-7198",
+      "title": "完成隔离桌面 32 页签真实 UI 基准",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "performance",
+      "dependsOn": [
+        "T-7197"
+      ],
+      "evidence": [
+        "tests/e2e/t7151-scale.spec.mjs",
+        "docs/t7151-performance-evidence-2026-10-07.md",
+        "docs/adr/0149-t7151-host-scale-benchmark-boundaries.md",
+        ".artifacts/e2e-background/20261007112850-7332-4e7505/artifacts/t7151-scale-32/results.json"
+      ],
+      "next": "T-7151"
+    },
+    {
+      "id": "T-7199",
+      "title": "补齐隔离 32 页签过滤与激活 p95 样本",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "performance",
+      "dependsOn": [
+        "T-7198"
+      ],
+      "evidence": [
+        "tests/e2e/t7151-scale.spec.mjs",
+        "docs/t7151-performance-evidence-2026-10-07.md",
+        ".artifacts/e2e-background/20261007120330-19600-562033/artifacts/t7151-scale-32/results.json"
+      ],
+      "next": "T-7152"
+    },
+    {
+      "id": "T-7200",
+      "title": "完成 120 轮隔离资源压力脚手架与商店监听生命周期修复",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "performance",
+      "dependsOn": [
+        "T-7153"
+      ],
+      "evidence": [
+        "src/home-store-ui.ts",
+        "tests/home-store-render-listeners.test.cjs",
+        "tests/resource-trend-probe.browser.js",
+        "tests/e2e/resource-trend.spec.mjs",
+        "docs/t7153-resource-trend-probe-2026-10-07.md",
+        "docs/adr/0150-t7153-render-listener-lifecycle.md",
+        ".artifacts/e2e-background/20261007132726-21184-5874f0/artifacts/t7153-resource-trend/results.json",
+        ".artifacts/e2e-background/20261007171037-38896-64a829/artifacts/t7153-resource-trend-final/results.json",
+        ".artifacts/e2e-background/20261007162443-39152-aaeb4e/artifacts/t7153-negative/runner.stdout.log"
+      ],
+      "next": "T-7153"
+    },
+    {
+      "id": "T-7201",
+      "title": "补齐 provider 缓存趋势与清理代次竞态证据",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "performance",
+      "dependsOn": [
+        "T-7200"
+      ],
+      "evidence": [
+        "src/home-adapters.js",
+        "src/home-runtime.js",
+        "src/index.ts",
+        "tests/home-adapters.test.cjs",
+        "tests/e2e/resource-trend.spec.mjs",
+        "docs/t7153-resource-trend-probe-2026-10-07.md",
+        "docs/adr/0151-t7153-provider-cache-generation.md",
+        ".artifacts/e2e-background/20261007181410-29436-80d19c/artifacts/t7153-cache-trend/results.json"
+      ],
+      "next": "T-7153"
+    },
+    {
+      "id": "T-7202",
+      "title": "为 T-7153 长会话增加有界检查点诊断",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "performance",
+      "dependsOn": [
+        "T-7201"
+      ],
+      "evidence": [
+        "tests/e2e/resource-trend.spec.mjs",
+        "playwright.e2e.resource-trend.config.mjs",
+        "docs/adr/0152-t7153-long-run-checkpoints.md",
+        ".artifacts/e2e-background/20261007191232-34884-acdb6c/artifacts/t7153-checkpoint-30/results.json",
+        ".artifacts/e2e-background/20261007194651-20824-97bd67/artifacts/t7153-detached-60-v3/results.json"
+      ],
+      "next": "T-7203"
+    },
+    {
+      "id": "T-7203",
+      "title": "修正 T-7153 长跑测试超时预算",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "performance",
+      "dependsOn": [
+        "T-7202"
+      ],
+      "evidence": [
+        "tests/e2e/resource-trend.cjs",
+        "tests/e2e/resource-trend.spec.mjs",
+        "tests/resource-trend-timeout.test.cjs",
+        "docs/adr/0152-t7153-long-run-checkpoints.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7153"
+    },
+    {
+      "id": "T-7225",
+      "title": "三面板全路径体验审计与 v0.46.3 回归修复",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7224"
+      ],
+      "evidence": [
+        "src/home-store-ui.ts",
+        "src/index.ts",
+        "src/i18n/en.json",
+        "src/i18n/zh-CN.json",
+        "src/styles/_platform-shell.scss",
+        "src/styles/_03-switcher-mobile.scss",
+        "src/styles/_05-settings-widgets.scss",
+        "src/styles/_snippet-studio.scss",
+        "tests/merge-regression-style-contract.test.cjs",
+        "tests/store-dialog-failure-contract.test.cjs",
+        "tests/store-mobile-layout-contract.test.cjs",
+        "docs/adr/0154-comprehensive-surface-audit-v0463.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7226",
+      "title": "R17 功能强化调研与下一程规划",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "research",
+      "dependsOn": [
+        "T-7225"
+      ],
+      "evidence": [
+        "docs/research-cycle-r17-2026-10-09.md",
+        "docs/adr/0155-r17-action-receipt-frontier.md",
+        "docs/dev-plan-2026-10-06.md",
+        "ROADMAP.md"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7227",
+      "title": "全路径无死角审计与 v0.46.4 修复",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7226"
+      ],
+      "evidence": [
+        "src/index.ts",
+        "src/doc-search-ui.ts",
+        "src/home-config-form.ts",
+        "src/second-panel-ui.ts",
+        "src/settings-sections.ts",
+        "tests/switcher-first-panel-regressions.test.cjs",
+        "tests/home-store-contract.test.cjs",
+        "tests/saved-search-edit-wiring.test.cjs",
+        "tests/doc-set-diff-wiring.test.cjs",
+        "tests/config-pack-diff-wiring.test.cjs",
+        "docs/adr/0156-comprehensive-surface-audit-v0464.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7228",
+      "title": "顶栏分段导航与稳定命中层",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7227"
+      ],
+      "evidence": [
+        "src/index.ts",
+        "src/styles/_platform-shell.scss",
+        "src/styles/_11-ui-polish.scss",
+        "tests/switcher-feedback-contract.test.cjs",
+        "docs/adr/0157-topbar-segmented-navigation-v0465.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7229"
+    },
+    {
+      "id": "T-7229",
+      "title": "第三面板片段目录快速启停",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7228"
+      ],
+      "evidence": [
+        "src/snippet-studio-ui.js",
+        "src/styles/_snippet-studio.scss",
+        "tests/snippet-studio-mount.test.cjs",
+        "tests/snippet-catalog-quick-toggle.test.cjs",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7230"
+    },
+    {
+      "id": "T-7230",
+      "title": "第二面板与组件商店层级修复",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7229"
+      ],
+      "evidence": [
+        "src/home-store-ui.ts",
+        "src/styles/_08-home-store-cards.scss",
+        "src/styles/_11-ui-polish.scss",
+        "tests/home-store-contract.test.cjs",
+        "tests/panel2-premium-store-contract.test.cjs",
+        "docs/adr/0158-panel-store-interaction-v0466.md",
+        "docs/research-cycle-r18-2026-10-09.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7231"
+    },
+    {
+      "id": "T-7231",
+      "title": "v0.46.6 紧急小版本发布",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "release",
+      "dependsOn": [
+        "T-7230"
+      ],
+      "evidence": [
+        "package.json",
+        "plugin.json",
+        "README.md",
+        "README.en-US.md",
+        "docs/CHANGELOG.md",
+        "docs/CHANGELOG.en-US.md",
+        "docs/release-readiness.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7235",
+      "title": "思源 OCR 接入调研与稳定版后置开发",
+      "status": "deferred",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "research",
+      "deferredBy": [
+        "ADR-0162",
+        "思源 v3.8.7 正式版"
+      ],
+      "evidence": [
+        "docs/research-siyuan-ocr-2026-10-10.md",
+        "docs/adr/0162-siyuan-ocr-integration-deferred.md",
+        "docs/dev-plan-2026-10-06.md",
+        "ROADMAP.md"
+      ],
+      "next": null
+    },
+    {
+      "id": "T-7236",
+      "title": "三面板首次使用快速开始引导",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7234"
+      ],
+      "evidence": [
+        "src/index.ts",
+        "src/second-panel-ui.ts",
+        "src/mobile-switcher-ui.ts",
+        "src/snippet-studio-ui.js",
+        "src/styles/_05-settings-widgets.scss",
+        "src/styles/_platform-shell.scss",
+        "src/i18n/zh-CN.json",
+        "src/i18n/en.json",
+        "tests/first-use-guide.test.cjs",
+        "docs/adr/0163-first-use-guide.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7140"
+    },
+    {
+      "id": "T-7237",
+      "title": "首屏打开与组件商店筛选性能",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "performance",
+      "dependsOn": [
+        "T-7236"
+      ],
+      "evidence": [
+        "src/styles/_03-switcher-mobile.scss",
+        "src/home-store-ui.ts",
+        "tests/switcher-performance-contract.test.cjs",
+        "docs/adr/0164-performance-first-paint.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7140"
+    },
+    {
+      "id": "T-7238",
+      "title": "悬浮球首次使用引导与动作扩展边界",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7237"
+      ],
+      "evidence": [
+        "src/settings-sections.ts",
+        "src/floating-ball-model.js",
+        "src/floating-ball-ui.ts",
+        "src/index.ts",
+        "src/i18n/zh-CN.json",
+        "src/i18n/en.json",
+        "src/styles/_02-settings.scss",
+        "tests/floating-ball-model.test.cjs",
+        "tests/floating-ball-host.test.cjs",
+        "tests/floating-ball-settings-ui.test.cjs",
+        "tests/kernel-widgets-wiring.test.cjs",
+        "docs/adr/0165-floating-ball-first-use-and-action-boundary.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7140"
+    },
+    {
+      "id": "T-7240",
+      "title": "独立内核 E2E 收口与表面细节修复",
+      "status": "completed",
+      "priority": "P0",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7238"
+      ],
+      "evidence": [
+        "src/styles/_snippet-studio.scss",
+        "src/styles/_11-ui-polish.scss",
+        "tests/e2e/mobile-layout-audit.spec.mjs",
+        "tests/e2e/t7006-settings-polish.spec.mjs",
+        "tests/e2e/workbench-information.spec.mjs",
+        ".artifacts/e2e-background/20261010172658-63372-e9c870/summary.json",
+        "docs/adr/0166-v0469-e2e-and-surface-polish.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7241"
+    },
+    {
+      "id": "T-7241",
+      "title": "v0.46.9 小版本发布",
+      "status": "completed",
+      "priority": "P0",
+      "owner": "release",
+      "workType": "release",
+      "dependsOn": [
+        "T-7240"
+      ],
+      "evidence": [
+        "package.json",
+        "plugin.json",
+        "README.md",
+        "README.en-US.md",
+        "docs/CHANGELOG.md",
+        "docs/CHANGELOG.en-US.md",
+        "docs/release-readiness.md",
+        "ROADMAP.md",
+        ".github/workflows/release.yml",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7242"
+    },
+    {
+      "id": "T-7242",
+      "title": "R54 三面板视觉适配与工作面重构",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7241"
+      ],
+      "evidence": [
+        "src/styles/_12-r54-surface-adapter.scss",
+        "src/index.scss",
+        "tests/r54-surface-adapter-contract.test.cjs",
+        "docs/adr/0167-r54-surface-adapter-v0470.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7247"
+    },
+    {
+      "id": "T-7247",
+      "title": "跨主要样式模块收敛精确既有刻度",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7246"
+      ],
+      "evidence": [
+        ".artifacts/t7247-candidate-audit.cjs",
+        ".artifacts/t7247-migrate-exact-tiers.cjs",
+        ".artifacts/token-audit-t7247-before.json",
+        ".artifacts/token-audit-t7247-candidates.json",
+        ".artifacts/token-audit-t7247-after.json",
+        ".artifacts/t7247-style-before.json",
+        ".artifacts/t7247-style-after.json",
+        "docs/adr/0172-exact-existing-tier-migration.md",
+        "docs/dev-plan-2026-10-06.md",
+        ".artifacts/t7247-contract-negative-probes.cjs",
+        ".artifacts/T-7247-verify-release-final.log"
+      ],
+      "next": "T-7141"
+    },
+    {
+      "id": "T-7243",
+      "title": "R5 原型界面落地与 v0.47.1 本地候选",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7242"
+      ],
+      "evidence": [
+        "src/index.ts",
+        "src/home-store-ui.ts",
+        "src/second-panel-ui.ts",
+        "src/styles/_platform-shell.scss",
+        "src/styles/_12-r54-surface-adapter.scss",
+        "src/i18n/zh-CN.json",
+        "src/i18n/en.json",
+        "tests/switcher-feedback-contract.test.cjs",
+        "tests/e2e/store-inline-preview.spec.mjs",
+        "tests/e2e/workbench-information.spec.mjs",
+        "tests/e2e/panel-header-layout.spec.mjs",
+        "tests/e2e/surface-close.spec.mjs",
+        "docs/adr/0168-r5-brand-identity-v0471.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7141"
+    },
+    {
+      "id": "T-7244",
+      "title": "共享外壳语义排版变量第一批收敛",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7243"
+      ],
+      "evidence": [
+        "src/styles/_00-tokens.scss",
+        "src/styles/_platform-shell.scss",
+        "src/styles/_11-ui-polish.scss",
+        "src/styles/_12-r54-surface-adapter.scss",
+        "scripts/ui-token-audit.cjs",
+        ".artifacts/t7244-style-after.json",
+        "docs/adr/0169-semantic-typography-token-migration.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7245"
+    },
+    {
+      "id": "T-7245",
+      "title": "精确分类 E2E 正常关停日志",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7243"
+      ],
+      "evidence": [
+        "scripts/e2e/lib.mjs",
+        "tests/e2e-kernel-log.test.cjs",
+        ".artifacts/T-7245-kernel-log/audit-summary.md",
+        "docs/adr/0170-graceful-e2e-shutdown-log-classification.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7246"
+    },
+    {
+      "id": "T-7246",
+      "title": "精确间距与字号 token 第二批迁移",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7244"
+      ],
+      "evidence": [
+        "scripts/ui-token-audit.cjs",
+        "src/styles/_01-base-controls.scss",
+        "src/styles/_02-settings.scss",
+        "src/styles/_03-switcher-mobile.scss",
+        "src/styles/_05-settings-widgets.scss",
+        "src/styles/_06-widgets-store.scss",
+        ".artifacts/token-audit-t7246-before.json",
+        ".artifacts/token-audit-t7246-after.json",
+        ".artifacts/t7246-style-after.json",
+        ".artifacts/T-7246-full-tests-final.log",
+        ".artifacts/T-7246-verify-release-final.log",
+        ".artifacts/t7244-negative-probes.cjs",
+        "docs/adr/0171-exact-gap-and-font-size-token-batch.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7243"
+    },
+    {
+      "id": "T-7248",
+      "title": "v0.47.1 小版本发布与资产回读",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "release",
+      "dependsOn": [
+        "T-7247"
+      ],
+      "evidence": [
+        "README.md",
+        "README.en-US.md",
+        "ROADMAP.md",
+        "docs/release-readiness.md",
+        "docs/dev-plan-2026-10-06.md",
+        "docs/current-status-index.json",
+        "package.json",
+        "plugin.json",
+        "package.zip"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7249",
+      "title": "片段实验室窄屏滚动与触控命中区",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7248"
+      ],
+      "evidence": [
+        "src/styles/_12-r54-surface-adapter.scss",
+        "tests/e2e/studio-editing-state.spec.mjs",
+        "docs/design/platform-ui-redesign-r4-2026-10-03.html",
+        "docs/adr/0176-studio-narrow-scroll-and-touch-targets.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7250",
+      "title": "第二面板编辑态持续摇摆与频闪",
+      "status": "completed",
+      "priority": "P0",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7248"
+      ],
+      "evidence": [
+        "src/styles/_05-settings-widgets.scss",
+        "tests/home-editing-chrome-wiring.test.cjs",
+        "tests/e2e/workbench-information.spec.mjs",
+        "docs/design/workbench-redesign-2026-09-27.html",
+        "docs/adr/0177-workbench-static-edit-mode.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7251"
+    },
+    {
+      "id": "T-7251",
+      "title": "工作台编辑快捷键可发现性与输入保护",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7250"
+      ],
+      "evidence": [
+        "src/second-panel-ui.ts",
+        "src/i18n/zh-CN.json",
+        "src/i18n/en.json",
+        "tests/e2e/workbench-information.spec.mjs",
+        "tests/home-editing-chrome-wiring.test.cjs",
+        "docs/adr/0178-workbench-edit-shortcuts.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7252"
+    },
+    {
+      "id": "T-7252",
+      "title": "工作台精选组件补齐入口与商店原型设备语义",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7251"
+      ],
+      "evidence": [
+        "src/second-panel-ui.ts",
+        "src/home-store-ui.ts",
+        "src/i18n/zh-CN.json",
+        "src/i18n/en.json",
+        "docs/design/workbench-redesign-2026-09-27.html",
+        "docs/design/store-redesign-2026-09-27.html",
+        "tests/e2e/workbench-information.spec.mjs",
+        "tests/e2e/store-inline-preview.spec.mjs",
+        "tests/home-empty-guide.test.cjs",
+        "tests/store-master-detail-contract.test.cjs",
+        "docs/adr/0179-workbench-default-fill-and-store-preview-context.md",
+        "docs/adr/0180-package-budget-578kib-for-v0471-working-tree.md",
+        "docs/dev-plan-2026-10-06.md",
+        ".artifacts/T-7252-independent-e2e/results.json",
+        ".artifacts/T-7252-final-e2e/results.json"
+      ],
+      "next": "T-7253"
+    },
+    {
+      "id": "T-7253",
+      "title": "天气组件上下文对比度与烟测覆盖",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7252"
+      ],
+      "evidence": [
+        "src/styles/_09-store-preview-polish.scss",
+        "tests/chromium-style-smoke.cjs",
+        "scripts/readiness-snapshot.cjs",
+        "docs/adr/0181-weather-context-contrast-guard.md",
+        ".artifacts/T-7253-verify-release.log",
+        ".artifacts/T-7253-weather-contrast-smoke.log",
+        ".artifacts/T-7253-weather-contrast-negative.log"
+      ],
+      "next": "T-7254"
+    },
+    {
+      "id": "T-7254",
+      "title": "加载骨架动效声明修复",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7253"
+      ],
+      "evidence": [
+        "src/styles/_00-tokens.scss",
+        "src/styles/_03-switcher-mobile.scss",
+        "src/styles/_05-settings-widgets.scss",
+        "docs/adr/0182-loading-skeleton-duration-token.md",
+        "docs/dev-plan-2026-10-06.md",
+        ".artifacts/T-7254-build.log",
+        ".artifacts/T-7254-skeleton-motion.log"
+      ],
+      "next": "T-7255"
+    },
+    {
+      "id": "T-7255",
+      "title": "第一面板顶栏控件状态同步",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7254"
+      ],
+      "evidence": [
+        "src/index.ts",
+        "tests/switcher-feedback-contract.test.cjs",
+        "docs/adr/0183-first-panel-control-state-sync.md",
+        "docs/dev-plan-2026-10-06.md",
+        ".artifacts/T-7255-first-panel-contract.log"
+      ],
+      "next": "T-7256"
+    },
+    {
+      "id": "T-7256",
+      "title": "移动入口与筛选失败恢复闭环",
+      "status": "completed",
+      "priority": "P0",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7255"
+      ],
+      "evidence": [
+        "src/index.ts",
+        "src/mobile-switcher-ui.ts",
+        "src/doc-search-ui.ts",
+        "tests/mobile-card-smoke.cjs",
+        "tests/history-trigger-lock-contract.test.cjs",
+        "docs/adr/0184-filter-retry-and-mobile-journal-entry.md",
+        "docs/dev-plan-2026-10-06.md",
+        ".artifacts/T-7256-mobile-journal-history.log",
+        ".artifacts/T-7256-negative-mobile-journal.log",
+        ".artifacts/T-7256-negative-history-lock.log"
+      ],
+      "next": "T-7257"
+    },
+    {
+      "id": "T-7257",
+      "title": "最近关闭批量清空确认",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7256"
+      ],
+      "evidence": [
+        "src/index.ts",
+        "src/i18n/zh-CN.json",
+        "src/i18n/en.json",
+        "tests/history-clear-confirm-contract.test.cjs",
+        "docs/adr/0185-recently-closed-clear-confirmation.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7258",
+      "title": "最近记录同步失败回执与重试",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7257"
+      ],
+      "evidence": [
+        "src/index.ts",
+        "src/i18n/zh-CN.json",
+        "src/i18n/en.json",
+        "src/styles/_03-switcher-mobile.scss",
+        "tests/history-sync-receipt-contract.test.cjs",
+        "docs/adr/0186-history-sync-failure-receipt.md",
+        "docs/dev-plan-2026-10-06.md",
+        ".artifacts/T-7258-negative.log",
+        ".artifacts/T-7259-verify-release-final.log"
+      ],
+      "next": "T-7259"
+    },
+    {
+      "id": "T-7259",
+      "title": "最近记录改动筛选失败与空态闭环",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7258"
+      ],
+      "evidence": [
+        "src/index.ts",
+        "src/i18n/zh-CN.json",
+        "src/i18n/en.json",
+        "tests/history-sync-receipt-contract.test.cjs",
+        "docs/adr/0187-changed-history-filter-recovery.md",
+        "docs/dev-plan-2026-10-06.md",
+        "src/styles/_03-switcher-mobile.scss",
+        ".artifacts/T-7259-negative.log",
+        ".artifacts/T-7259-verify-release-final.log",
+        "docs/release-readiness.md"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7260",
+      "title": "共享请求服务与内核结果分类",
+      "status": "completed",
+      "priority": "P0",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7259"
+      ],
+      "evidence": [
+        "src/request-service.js",
+        "src/index.ts",
+        "src/doc-search-ui.ts",
+        "src/i18n/zh-CN.json",
+        "src/i18n/en.json",
+        "tests/request-service.test.cjs",
+        "tests/kernel-endpoint-guard.test.cjs",
+        "tests/doc-search-fetch-behavior.test.cjs",
+        "tests/search-orchestration-composition.test.cjs",
+        "docs/adr/0188-shared-request-outcomes-and-latest-wins.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7261"
+    },
+    {
+      "id": "T-7261",
+      "title": "工作台适配器 deadline 取消",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7260"
+      ],
+      "evidence": [
+        "src/home-adapters.js",
+        "tests/home-adapters.test.cjs",
+        "docs/adr/0188-shared-request-outcomes-and-latest-wins.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7262"
+    },
+    {
+      "id": "T-7262",
+      "title": "生活组件 latest-wins 缓存保护",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7261"
+      ],
+      "evidence": [
+        "src/life-widget-network.js",
+        "tests/life-widget-network.test.cjs",
+        "tests/life-widget-backoff.test.cjs",
+        "docs/adr/0188-shared-request-outcomes-and-latest-wins.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7263",
+      "title": "旁路请求与写操作继续审计",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7262"
+      ],
+      "evidence": [
+        "src/journal-actions.js",
+        "src/snippet-gist.js",
+        "src/index.ts",
+        "src/ical-model.js",
+        "src/life-widget-model.js",
+        "tests/journal-actions.test.cjs",
+        "tests/snippet-gist.test.cjs",
+        "tests/snippet-gist-ui.test.cjs",
+        "tests/ical-model.test.cjs",
+        "tests/life-widget-model.test.cjs",
+        "tests/preview-cancel-contract.test.cjs",
+        "docs/adr/0189-side-channel-write-outcomes-and-measured-performance.md",
+        "docs/dev-plan-2026-10-06.md",
+        "docs/release-readiness.md"
+      ],
+      "next": "T-7264"
+    },
+    {
+      "id": "T-7264",
+      "title": "平台顶栏层级 token 收敛",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7263"
+      ],
+      "evidence": [
+        "src/styles/_00-tokens.scss",
+        "src/styles/_platform-shell.scss",
+        "tests/platform-topbar-layout-contract.test.cjs",
+        ".artifacts/token-audit-20261014-before.json",
+        ".artifacts/token-audit-20261014-after.json",
+        "docs/adr/0190-shared-layer-token-boundary.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7265"
+    },
+    {
+      "id": "T-7265",
+      "title": "共享圆角刻度第二批收敛",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7264"
+      ],
+      "evidence": [
+        "src/styles/_00-tokens.scss",
+        "src/styles/_01-base-controls.scss",
+        "src/styles/_02-settings.scss",
+        "src/styles/_03-switcher-mobile.scss",
+        "src/styles/_04-fab-fullscreen-soft.scss",
+        "src/styles/_05-settings-widgets.scss",
+        "src/styles/_06-widgets-store.scss",
+        "src/styles/_07-sidebar-panel-store.scss",
+        "src/styles/_08-home-store-cards.scss",
+        "src/styles/_09-store-preview-polish.scss",
+        "src/styles/_platform-shell.scss",
+        "src/styles/_snippet-studio.scss",
+        "tests/radius-scale-gate.test.cjs",
+        "tests/store-ui-polish.test.cjs",
+        ".artifacts/token-audit-t7265-before.json",
+        ".artifacts/token-audit-t7265-after.json",
+        ".artifacts/t7265-negative-radius-probe.log",
+        "docs/adr/0191-shared-radius-compile-time-tiers.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7266"
+    },
+    {
+      "id": "T-7266",
+      "title": "复合间距刻度精确迁移",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7265"
+      ],
+      "evidence": [
+        "src/styles/_00-tokens.scss",
+        "src/styles/_01-base-controls.scss",
+        "src/styles/_02-settings.scss",
+        "src/styles/_03-switcher-mobile.scss",
+        "src/styles/_04-fab-fullscreen-soft.scss",
+        "src/styles/_05-settings-widgets.scss",
+        "src/styles/_06-widgets-store.scss",
+        "src/styles/_07-sidebar-panel-store.scss",
+        "src/styles/_08-home-store-cards.scss",
+        "src/styles/_09-store-preview-polish.scss",
+        "src/styles/_floating-ball-more.scss",
+        "src/styles/_platform-shell.scss",
+        "src/styles/_snippet-studio.scss",
+        "tests/spacing-token-migration.test.cjs",
+        "tests/space-scale-gate.test.cjs",
+        "tests/store-mobile-layout-contract.test.cjs",
+        "tests/store-mobile-external-contract.test.cjs",
+        "tests/store-ui-polish.test.cjs",
+        ".artifacts/token-audit-t7265-after.json",
+        ".artifacts/token-audit-t7266-after.json",
+        ".artifacts/t7266-spacing-candidates.json",
+        ".artifacts/t7266-spacing-migration.json",
+        ".artifacts/t7266-style-compare.json",
+        ".artifacts/t7266-negative-spacing-probe.log",
+        ".artifacts/t7266-build.log",
+        "docs/adr/0192-exact-spacing-shorthand-migration.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7267"
+    },
+    {
+      "id": "T-7267",
+      "title": "2px 复合间距刻度精确迁移",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7266"
+      ],
+      "evidence": [
+        "src/styles/_00-tokens.scss",
+        "src/styles/_01-base-controls.scss",
+        "src/styles/_02-settings.scss",
+        "src/styles/_03-switcher-mobile.scss",
+        "src/styles/_04-fab-fullscreen-soft.scss",
+        "src/styles/_05-settings-widgets.scss",
+        "src/styles/_06-widgets-store.scss",
+        "src/styles/_07-sidebar-panel-store.scss",
+        "src/styles/_08-home-store-cards.scss",
+        "src/styles/_09-store-preview-polish.scss",
+        "src/styles/_11-ui-polish.scss",
+        "src/styles/_12-r54-surface-adapter.scss",
+        "src/styles/_floating-ball-more.scss",
+        "src/styles/_platform-shell.scss",
+        "src/styles/_snippet-studio.scss",
+        "tests/spacing-token-migration.test.cjs",
+        "tests/space-scale-gate.test.cjs",
+        "tests/store-mobile-layout-contract.test.cjs",
+        "tests/store-mobile-external-contract.test.cjs",
+        "tests/store-ui-polish.test.cjs",
+        ".artifacts/t7267-spacing2-migration.json",
+        ".artifacts/t7267-token-audit-after.json",
+        ".artifacts/t7267-style-compare.json",
+        ".artifacts/t7267-negative-spacing2-probe.log",
+        ".artifacts/t7267-build.log",
+        "docs/adr/0193-exact-2px-spacing-tier-migration.md",
+        "docs/dev-plan-2026-10-06.md"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7268",
+      "title": "v0.47.2 小版本发布",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "release",
+      "workType": "release",
+      "dependsOn": [
+        "T-7267"
+      ],
+      "evidence": [
+        "ROADMAP.md",
+        "docs/dev-plan-2026-10-06.md",
+        "docs/release-readiness.md",
+        "package.json",
+        "plugin.json",
+        "README.md"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7269",
+      "title": "真实宿主组件核验与 E2E 隔离",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7144"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0194-t7269-host-outline-and-e2e-isolation.md",
+        "src/agent-capabilities.js",
+        "tests/agent-outline.test.cjs",
+        "tests/e2e/t7144-widgets.spec.mjs",
+        "tests/e2e-port-guard.test.cjs",
+        "scripts/e2e/lib.mjs",
+        "tests/e2e/global-setup.mjs",
+        "scripts/e2e/host-scale-probe.mjs",
+        "docs/release-readiness.md"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7270",
+      "title": "近期编辑真实宿主规模观测",
+      "status": "completed",
+      "priority": "P2",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7144"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0195-t7270-recent-edits-host-scale.md",
+        ".artifacts/T-7270-recent-edits-scale.json",
+        "src/index.ts",
+        "src/kernel-widget-model.js",
+        "docs/component-availability-audit.md"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7271",
+      "title": "标签层级路径与原生入口核验",
+      "status": "completed",
+      "priority": "P2",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7144"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0196-t7271-tag-path-host-boundary.md",
+        ".artifacts/T-7271-tag-path-probe.json",
+        "src/kernel-widget-model.js",
+        "src/index.ts",
+        "docs/component-availability-audit.md"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7272",
+      "title": "文档关系摘要真实宿主边界核验",
+      "status": "completed",
+      "priority": "P2",
+      "owner": "local",
+      "workType": "quality",
+      "dependsOn": [
+        "T-7144"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0197-t7272-relations-host-boundary.md",
+        ".artifacts/T-7272-relations-host-probe.json",
+        "src/index.ts",
+        "src/kernel-widget-model.js",
+        "docs/component-availability-audit.md"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7273",
+      "title": "第二面板紧凑小组件与 Obsidian 参考再调研",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "research",
+      "dependsOn": [],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/research-second-panel-2026-10-15.md",
+        "docs/adr/0198-t7273-second-panel-information-architecture.md",
+        "src/second-panel-ui.ts",
+        "src/styles/_05-settings-widgets.scss",
+        "tests/e2e/workbench-information.spec.mjs",
+        ".artifacts/e2e/workbench-information.png",
+        ".artifacts/e2e/workbench-unavailable-wide.png",
+        "docs/adr/0199-t7273-compact-widgets.md",
+        "docs/design/second-panel-compact-widget-prototype-2026-10-16.html"
+      ],
+      "next": "T-7274"
+    },
+    {
+      "id": "T-7274",
+      "title": "第二面板紧凑小组件尺寸对照原型与候选实现",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7273"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/research-second-panel-2026-10-15.md",
+        "docs/adr/0199-t7273-compact-widgets.md",
+        "docs/adr/0198-t7273-second-panel-information-architecture.md",
+        "docs/adr/0200-t7274-candidate-production-implementation.md",
+        "docs/design/second-panel-compact-widget-prototype-2026-10-16.html",
+        "src/index.ts",
+        "src/constants.ts",
+        "src/second-panel-ui.ts",
+        "src/styles/_12-r54-surface-adapter.scss",
+        "tests/compact-workbench-style-contract.test.cjs",
+        "tests/kernel-widgets-wiring.test.cjs",
+        "tests/compact-workbench-style-contract.test.cjs",
+        ".artifacts/e2e-compact-host-7/compact-host-probe.png",
+        ".artifacts/e2e-compact-host-narrow-2/compact-host-700.png",
+        ".artifacts/e2e-compact-host-narrow-2/compact-host-375.png"
+      ],
+      "next": "T-7275"
+    },
+    {
+      "id": "T-7275",
+      "title": "第二面板候选实现视觉回归与兼容收口",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "verification",
+      "dependsOn": [
+        "T-7274"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0200-t7274-candidate-production-implementation.md",
+        ".artifacts/e2e-compact-host-7/compact-host-probe.png",
+        ".artifacts/e2e-compact-host-narrow-2/compact-host-narrow-probe.json",
+        "package.zip",
+        "README.md"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7276",
+      "title": "书签计数与有效块回退",
+      "status": "completed",
+      "priority": "P2",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7144"
+      ],
+      "evidence": [
+        "src/kernel-widget-model.js",
+        "tests/kernel-widget-model.test.cjs",
+        "docs/adr/0201-t7276-bookmark-count-fallback.md",
+        "docs/dev-plan-2026-10-06.md",
+        ".artifacts/T-7276-bookmark-model.log"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7277",
+      "title": "第二面板微型信息条与混合拼贴视觉方向",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "research",
+      "dependsOn": [
+        "T-7275"
+      ],
+      "evidence": [
+        "docs/design/second-panel-micro-mosaic-prototype-2026-10-16.html",
+        "docs/research-second-panel-visual-gap-2026-10-16.md",
+        "docs/research-second-panel-2026-10-15.md",
+        "docs/adr/0202-t7277-second-panel-micro-mosaic-direction.md",
+        "docs/dev-plan-2026-10-06.md",
+        ".artifacts/e2e-compact-host-7/compact-host-probe.png",
+        ".artifacts/e2e-compact-host-narrow-2/compact-host-700.png"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7278",
+      "title": "compact 高度档位恢复",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "verification",
+      "dependsOn": [
+        "T-7277"
+      ],
+      "evidence": [
+        "src/styles/_12-r54-surface-adapter.scss",
+        "tests/compact-workbench-style-contract.test.cjs",
+        "tests/surface-switch-browser-smoke.cjs",
+        "docs/adr/0203-t7278-compact-height-tracks.md",
+        "docs/dev-plan-2026-10-06.md",
+        ".artifacts/T-7278-negative-height-track.log",
+        ".artifacts/T-7278-negative-height-track-explicit28.log",
+        ".artifacts/T-7278-visual-regression-28-run-output.json",
+        ".artifacts/T-7278-compact-visual-metrics.json",
+        ".artifacts/surface-switch-hostcss.log"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7279",
+      "title": "compact 壳层显露层级收口",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7278"
+      ],
+      "evidence": [
+        "src/styles/_12-r54-surface-adapter.scss",
+        "src/home-view.js",
+        "src/second-panel-ui.ts",
+        "tests/compact-workbench-style-contract.test.cjs",
+        "tests/home-view.test.cjs",
+        "docs/adr/0204-t7279-compact-shell-hierarchy.md",
+        "docs/dev-plan-2026-10-06.md",
+        ".artifacts/T-7279-negative-shell-contract.log",
+        ".artifacts/T-7279-visual/results.json",
+        ".artifacts/T-7279-visual/metrics.json",
+        ".artifacts/T-7279-visual-run.log",
+        ".artifacts/T-7279-visual/t7279-compact-shell-1440.png",
+        ".artifacts/T-7279-visual/t7279-compact-shell-700.png",
+        ".artifacts/T-7279-visual/t7279-compact-shell-375.png",
+        "scripts/css-assertion-injector.cjs"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7280",
+      "title": "默认四组件的紧凑内容层级",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7279"
+      ],
+      "evidence": [
+        "src/styles/_12-r54-surface-adapter.scss",
+        "src/home-view.js",
+        "tests/compact-workbench-style-contract.test.cjs",
+        "tests/home-view.test.cjs",
+        "docs/adr/0205-t7280-compact-default-widget-content.md",
+        "docs/dev-plan-2026-10-06.md",
+        ".artifacts/T-7280-visual-run.log",
+        ".artifacts/T-7280-negative-renderer.log",
+        ".artifacts/T-7279-negative-shell-contract.log",
+        ".artifacts/T-7280-visual/results.json",
+        ".artifacts/T-7280-visual/metrics.json",
+        ".artifacts/T-7280-visual/scroll-stale.json",
+        ".artifacts/T-7280-visual/t7280-default-four.png",
+        ".artifacts/T-7280-visual/compact-before-after.png",
+        ".artifacts/T-7280-verify-release-final.log"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7281",
+      "title": "通用默认七组件与独立紧凑排版",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7280"
+      ],
+      "evidence": [
+        "src/home-model.js",
+        "src/second-panel-ui.ts",
+        "src/home-controller.js",
+        "src/styles/_12-r54-surface-adapter.scss",
+        "tests/home-defaults.test.cjs",
+        "tests/home-controller.test.cjs",
+        "docs/adr/0206-t7281-universal-default-widgets.md",
+        "docs/dev-plan-2026-10-06.md",
+        ".artifacts/T-7281-defaults-tests.log",
+        ".artifacts/T-7281-negative-defaults.json",
+        ".artifacts/T-7281-home-controller.log",
+        ".artifacts/T-7281-negative-clock-stale.log",
+        ".artifacts/T-7281-negative-clock.log",
+        ".artifacts/T-7281-negative-wiring-contracts.log",
+        ".artifacts/T-7281-visual/results.json",
+        ".artifacts/T-7281-visual/metrics.json",
+        ".artifacts/T-7281-visual-run.log",
+        ".artifacts/T-7281-visual-run-final.log",
+        ".artifacts/T-7281-targeted-final.log",
+        ".artifacts/T-7281-verify-release-final.log"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7282",
+      "title": "可选效果组件紧凑化",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7281"
+      ],
+      "evidence": [
+        "src/styles/_12-r54-surface-adapter.scss",
+        "tests/compact-optional-widgets-style-contract.test.cjs",
+        "docs/adr/0207-t7282-compact-optional-widgets.md",
+        "docs/dev-plan-2026-10-06.md",
+        ".tmp/T-7282/compact-effects.spec.mjs",
+        ".tmp/T-7282/negative-optional.json",
+        ".artifacts/T-7282-negative-optional-contract.log",
+        ".artifacts/T-7282-visual/metrics.json",
+        ".artifacts/T-7282-visual/results.json",
+        ".artifacts/T-7282-verify-release-final.log"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7283",
+      "title": "天气网络失败空态重试闭环",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7282"
+      ],
+      "evidence": [
+        "src/home-external-adapters.ts",
+        "src/home-adapters.js",
+        "src/home-view.js",
+        "src/home-controller.js",
+        "tests/external-widget-availability-contract.test.cjs",
+        "tests/home-adapters.test.cjs",
+        "tests/home-view.test.cjs",
+        "tests/home-controller.test.cjs",
+        "docs/adr/0208-t7283-weather-empty-retry.md",
+        "docs/dev-plan-2026-10-06.md",
+        ".tmp/T-7283/negative-weather.json",
+        ".tmp/T-7283/weather-retry.spec.mjs",
+        ".tmp/T-7283/playwright.config.mjs",
+        ".artifacts/T-7283-negative-weather.log",
+        ".artifacts/T-7283-weather-retry-run.log",
+        ".artifacts/T-7283-weather-retry/results.json",
+        ".artifacts/T-7283-weather-retry/calls.json",
+        ".artifacts/T-7283-weather-retry/recovered.png",
+        ".artifacts/T-7283-build.log",
+        ".artifacts/T-7283-verify-release-final.log"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7284",
+      "title": "T-7144 候选矩阵与证据准入边界",
+      "status": "completed",
+      "priority": "P2",
+      "owner": "local",
+      "workType": "research",
+      "dependsOn": [
+        "T-7283"
+      ],
+      "evidence": [
+        "docs/t7144-candidate-matrix-2026-10-16.md",
+        "docs/adr/0209-t7284-t7144-candidate-matrix.md",
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0194-t7269-host-outline-and-e2e-isolation.md",
+        "docs/adr/0195-t7270-recent-edits-host-scale.md",
+        "docs/adr/0196-t7271-tag-path-host-boundary.md",
+        "docs/adr/0197-t7272-relations-host-boundary.md",
+        "docs/adr/0201-t7276-bookmark-count-fallback.md",
+        "docs/component-availability-audit.md"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7285",
+      "title": "书签旧宿主字段别名兼容",
+      "status": "completed",
+      "priority": "P2",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7284"
+      ],
+      "evidence": [
+        "src/kernel-widget-model.js",
+        "tests/kernel-widget-model.test.cjs",
+        "tests/component-specs-batch8-wiring.test.cjs",
+        "docs/adr/0210-t7285-bookmark-legacy-field-aliases.md",
+        "docs/dev-plan-2026-10-06.md",
+        ".artifacts/T-7285-negative-bookmark-alias.log",
+        "package.zip"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7286",
+      "title": "当前文档大纲旧宿主包装与无活动文档兼容审计",
+      "status": "completed",
+      "priority": "P2",
+      "owner": "local",
+      "workType": "research",
+      "dependsOn": [
+        "T-7285"
+      ],
+      "evidence": [
+        "src/index.ts",
+        "src/agent-capabilities.js",
+        "tests/agent-outline.test.cjs",
+        "tests/insight-widgets.test.cjs",
+        "docs/adr/0211-t7286-outline-legacy-envelope-boundary.md",
+        "docs/dev-plan-2026-10-06.md",
+        ".artifacts/T-7286-negative-outline.log"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7287",
+      "title": "笔记统计零值与缺失聚合边界",
+      "status": "completed",
+      "priority": "P2",
+      "owner": "local",
+      "workType": "research",
+      "dependsOn": [
+        "T-7286"
+      ],
+      "evidence": [
+        "src/index.ts",
+        "src/kernel-widget-model.js",
+        "tests/kernel-widget-model.test.cjs",
+        "tests/insight-widgets.test.cjs",
+        "docs/adr/0212-t7287-note-stats-aggregate-boundary.md",
+        "docs/dev-plan-2026-10-06.md",
+        ".artifacts/T-7287-negative-note-stats.log"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7288",
+      "title": "组件诊断预览与字段边界",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7149"
+      ],
+      "evidence": [
+        "src/home-controller.js",
+        "src/second-panel-ui.ts",
+        "tests/home-health-report.test.cjs",
+        "tests/home-health-wiring.test.cjs",
+        "tests/e2e/home-health-diagnostics.spec.mjs",
+        "docs/adr/0213-t7288-diagnostics-preview-and-field-boundary.md",
+        "docs/dev-plan-2026-10-06.md",
+        ".artifacts/T-7288-model-negative.log",
+        ".artifacts/T-7288-wiring-negative.log",
+        ".artifacts/T-7288-diagnostics-e2e.log",
+        ".artifacts/T-7288-diagnostics-lifecycle-e2e.log",
+        ".artifacts/T-7288-diagnostics-token-e2e.log",
+        ".artifacts/T-7288-diagnostics-negative-proof.json",
+        ".artifacts/T-7288-verify-release-final.log",
+        "package.zip"
+      ],
+      "next": "T-7163"
+    },
+    {
+      "id": "T-7289",
+      "title": "v0.47.3 发布",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "release",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7288"
+      ],
+      "evidence": [
+        "package.json",
+        "plugin.json",
+        "README.md",
+        "README.en-US.md",
+        "docs/CHANGELOG.md",
+        "docs/CHANGELOG.en-US.md",
+        "docs/release-readiness.md",
+        "docs/adr/0214-t7289-v0473-release.md",
+        "docs/dev-plan-2026-10-06.md",
+        ".artifacts/T-7289-verify-release.log",
+        ".artifacts/T-7289-release-audit.log",
+        ".artifacts/T-7289-local-artifacts.json",
+        ".artifacts/T-7289-ci-receipt.json",
+        ".artifacts/T-7289-release-run-receipt.json",
+        ".artifacts/T-7289-release-receipt.json",
+        ".artifacts/T-7289-cloud-artifact-comparison.json",
+        "package.zip"
+      ],
+      "next": "T-7163"
+    },
+    {
+      "id": "T-7290",
+      "title": "产品定位与未来路线收敛",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "product",
+      "workType": "research",
+      "dependsOn": [
+        "T-7289"
+      ],
+      "evidence": [
+        "docs/product-direction-2026-10-16.md",
+        "docs/adr/0215-product-positioning-and-roadmap-2026-10-16.md",
+        "docs/product-review-2026-10-06.md",
+        "docs/dev-plan-2026-10-06.md",
+        "docs/research-second-panel-visual-gap-2026-10-16.md"
+      ],
+      "next": "T-7163"
+    },
+    {
+      "id": "T-7291",
+      "title": "compact 工作台视觉层次收口",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "conditional",
+      "dependsOn": [
+        "T-7290",
+        "T-7275"
+      ],
+      "evidence": [
+        "docs/product-direction-2026-10-16.md",
+        "docs/adr/0215-product-positioning-and-roadmap-2026-10-16.md",
+        "docs/adr/0216-t7291-compact-workbench-visual-parity.md",
+        "docs/adr/0217-multi-device-bento-and-gpu-performance-guardrails.md",
+        "docs/multi-device-adaptive-and-performance-spec-2026-10-17.md",
+        "docs/widget-glance-system-spec-2026-10-17.md",
+        "docs/design/widget-gallery-glance-prototype-2026-10-17.html",
+        "docs/cyber-tactile-design-tokens-2026-10-17.md",
+        "docs/design/cyber-tactile-glance-prototype-2026-10-17.html",
+        "docs/research-second-panel-visual-gap-2026-10-16.md",
+        "docs/adr/0202-t7277-second-panel-micro-mosaic-direction.md",
+        "src/second-panel-ui.ts",
+        "src/styles/_00-tokens.scss",
+        "src/styles/_12-r54-surface-adapter.scss",
+        "tests/compact-workbench-style-contract.test.cjs"
+      ],
+      "next": "T-7163"
+    },
+    {
+      "id": "T-7292",
+      "title": "第三方组件 Provider 7 阶段全生命周期与跨表面契约",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7291",
+        "T-7146"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0218-t7292-provider-full-lifecycle-and-cross-surface-evidence.md",
+        "tests/widget-provider-full-lifecycle-contract.test.cjs",
+        "src/home-runtime.js",
+        "src/home-adapters.js",
+        "src/external-widget-model.js"
+      ],
+      "next": "T-7293"
+    },
+    {
+      "id": "T-7293",
+      "title": "组件商店分组与目录协议扩展（来源/网络/鉴权透明化）",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7292"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0219-t7293-store-grouping-and-directory-protocol-extension.md",
+        "tests/store-grouping-and-directory-protocol.test.cjs",
+        "src/home-source-model.js"
+      ],
+      "next": "T-7294"
+    },
+    {
+      "id": "T-7294",
+      "title": "8 大高价值核心组件 7 维价值密度与端侧适配契约",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7293"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0220-t7294-high-value-widgets-seven-dimension-quality-contract.md",
+        "tests/high-value-widgets-seven-dimension-contract.test.cjs",
+        "src/kernel-widget-model.js",
+        "src/life-widget-model.js",
+        "src/home-adapters.js"
+      ],
+      "next": "T-7295"
+    },
+    {
+      "id": "T-7295",
+      "title": "Phase C 受控智能与 Agent 动作安全回执契约",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7294"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0221-t7295-controlled-agent-safety-and-execution-receipt-contract.md",
+        "tests/controlled-agent-safety-contract.test.cjs",
+        "src/agent-capabilities.js"
+      ],
+      "next": "T-7296"
+    },
+    {
+      "id": "T-7296",
+      "title": "片段 AI 草稿隔离、CSS 沙箱与 JS 禁执行契约",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7295"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0222-t7296-snippet-ai-draft-sandbox-and-execution-guard-contract.md",
+        "tests/snippet-ai-sandbox-execution-guard-contract.test.cjs",
+        "src/snippet-studio-preview.js",
+        "src/snippet-diff.js"
+      ],
+      "next": "T-7297"
+    },
+    {
+      "id": "T-7297",
+      "title": "文档集恢复与批量打开受控执行与 6 态回执契约",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7296"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0223-t7297-document-set-restore-and-batch-open-safety-contract.md",
+        "tests/document-set-restore-agent-contract.test.cjs",
+        "src/agent-document-set-actions.js",
+        "src/agent-workspace-actions.js",
+        "src/agent-capabilities.js"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7298",
+      "title": "全表面渐进式质感升级与典藏版平台演进",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7291",
+        "T-7297"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0218-progressive-sensory-polish-and-masterpiece-evolution.md",
+        "docs/design/platform-ui-masterpiece-2026-10-17.html",
+        "tests/compact-workbench-style-contract.test.cjs",
+        "src/styles/_11-ui-polish.scss",
+        "src/styles/_06-widgets-store.scss",
+        "src/styles/_07-sidebar-panel-store.scss",
+        "src/styles/_platform-shell.scss"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7299",
+      "title": "v0.47.4 正式版发布与资产回执",
+      "status": "completed",
+      "priority": "P0",
+      "owner": "release",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7298"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0221-t7299-v0474-release.md",
+        "package.json",
+        "plugin.json",
+        "README.md",
+        "README.en-US.md",
+        "docs/CHANGELOG.md",
+        "docs/CHANGELOG.en-US.md"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7300",
+      "title": "零依赖代码格式化器与片段三模式导入规划引擎落地",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7299"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0222-lightweight-snippet-formatter-and-import-plan.md",
+        "docs/research-tcotc-snippets-benchmark-and-fusion-2026-10-17.md",
+        "docs/design/platform-ui-masterpiece-2026-10-17.html",
+        "tests/snippet-formatter-and-import-plan.test.cjs",
+        "src/snippet-formatter.js",
+        "src/snippet-import-plan.js",
+        "src/snippet-studio-ui.js"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7301",
+      "title": "v0.47.5 正式版发布与资产回执",
+      "status": "completed",
+      "priority": "P0",
+      "owner": "release",
+      "workType": "deliverable",
+      "dependsOn": [
+        "T-7300"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0223-t7301-v0475-release.md",
+        "package.json",
+        "plugin.json",
+        "README.md",
+        "README.en-US.md",
+        "docs/CHANGELOG.md",
+        "docs/CHANGELOG.en-US.md"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7302",
+      "title": "待办目标态回执、片段文案与移动双拼层叠收口",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7301"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "src/home-view.js",
+        "src/index.ts",
+        "src/second-panel-ui.ts",
+        "src/home-store-ui.ts",
+        "src/styles/_12-r54-surface-adapter.scss",
+        "tests/home-view.test.cjs",
+        "tests/store-mobile-layout-contract.test.cjs"
+      ],
+      "next": "T-7303"
+    },
+    {
+      "id": "T-7303",
+      "title": "完整状态审计、生产接线修复与原型证据边界校准",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7302"
+      ],
+      "evidence": [
+        "docs/status-audit-2026-10-18.md",
+        "docs/adr/0224-status-audit-and-production-boundaries-2026-10-18.md",
+        "docs/dev-plan-2026-10-06.md",
+        "tests/agent-workspace-plan-host.test.cjs",
+        "tests/home-resize-hit-target.test.cjs",
+        "tests/snippet-formatter-and-import-plan.test.cjs",
+        "src/snippet-studio-ui.js",
+        "pnpm-lock.yaml",
+        ".artifacts/ui-audit-json-import/results.json",
+        "tests/third-party-lifecycle-browser-smoke.cjs"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7304",
+      "title": "UI 状态反馈一致性与真实宿主 E2E 收口",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "fix",
+      "dependsOn": [
+        "T-7303"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "src/styles/_12-r54-surface-adapter.scss",
+        "src/second-panel-ui.ts",
+        "src/home-view.js",
+        "src/home-store-ui.ts",
+        "src/i18n/en.json",
+        "src/i18n/zh-CN.json",
+        "tests/compact-workbench-style-contract.test.cjs",
+        "tests/home-view.test.cjs",
+        "tests/e2e/split-open.spec.mjs",
+        "tests/e2e/workbench-information.spec.mjs",
+        ".artifacts/e2e/results.json"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7334",
+      "title": "路径首字母模糊加速打分与既有结果重排",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "feature",
+      "dependsOn": [
+        "T-7333"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0226-t7334-path-acronym-scoring.md",
+        "src/path-acronym-model.js",
+        "src/search-model.js",
+        "src/doc-search-ui.ts",
+        "src/index.ts",
+        "tests/path-acronym-model.test.cjs"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7335",
+      "title": "次级动作画板纯领域模型与档案预算微调",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "feature",
+      "dependsOn": [
+        "T-7334"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0227-t7335-action-palette-model.md",
+        "src/action-palette-model.js",
+        "src/search-model.js",
+        "src/api/external-bridge.js",
+        "scripts/release-readiness-metrics.cjs",
+        "tests/action-palette-model.test.cjs",
+        "tests/production-graph-isolation.test.cjs"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7336",
+      "title": "思源原生属性视图(av)轻量只读看板模型",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "feature",
+      "dependsOn": [
+        "T-7335"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0228-t7336-av-board-model.md",
+        "src/av-board-model.js",
+        "src/kernel-widget-model.js",
+        "tests/av-board-model.test.cjs",
+        "tests/production-graph-isolation.test.cjs"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7337",
+      "title": "闪卡间隔重复复习模型与档案预算微调",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "feature",
+      "dependsOn": [
+        "T-7336"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0229-t7337-flashcard-review-model.md",
+        "src/flashcard-review-model.js",
+        "src/kernel-widget-model.js",
+        "scripts/release-readiness-metrics.cjs",
+        "tests/flashcard-review-model.test.cjs",
+        "tests/production-graph-isolation.test.cjs"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7338",
+      "title": "深入穿透检索模型(:大纲穿透与^块搜索)",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "feature",
+      "dependsOn": [
+        "T-7337"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0230-t7338-penetration-search-model.md",
+        "src/penetration-search-model.js",
+        "src/search-model.js",
+        "tests/penetration-search-model.test.cjs",
+        "tests/production-graph-isolation.test.cjs"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7339",
+      "title": "Action Palette 键盘导航状态机",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "feature",
+      "dependsOn": [
+        "T-7338"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0231-t7339-action-palette-navigation.md",
+        "src/action-palette-navigation.js",
+        "src/search-model.js",
+        "tests/action-palette-navigation.test.cjs",
+        "tests/production-graph-isolation.test.cjs"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7340",
+      "title": "Action Palette 面板 DOM 模型层与档案预算微调",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "feature",
+      "dependsOn": [
+        "T-7339"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0232-t7340-action-palette-panel.md",
+        "src/action-palette-panel.js",
+        "src/search-model.js",
+        "scripts/release-readiness-metrics.cjs",
+        "tests/action-palette-panel.test.cjs",
+        "tests/production-graph-isolation.test.cjs"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7341",
+      "title": "Action Palette 真实 DOM 装配与 Disposer 契约",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "feature",
+      "dependsOn": [
+        "T-7340"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0233-t7341-action-palette-ui.md",
+        "src/action-palette-ui.js",
+        "src/declarations.d.ts",
+        "src/index.ts",
+        "src/i18n/zh-CN.json",
+        "src/i18n/en.json",
+        "tests/i18n.test.cjs",
+        "tests/action-palette-ui.test.cjs",
+        "tests/production-graph-isolation.test.cjs"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7342",
+      "title": "深入穿透检索运行时编排与安全只读 SQL 生成",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "feature",
+      "dependsOn": [
+        "T-7341"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0234-t7342-penetration-search-orchestration.md",
+        "src/penetration-search-orchestration.js",
+        "src/search-model.js",
+        "tests/penetration-search-orchestration.test.cjs",
+        "tests/production-graph-isolation.test.cjs"
+      ],
+      "next": "T-7144"
+    },
+    {
+      "id": "T-7343",
+      "title": "深入穿透检索运行时管线接入与去重锚定修正",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "feature",
+      "dependsOn": [
+        "T-7342"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0236-t7343-penetration-fetch-raw-bundle-recalibration.md",
+        "src/doc-search-ui.ts",
+        "src/search-model.js",
+        "src/index.ts",
+        "tests/penetration-search-fetch.test.cjs",
+        "tests/doc-search-fetch-behavior.test.cjs",
+        "tests/search-orchestration-composition.test.cjs",
+        "tests/second-round-widgets.test.cjs",
+        "scripts/release-readiness-metrics.cjs"
+      ],
+      "next": "T-7344"
+    },
+    {
+      "id": "T-7344",
+      "title": "动作画板挂载到切换器主 UI（右键菜单与 Tab/⌘K 次级动作唤出）",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "feature",
+      "dependsOn": [
+        "T-7343"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0237-t7344-action-palette-main-ui-wiring.md",
+        "src/index.ts",
+        "src/styles/_11-ui-polish.scss",
+        "src/action-palette-ui.js",
+        "src/declarations.d.ts",
+        "tests/action-palette-main-wiring.test.cjs",
+        "scripts/release-readiness-metrics.cjs",
+        "tests/second-round-widgets.test.cjs"
+      ],
+      "next": "T-7345"
+    },
+    {
+      "id": "T-7345",
+      "title": "动作画板与深入穿透检索多端 E2E 交互与快捷键断言验证",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "verification",
+      "dependsOn": [
+        "T-7344"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0238-t7345-action-palette-multitarget-e2e-contracts.md",
+        "tests/action-palette-e2e-interaction.test.cjs"
+      ],
+      "next": "T-7346"
+    },
+    {
+      "id": "T-7346",
+      "title": "多端端到端行为回归、窄侧栏自适应及文档与多语言对账",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "verification",
+      "dependsOn": [
+        "T-7345"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0239-t7346-narrow-sidebar-and-docs-reconciliation.md",
+        "src/styles/_11-ui-polish.scss",
+        "README.md",
+        "README.en-US.md",
+        "docs/CHANGELOG.md",
+        "docs/CHANGELOG.en-US.md",
+        "tests/narrow-sidebar-action-palette-contract.test.cjs"
+      ],
+      "next": "T-7347"
+    },
+    {
+      "id": "T-7347",
+      "title": "多端端到端基线快照审计、全表面交互验收与版本发布就绪审查",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "verification",
+      "dependsOn": [
+        "T-7346"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0240-t7347-release-readiness-batch-review.md",
+        "tests/release-readiness-batch-review.test.cjs"
+      ],
+      "next": "T-7348"
+    },
+    {
+      "id": "T-7348",
+      "title": "版本候选封板演练、产物校验与发布清单审计",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "verification",
+      "dependsOn": [
+        "T-7347"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0241-t7348-release-candidate-seal-audit.md",
+        "tests/release-candidate-seal-audit.test.cjs"
+      ],
+      "next": "T-7349"
+    },
+    {
+      "id": "T-7349",
+      "title": "版本正式发布动作封版：Tag 拟定、版本号推进与 CHANGELOG 历史固化",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "release",
+      "dependsOn": [
+        "T-7348"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0242-t7349-v0480-release-and-changelog-sealing.md",
+        "package.json",
+        "plugin.json",
+        "README.md",
+        "README.en-US.md",
+        "docs/CHANGELOG.md",
+        "docs/CHANGELOG.en-US.md",
+        "tests/release-version-bump-contract.test.cjs"
+      ],
+      "next": "T-7350"
+    },
+    {
+      "id": "T-7350",
+      "title": "构建发布产物检验、可复现构建验证与 Release 说明归档",
+      "status": "completed",
+      "priority": "P0",
+      "owner": "local",
+      "workType": "release",
+      "dependsOn": [
+        "T-7349"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0243-t7350-v0480-release-candidate-hash-and-notes.md",
+        "docs/release-readiness.md",
+        "tests/release-candidate-hash-audit.test.cjs"
+      ],
+      "next": "T-7351"
+    },
+    {
+      "id": "T-7351",
+      "title": "符号化前缀多模态检索模型扩展（@大纲、#标签、!书签、^正文块一体化路由）",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "feature",
+      "dependsOn": [
+        "T-7350"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0244-t7351-penetration-symbol-multimodal-routing.md",
+        "src/penetration-search-model.js",
+        "src/penetration-search-orchestration.js",
+        "src/search-model.js",
+        "tests/penetration-symbol-multimodal.test.cjs"
+      ],
+      "next": "T-7352"
+    },
+    {
+      "id": "T-7352",
+      "title": "穿透检索命中片段富文本高亮渲染（<mark> 标签注入与 XSS 防护）",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "feature",
+      "dependsOn": [
+        "T-7351"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0245-t7352-penetration-highlight-and-xss-defense.md",
+        "src/search-model.js",
+        "src/doc-search-ui.ts",
+        "src/styles/_11-ui-polish.scss",
+        "tests/highlight-and-direct-shortcut-contract.test.cjs"
+      ],
+      "next": "T-7353"
+    },
+    {
+      "id": "T-7353",
+      "title": "主界面快捷键一键执行动作画板次级命令（Ctrl+Enter、Alt+C 免呼出直达）",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "feature",
+      "dependsOn": [
+        "T-7352"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0246-t7353-direct-palette-shortcuts.md",
+        "src/index.ts",
+        "tests/highlight-and-direct-shortcut-contract.test.cjs"
+      ],
+      "next": "T-7354"
+    },
+    {
+      "id": "T-7354",
+      "title": "属性视图（AV）轻量只读看板卡片装配与工作台接入",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "feature",
+      "dependsOn": [
+        "T-7353"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0247-t7354-database-board-widget-wiring.md",
+        "src/home-model.js",
+        "src/index.ts",
+        "tests/widget-board-and-review-wiring.test.cjs"
+      ],
+      "next": "T-7355"
+    },
+    {
+      "id": "T-7355",
+      "title": "今日待复习闪卡（Flashcard Due）卡片装配与一键复习入口",
+      "status": "completed",
+      "priority": "P1",
+      "owner": "local",
+      "workType": "feature",
+      "dependsOn": [
+        "T-7354"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0248-t7355-flashcard-review-widget-wiring.md",
+        "src/index.ts",
+        "tests/av-board-and-flashcard-wiring.test.cjs"
+      ],
+      "next": "T-7356"
+    },
+    {
+      "id": "T-7356",
+      "title": "切换器一键撤销关闭页签（Ctrl+Shift+T）与历史快速恢复",
+      "status": "completed",
+      "priority": "P2",
+      "owner": "local",
+      "workType": "feature",
+      "dependsOn": [
+        "T-7355"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0249-t7356-undo-close-docset-and-ecosystem-linkage.md",
+        "src/index.ts",
+        "tests/undo-closed-docset-and-ecosystem-contract.test.cjs"
+      ],
+      "next": "T-7357"
+    },
+    {
+      "id": "T-7357",
+      "title": "当前打开页签一键保存为文档集与思阅/思播生态联动增强",
+      "status": "completed",
+      "priority": "P2",
+      "owner": "local",
+      "workType": "feature",
+      "dependsOn": [
+        "T-7356"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0249-t7356-undo-close-docset-and-ecosystem-linkage.md",
+        "src/action-palette-model.js",
+        "src/home-view.js",
+        "src/index.ts",
+        "tests/undo-closed-docset-and-ecosystem-contract.test.cjs"
+      ],
+      "next": "T-7358"
+    },
+    {
+      "id": "T-7358",
+      "title": "全平台 E2E 矩阵与性能门禁最终验收",
+      "status": "completed",
+      "priority": "P2",
+      "owner": "local",
+      "workType": "feature",
+      "dependsOn": [
+        "T-7357"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0250-t7358-full-platform-e2e-matrix-and-mru.md",
+        "tests/full-platform-e2e-matrix.test.cjs"
+      ],
+      "next": "T-7359"
+    },
+    {
+      "id": "T-7359",
+      "title": "版本说明、集市资源核验与多端使用说明同步",
+      "status": "completed",
+      "priority": "P2",
+      "owner": "local",
+      "workType": "release",
+      "dependsOn": [
+        "T-7358"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md",
+        "docs/adr/0251-t7359-symbol-cheatsheet-and-docs-reconciliation.md",
+        "tests/symbol-cheatsheet-and-docs-reconciliation.test.cjs"
+      ],
+      "next": "T-7360"
+    },
+    {
+      "id": "T-7360",
+      "title": "生产发布候选终验与环境待验项巡检",
+      "status": "in_progress",
+      "priority": "P2",
+      "owner": "local",
+      "workType": "release",
+      "dependsOn": [
+        "T-7359"
+      ],
+      "evidence": [
+        "docs/dev-plan-2026-10-06.md"
+      ]
+    }
+  ],
+  "global": {
+    "jsRunner": "blocked",
+    "release": "candidate_ready",
+    "personalInstall": "not_updated",
+    "mainlineMerge": "forbidden_until_user_action",
+    "packageBudget": "passed: 603836 bytes is below the 604160-byte repository budget by 324 bytes (local v0.48.0 working-tree package.zip, SHA-256 a6b09cc77ff2796545a0b710ac4231fa3a7b86c09a9c7b41a32d69965d77e712)"
+  }
+}

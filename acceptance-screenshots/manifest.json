@@ -1,0 +1,79 @@
+{
+  "version": "0.48.88",
+  "generatedAt": "2026-11-10T16:16:12.360Z",
+  "cssSha256": "115f19256373790a5332b7490ff1dcaefba0287d37c6df3435f5585cc672f3a7",
+  "cases": [
+    {
+      "id": "switcher-light",
+      "theme": "light",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      }
+    },
+    {
+      "id": "switcher-dark",
+      "theme": "dark",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      }
+    },
+    {
+      "id": "workbench-light",
+      "theme": "light",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      }
+    },
+    {
+      "id": "workbench-dark",
+      "theme": "dark",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      }
+    },
+    {
+      "id": "studio-light",
+      "theme": "light",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      }
+    },
+    {
+      "id": "studio-dark",
+      "theme": "dark",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      }
+    },
+    {
+      "id": "workbench-narrow",
+      "theme": "light",
+      "viewport": {
+        "width": 420,
+        "height": 768
+      }
+    },
+    {
+      "id": "workbench-portrait",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "id": "workbench-landscape-short",
+      "theme": "light",
+      "viewport": {
+        "width": 844,
+        "height": 360
+      }
+    }
+  ]
+}

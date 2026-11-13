@@ -1,0 +1,662 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const {JSDOM} = require("jsdom");
+const {normalizeHomeViewResult, buildHomeModuleView, renderHomeModuleView, renderModuleIcon, formatUpdatedAt} = require("../src/home-view.js");
+
+test("home view normalizes loading, cached, empty, and bounded item states", () => {
+    const loading = normalizeHomeViewResult({loading: true});
+    assert.deepEqual({status: loading.status, cached: loading.cached}, {status: "loading", cached: false});
+    const ready = normalizeHomeViewResult({ok: true, cached: true, snapshot: {items: [{label: " Ready ", value: "1"}, {label: ""}]}});
+    assert.equal(ready.status, "ready");
+    assert.equal(ready.cached, true);
+    assert.deepEqual(ready.items, [{label: "Ready", value: "1", href: "", command: ""}]);
+    assert.equal(normalizeHomeViewResult({ok: true, snapshot: {items: []}}).status, "empty");
+    assert.equal(normalizeHomeViewResult({ok: false, reason: "timeout"}).status, "error");
+});
+
+test("home view preserves a bounded adapter empty hint", () => {
+    const view = buildHomeModuleView({moduleId: "commands", title: "Commands"}, {
+        ok: true,
+        snapshot: {items: [], emptyHint: "  Install a command plugin  ", empty: true},
+    });
+    assert.equal(view.emptyHint, "Install a command plugin");
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const rendered = renderHomeModuleView(dom.window.document, view);
+    assert.equal(rendered.querySelector(".sw__home-module-status").textContent, "Install a command plugin");
+});
+
+test("home view renders a retry action for retryable empty states", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const calls = [];
+    const view = buildHomeModuleView({moduleId: "weather", title: "Weather"}, {
+        ok: true,
+        snapshot: {items: [], emptyHint: "加载失败 · 重试", retryable: true},
+    });
+    assert.equal(view.status, "empty");
+    assert.equal(view.retryable, true);
+    const rendered = renderHomeModuleView(dom.window.document, view, {onRetry: () => calls.push("retry")});
+    assert.equal(rendered.querySelector('[role="status"]').textContent, "加载失败 · 重试");
+    rendered.querySelector(".sw__home-module-retry").click();
+    assert.deepEqual(calls, ["retry"]);
+});
+
+test("home view shows the adapter hint beside a ready zero statistic without hiding populated rows (T-7280)", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const render = (items, emptyHint = "No pending tasks") => renderHomeModuleView(dom.window.document,
+        buildHomeModuleView({moduleId: "today-tasks", title: "Today's tasks"}, {
+            ok: true, snapshot: {items, stat: {value: "0", label: "tasks"}, emptyHint},
+        }));
+    const empty = render([]);
+    assert.equal(empty.dataset.status, "ready");
+    assert.equal(empty.querySelector(".sw__home-stat-value").textContent, "0");
+    assert.equal(empty.querySelector(".sw__home-module-status--empty").textContent, "No pending tasks");
+    assert.ok(empty.classList.contains("is-empty-content"));
+    const populated = render([{label: "Draft the note", value: "task-1"}]);
+    assert.equal(populated.querySelector(".sw__home-module-status--empty"), null);
+    assert.equal(populated.querySelector(".sw__home-module-item-label").textContent, "Draft the note");
+    assert.equal(render([], "").querySelector(".sw__home-module-status--empty"), null);
+});
+
+test("home view renders blocked provider state as a non-error placeholder", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const view = buildHomeModuleView({moduleId: "clipped-unread", title: "Clipped"}, {
+        ok: true,
+        snapshot: {status: "blocked", items: [], emptyHint: "Install the clipping provider"},
+    });
+    assert.equal(view.status, "blocked");
+    assert.equal(view.emptyHint, "Install the clipping provider");
+    const root = renderHomeModuleView(dom.window.document, view, {onRetry: () => { throw new Error("blocked must not retry"); }});
+    const status = root.querySelector(".sw__home-module-status--blocked");
+    assert.ok(status);
+    assert.equal(status.getAttribute("role"), "status");
+    assert.equal(status.getAttribute("aria-live"), "polite");
+    assert.equal(status.textContent, "Install the clipping provider");
+    assert.equal(root.querySelectorAll(".sw__home-module-retry").length, 0);
+});
+
+test("home view builds a stable accessible module contract", () => {
+    const view = buildHomeModuleView({moduleId: "tasks", title: "Tasks", icon: "iconCheck", category: "siyuan"}, {ok: true, snapshot: {items: [{label: "One"}]}}, {collapsed: true});
+    assert.deepEqual(view, {
+        moduleId: "tasks", title: "Tasks", icon: "iconCheck", category: "siyuan", status: "ready", cached: false,
+        reason: "", updatedAt: 0, sourceHealth: "", stat: null, items: [{label: "One", value: "", href: "", command: ""}], viewType: "", configurable: false, collapsed: true,
+        role: "region", ariaBusy: false,
+        calendarOffset: 0,
+        dayProgress: -1,
+    });
+    assert.equal(buildHomeModuleView(null, {}), null);
+});
+
+test("home view renderer exposes bounded states and activation hooks", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const calls = [];
+    const ready = renderHomeModuleView(dom.window.document, buildHomeModuleView({moduleId: "tasks", title: "Tasks"}, {ok: true, snapshot: {items: [{label: "One", value: "1", href: "siyuan://one"}]}}), {
+        onItem: (item) => calls.push(item.value),
+        onToggle: () => calls.push("toggle"),
+    });
+    assert.equal(ready.dataset.status, "ready");
+    assert.equal(ready.getAttribute("role"), "region");
+    assert.equal(ready.getAttribute("aria-labelledby"), ready.querySelector(".sw__home-module-title").id);
+    assert.equal(ready.getAttribute("aria-expanded"), "true");
+    assert.equal(ready.querySelector(".sw__home-module-title").textContent, "Tasks");
+    const toggle = ready.querySelector(".sw__home-module-toggle");
+    const body = ready.querySelector(".sw__home-module-body");
+    assert.equal(body.getAttribute("aria-hidden"), "false");
+    assert.equal(toggle.getAttribute("aria-controls"), body.id);
+    assert.notEqual(toggle.getAttribute("aria-controls"), "");
+    const unsafeId = renderHomeModuleView(dom.window.document, buildHomeModuleView({moduleId: "a/b", title: "Unsafe"}, {ok: true, snapshot: {items: []}}));
+    assert.match(unsafeId.querySelector(".sw__home-module-title").id, /^sw-home-title-/);
+    assert.equal(unsafeId.getAttribute("aria-labelledby"), unsafeId.querySelector(".sw__home-module-title").id);
+    assert.notEqual(unsafeId.querySelector(".sw__home-module-title").id, ready.querySelector(".sw__home-module-title").id);
+    assert.ok(unsafeId.querySelector(".sw__home-module-title").id.length < 64);
+    assert.equal(ready.querySelectorAll(".sw__home-module-item-action").length, 1);
+    ready.querySelector(".sw__home-module-item-action").click();
+    ready.querySelector(".sw__home-module-toggle").click();
+    assert.deepEqual(calls, ["1", "toggle"]);
+
+    const collapsed = renderHomeModuleView(dom.window.document, buildHomeModuleView({moduleId: "collapsed", title: "Collapsed"}, {
+        ok: true, snapshot: {items: [{label: "Hidden"}]},
+    }, {collapsed: true}), {onToggle: () => undefined});
+    assert.equal(collapsed.getAttribute("aria-expanded"), "false");
+    assert.equal(collapsed.querySelector(".sw__home-module-body").getAttribute("aria-hidden"), "true");
+    assert.equal(collapsed.querySelector(".sw__home-module-body").hidden, true);
+
+    const error = renderHomeModuleView(dom.window.document, buildHomeModuleView({moduleId: "failed", title: "Failed"}, {ok: false, reason: "timeout"}), {
+        onRetry: () => calls.push("retry"),
+    });
+    assert.equal(error.getAttribute("aria-busy"), "false");
+    assert.equal(error.querySelector('[role="alert"]').textContent, "请求超时");
+    
+    assert.equal(error.querySelector('[role="alert"]').getAttribute("aria-live"), "assertive");
+    error.querySelector(".sw__home-module-retry").click();
+    assert.equal(calls.at(-1), "retry");
+
+    const localized = renderHomeModuleView(dom.window.document, buildHomeModuleView({moduleId: "slow", title: "Slow"}, {ok: false, reason: "timeout"}), {
+        labels: {timeout: "请求超时"},
+    });
+    assert.equal(localized.querySelector('[role="alert"]').textContent, "请求超时");
+});
+
+test("home view keeps long mobile labels in semantic item controls", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const view = renderHomeModuleView(dom.window.document, buildHomeModuleView({moduleId: "tasks", title: "A very long title"}, {
+        ok: true, snapshot: {items: [{label: "一个很长很长的待办项目标题", value: "task"}]},
+    }));
+    const item = view.querySelector(".sw__home-module-item-action");
+    assert.equal(item?.tagName, "BUTTON");
+    assert.equal(item?.getAttribute("type"), "button");
+    assert.equal(item?.textContent, "一个很长很长的待办项目标题");
+});
+
+test("home view renders a collapsible tag tree with inert virtual parents", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const calls = [];
+    const view = buildHomeModuleView({moduleId: "tags", title: "Tags"}, {ok: true, snapshot: {
+        viewType: "tag-tree",
+        items: [
+            {label: "项目", value: "", treePath: "项目", depth: 0, hasChildren: true, expanded: true, virtual: true, disabled: true, secondary: "3 blocks"},
+            {label: "前端", value: "tag:项目/前端", treePath: "项目/前端", depth: 1, secondary: "3 blocks"},
+            {label: "独立", value: "tag:独立", treePath: "独立", depth: 0, secondary: "2 blocks"},
+        ],
+    }});
+    const root = renderHomeModuleView(dom.window.document, view, {
+        labels: {collapse: "Collapse", expand: "Expand", tagVirtual: "Organization node"},
+        onItem: (item) => calls.push(item.value),
+    });
+    const tree = root.querySelector('[role="tree"]');
+    assert.ok(tree);
+    const rows = tree.querySelectorAll('[role="treeitem"]');
+    assert.equal(rows.length, 3);
+    assert.equal(rows[0].getAttribute("aria-expanded"), "true");
+    assert.equal(rows[0].querySelector(".sw__home-tag-tree-action").disabled, true);
+    rows[0].querySelector(".sw__home-tag-tree-toggle").click();
+    assert.equal(rows[1].hidden, true);
+    rows[0].querySelector(".sw__home-tag-tree-toggle").click();
+    assert.equal(rows[1].hidden, false);
+    rows[1].querySelector(".sw__home-tag-tree-action").click();
+    assert.deepEqual(calls, ["tag:项目/前端"]);
+});
+
+test("home view renders calendar grid for viewType calendar", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const view = buildHomeModuleView(
+        {moduleId: "journal-calendar", title: "日历月视图", viewType: "calendar"},
+        {ok: true, snapshot: {items: [
+            {label: "", value: ""},
+            {label: "1", value: "20260901000000-aaaaaaa"},
+            {label: "2", value: ""},
+            {label: "3", value: "", done: true},
+            {label: "4", value: "", secondary: "正月初四"},
+        ]}},
+        {calendarWeekdays: "一二三四五六日"},
+    );
+    const root = renderHomeModuleView(dom.window.document, view, {onItem: () => {}});
+    assert.ok(root, "rendered");
+    const grid = root.querySelector(".sw__home-calendar");
+    assert.ok(grid, "calendar grid present");
+    assert.equal(grid.querySelectorAll(".sw__home-calendar-head").length, 7);
+    assert.equal(grid.querySelectorAll(".sw__home-calendar-cell").length, 5);
+    assert.equal(grid.querySelectorAll(".has-journal").length, 1);
+    assert.equal(grid.querySelectorAll(".is-today").length, 1);
+    assert.equal(grid.querySelectorAll(".sw__home-calendar-secondary").length, 1);
+});
+
+test("home view prefers adapter-projected calendar weekday order", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const view = buildHomeModuleView(
+        {moduleId: "journal-calendar", title: "日历月视图", viewType: "calendar"},
+        {ok: true, snapshot: {calendarWeekdays: "日一二三四五六", items: Array.from({length: 7}, (_, index) => ({label: String(index + 1), weekend: index === 0 || index === 6}))}},
+    );
+    const root = renderHomeModuleView(dom.window.document, view, {calendarWeekdays: "一二三四五六日"});
+    assert.equal([...root.querySelectorAll(".sw__home-calendar-head")].map((node) => node.textContent).join(""), "日一二三四五六");
+    assert.deepEqual([...root.querySelectorAll(".sw__home-calendar-cell")].map((node) => node.classList.contains("is-weekend")), [true, false, false, false, false, false, true]);
+});
+
+test("home view retains a complete calendar and renders iPad-style date states", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const items = Array.from({length: 42}, (_, index) => ({
+        label: String((index % 31) + 1),
+        value: index === 10 ? "20260909000000-aaaaaaa" : "",
+        outside: index < 2 || index > 31,
+        done: index === 10,
+    }));
+    const view = buildHomeModuleView(
+        {moduleId: "journal-calendar", title: "日历月视图", viewType: "calendar"},
+        {ok: true, snapshot: {title: "2026年9月", items}},
+    );
+    const root = renderHomeModuleView(dom.window.document, view, {onItem: () => {}, onCalendarNavigate: () => {}});
+    assert.equal(view.contextTitle, "2026年9月");
+    assert.equal(root.querySelector(".sw__home-calendar-period").textContent, "2026年9月");
+    assert.equal(root.querySelectorAll(".sw__home-calendar-cell").length, 42);
+    assert.equal(root.querySelectorAll(".is-outside").length, 12);
+    assert.equal(root.querySelectorAll(".sw__home-calendar-marker").length, 1);
+    assert.equal(root.querySelector(".has-journal").type, "button");
+});
+test("home view renders holiday overlays without losing lunar context", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const view = buildHomeModuleView(
+        {moduleId: "journal-calendar", title: "Calendar", viewType: "calendar"},
+        {ok: true, snapshot: {title: "2026-10", items: [
+            {label: "1", secondary: "国庆节 · 八月廿一", holiday: "off"},
+            {label: "10", secondary: "国庆节 · 班", holiday: "work"},
+        ]}},
+    );
+    const root = renderHomeModuleView(dom.window.document, view, {});
+    assert.equal(root.querySelectorAll(".is-holiday").length, 1);
+    assert.equal(root.querySelectorAll(".is-workday").length, 1);
+    assert.match(root.querySelector(".is-holiday").getAttribute("aria-label"), /国庆节/);
+    assert.match(root.querySelector(".is-holiday .sw__home-calendar-secondary").textContent, /八月廿一/);
+});
+
+test("home view renders weather context, secondary forecasts, and safe attribution", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const view = buildHomeModuleView(
+        {moduleId: "external-weather-open-meteo", title: "近期天气"},
+        {ok: true, snapshot: {title: "北京 · 中国", stat: {value: "21°", label: "⛅ 多云"}, items: [
+            {label: "今天 ☀️ 18° / 27°", secondary: "晴 · 降水 10%"},
+            {label: "Open-Meteo", href: "https://open-meteo.com/"},
+        ]}},
+    );
+    const root = renderHomeModuleView(dom.window.document, view, {});
+    assert.equal(root.querySelector(".sw__home-module-context").textContent, "北京 · 中国");
+    assert.equal(root.querySelector(".sw__home-module-item-secondary").textContent, "晴 · 降水 10%");
+    assert.equal(view.items[1].href, "https://open-meteo.com/");
+});
+
+test("home view renders ranked feeds and stale source health", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const view = buildHomeModuleView({moduleId: "external-hot-news-dailyhot", title: "热搜事件"}, {ok: true, snapshot: {
+        sourceHealth: "stale", items: [{label: "事件 A", rank: 1, secondary: "热度 123"}],
+    }});
+    const root = renderHomeModuleView(dom.window.document, view, {labels: {sourceStale: "过期缓存"}});
+    assert.equal(root.querySelector(".sw__home-source-health").textContent, "过期缓存");
+    assert.equal(root.querySelector(".sw__home-source-health").dataset.health, "stale");
+    assert.equal(root.querySelector(".sw__home-source-health").getAttribute("aria-label"), "过期缓存");
+    assert.equal(root.querySelector(".sw__home-source-health").getAttribute("title"), "过期缓存");
+    assert.equal(root.querySelector(".sw__home-module-item-rank").textContent, "1");
+    assert.equal(root.querySelector(".sw__home-module-item-secondary").textContent, "热度 123");
+});
+
+test("home view drops malformed feed source health and rank", () => {
+    const view = normalizeHomeViewResult({snapshot: {sourceHealth: "bad", items: [{label: "A", rank: -3}]}});
+    assert.equal(view.sourceHealth, "");
+    assert.equal(view.items[0].rank, undefined);
+});
+
+test("home view renders a semantic media cover grid", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const calls = [];
+    const view = buildHomeModuleView(
+        {moduleId: "external-anime-bangumi", title: "每日放送", viewType: "media"},
+        {ok: true, snapshot: {items: [
+            {label: "阿尔法", secondary: "★ 8.3", image: "https://lain.bgm.tv/pic/cover/l/a.jpg", href: "https://bgm.tv/subject/101"},
+            {label: "数据来源：Bangumi", href: "https://bgm.tv/calendar"},
+        ]}},
+    );
+    const root = renderHomeModuleView(dom.window.document, view, {onItem: (item) => calls.push(item.href)});
+    assert.equal(view.viewType, "media");
+    assert.equal(root.querySelectorAll(".sw__home-media-item").length, 2);
+    assert.equal(root.querySelectorAll(".sw__home-media-cover").length, 1);
+    assert.equal(root.querySelectorAll(".sw__home-media-item.is-source").length, 1);
+    root.querySelector(".sw__home-media-action").click();
+    assert.deepEqual(calls, ["https://bgm.tv/subject/101"]);
+});
+
+test("media covers are lazy, async, and referrer-free", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const view = buildHomeModuleView({moduleId: "media", title: "Media", viewType: "media"}, {snapshot: {items: [
+        {label: "A", image: "https://lain.bgm.tv/pic/cover/l/a.jpg"},
+    ]}});
+    const image = renderHomeModuleView(dom.window.document, view, {}).querySelector("img");
+    assert.equal(image.loading, "lazy");
+    assert.equal(image.decoding, "async");
+    assert.equal(image.referrerPolicy, "no-referrer");
+    assert.equal(image.alt, "");
+});
+
+test("home view strips untrusted media covers", () => {
+    const view = buildHomeModuleView({moduleId: "media", title: "Media", viewType: "media"}, {snapshot: {items: [
+        {label: "A", image: "https://example.com/a.jpg"},
+        {label: "B", image: "http://lain.bgm.tv/pic/cover/l/b.jpg"},
+    ]}});
+    assert.equal(view.items.every((item) => !item.image), true);
+});
+
+test("home view strips executable item links", () => {
+    const view = buildHomeModuleView({moduleId: "unsafe", title: "Unsafe"}, {ok: true, snapshot: {items: [
+        {label: "unsafe", href: "javascript:alert(1)"},
+        {label: "safe", href: "https://example.com"},
+    ]}});
+    assert.equal(view.items[0].href, "");
+    assert.equal(view.items[1].href, "https://example.com");
+});
+test("home view loading state includes a bounded static-safe skeleton", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const view = buildHomeModuleView({moduleId: "loading", title: "Loading"}, {loading: true});
+    const root = renderHomeModuleView(dom.window.document, view, {});
+    const skeleton = root.querySelector(".sw__home-loading-skeleton");
+    assert.ok(skeleton);
+    assert.equal(skeleton.getAttribute("aria-hidden"), "true");
+    assert.equal(skeleton.querySelectorAll(".sw__home-loading-skeleton-line").length, 3);
+});
+test("home view empty and error states expose stable status hooks", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const empty = renderHomeModuleView(dom.window.document, buildHomeModuleView({moduleId: "empty", title: "Empty"}, {ok: true, snapshot: {items: []}}));
+    const failure = renderHomeModuleView(dom.window.document, buildHomeModuleView({moduleId: "error", title: "Error"}, {ok: false, reason: "failed"}));
+    assert.ok(empty.querySelector(".sw__home-module-status--empty"));
+    assert.ok(failure.querySelector(".sw__home-module-status--error"));
+    assert.equal(empty.querySelector(".sw__home-module-status").getAttribute("aria-live"), "polite");
+    assert.equal(failure.querySelector(".sw__home-module-status").getAttribute("aria-live"), "assertive");
+});
+test("home view exposes bounded calendar navigation controls", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const calls = [];
+    const view = buildHomeModuleView({moduleId: "journal-calendar", title: "Calendar", viewType: "calendar"}, {
+        ok: true, snapshot: {items: [{label: "1", value: ""}]},
+    });
+    const root = renderHomeModuleView(dom.window.document, view, {
+        labels: {previousMonth: "上月", today: "今天", nextMonth: "下月"},
+        onCalendarNavigate: (direction) => calls.push(direction),
+    });
+    const controls = root.querySelectorAll(".sw__home-module-body button");
+    assert.equal(controls.length, 3);
+    assert.equal([...controls].every((control) => control.type === "button"), true);
+    assert.equal(controls[0].getAttribute("aria-label"), "上月");
+    controls[0].click();
+    controls[1].click();
+    controls[2].click();
+    assert.deepEqual(calls, [-1, 0, 1]);
+});
+test("home view renders week row for viewType weekdays", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const view = buildHomeModuleView(
+        {moduleId: "writing-streak", title: "写作打卡", viewType: "weekdays"},
+        {ok: true, snapshot: {items: [
+            {label: "一", value: "", done: true},
+            {label: "二", value: "", done: true},
+            {label: "三", value: "", done: false},
+        ]}},
+    );
+    const root = renderHomeModuleView(dom.window.document, view, {});
+    assert.ok(root, "rendered");
+    const row = root.querySelector(".sw__home-weekdays");
+    assert.ok(row, "week row present");
+    assert.equal(row.querySelectorAll(".sw__home-weekday").length, 3);
+    assert.equal(row.querySelectorAll(".sw__home-weekday.is-done").length, 2);
+});
+
+test("home view renders bounded stat arc with progress semantics", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const view = buildHomeModuleView({moduleId: "year-progress", title: "Year"}, {
+        ok: true,
+        snapshot: {stat: {value: "50%", label: "2026", arc: {value: 183, max: 366}}},
+    });
+    assert.deepEqual(view.stat.arc, {value: 183, max: 366});
+    const root = renderHomeModuleView(dom.window.document, view, {});
+    const arc = root.querySelector(".sw__home-stat-arc");
+    assert.ok(arc, "arc should render");
+    assert.equal(arc.getAttribute("role"), "progressbar");
+    assert.equal(arc.getAttribute("aria-valuenow"), "50");
+    assert.equal(arc.querySelector(".sw__home-stat-arc-fill").getAttribute("stroke-dasharray"), "50 50");
+
+    const clamped = buildHomeModuleView({moduleId: "bad-arc", title: "Bad"}, {
+        snapshot: {stat: {value: "x", label: "Bad", arc: {value: 99, max: 0}}},
+    });
+    assert.equal(clamped.stat.arc, undefined);
+});
+test("home view renders safe symbol and text icon fallbacks", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const symbol = renderModuleIcon(dom.window.document, "iconCalendar");
+    assert.equal(symbol.tagName.toLowerCase(), "svg");
+    assert.equal(symbol.querySelector("use").getAttribute("href"), "#iconCalendar");
+    const emoji = renderModuleIcon(dom.window.document, "✓");
+    assert.equal(emoji.textContent, "✓");
+    assert.equal(emoji.classList.contains("sw__home-module-icon--text"), true);
+    assert.equal(renderModuleIcon(dom.window.document, "javascript:alert(1)"), null);
+    const view = renderHomeModuleView(dom.window.document, buildHomeModuleView({moduleId: "icon", title: "Icon", icon: "iconCheck"}, {snapshot: {items: []}}));
+    assert.equal(view.querySelector(".sw__home-module-icon use").getAttribute("xlink:href"), "#iconCheck");
+});
+
+test("home view exposes bounded cache and update metadata", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    assert.notEqual(formatUpdatedAt(Date.now()), "");
+    assert.equal(formatUpdatedAt(0), "");
+    assert.equal(formatUpdatedAt("invalid"), "");
+    const view = renderHomeModuleView(dom.window.document, buildHomeModuleView({moduleId: "meta", title: "Meta"}, {
+        ok: true,
+        cached: true,
+        snapshot: {updatedAt: Date.now(), items: []},
+    }));
+    const meta = view.querySelector(".sw__home-module-meta");
+    assert.ok(meta);
+    assert.match(meta.textContent, /缓存/);
+    // T-6473 头部瘦身："更新"前缀移入 title tooltip，行内只保留时间本身
+    assert.doesNotMatch(meta.textContent, /更新/);
+    assert.equal(meta.getAttribute("title"), `更新 ${meta.textContent}`);
+    assert.equal(view.getAttribute("aria-describedby"), meta.id);
+    assert.equal(view.querySelector(".sw__home-module-title").title, `Meta · 更新 ${meta.textContent}`);
+    assert.equal(meta.classList.contains("is-stale"), false);
+    const stale = renderHomeModuleView(dom.window.document, buildHomeModuleView({moduleId: "meta", title: "Meta"}, {
+        ok: true, cached: true, stale: true, snapshot: {updatedAt: Date.now(), items: []},
+    }));
+    assert.equal(stale.querySelector(".sw__home-module-meta").classList.contains("is-stale"), true);
+});
+
+
+test("home view renders task checkboxes and forwards toggles", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const doc = dom.window.document;
+    const calls = [];
+    const view = buildHomeModuleView({moduleId: "tasks", title: "Tasks"}, {ok: true, snapshot: {items: [
+        {label: "Open task", value: "1", done: false},
+        {label: "Plain item", value: "2"},
+    ]}});
+    const root = renderHomeModuleView(doc, view, {
+        onItem: (item) => calls.push("item:" + item.value),
+        onToggleItem: (item) => calls.push("toggle:" + item.value),
+    });
+    const checks = root.querySelectorAll(".sw__home-module-item-check");
+    assert.equal(checks.length, 1); // 仅带 done 的条目有勾选框
+    assert.equal(checks[0].getAttribute("aria-pressed"), "false");
+    assert.equal(checks[0].getAttribute("aria-label"), "标记完成");
+    checks[0].click();
+    assert.equal(checks[0].getAttribute("aria-label"), "标记未完成");
+    const plain = root.querySelectorAll(".sw__home-module-item-action")[1];
+    plain.click();
+    assert.deepEqual(calls, ["toggle:1", "item:2"]);
+});
+
+test("home view task checkbox labels can follow the active locale", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const view = buildHomeModuleView({moduleId: "tasks", title: "Tasks"}, {ok: true, snapshot: {items: [
+        {label: "Open task", value: "1", done: false},
+    ]}});
+    const root = renderHomeModuleView(dom.window.document, view, {
+        labels: {taskDone: "Mark complete", taskUndone: "Mark incomplete"},
+        onToggleItem: () => undefined,
+    });
+    const check = root.querySelector(".sw__home-module-item-check");
+    assert.equal(check.getAttribute("aria-label"), "Mark complete");
+    check.click();
+    assert.equal(check.getAttribute("aria-label"), "Mark incomplete");
+});
+
+test("home view done items render strikethrough style hooks", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const view = buildHomeModuleView({moduleId: "tasks", title: "T"}, {ok: true, snapshot: {items: [{label: "Done task", done: true}]}});
+    const root = renderHomeModuleView(dom.window.document, view, {});
+    assert.equal(root.querySelectorAll(".sw__home-module-item-action.is-done").length, 1);
+});
+
+test("home view task checkbox executes 0ms optimistic UI updates and handles rollbacks (T-7144)", async () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const doc = dom.window.document;
+    let shouldFail = false;
+    let toggledDone = null;
+    const view = buildHomeModuleView({moduleId: "tasks", title: "Tasks"}, {ok: true, snapshot: {items: [
+        {label: "Optimistic task", value: "task-1", done: false}
+    ]}});
+    const root = renderHomeModuleView(doc, view, {
+        onToggleItem: async (item) => {
+            toggledDone = item.done;
+            if (shouldFail) throw new Error("Network timeout");
+        },
+    });
+    const check = root.querySelector(".sw__home-module-item-check");
+    const actionButton = root.querySelector(".sw__home-module-item-action");
+
+    // 初始未完成状态
+    assert.equal(check.classList.contains("is-done"), false);
+    assert.equal(actionButton.classList.contains("is-done"), false);
+
+    // 正常点击：0ms 立即完成乐观更新
+    check.click();
+    assert.equal(check.classList.contains("is-done"), true);
+    assert.equal(actionButton.classList.contains("is-done"), true);
+    assert.equal(check.getAttribute("aria-pressed"), "true");
+    assert.equal(toggledDone, true);
+
+    // 失败分支：异常触发优雅回滚
+    shouldFail = true;
+    check.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(check.classList.contains("is-done"), true);
+    assert.equal(actionButton.classList.contains("is-done"), true);
+    assert.equal(check.getAttribute("aria-pressed"), "true");
+});
+
+test("home view forwards the explicit target state and rolls back a false Promise (T-7302)", async () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const seen = [];
+    const view = buildHomeModuleView({moduleId: "tasks", title: "Tasks"}, {ok: true, snapshot: {items: [
+        {label: "Targeted task", value: "task-2", done: false},
+    ]}});
+    const root = renderHomeModuleView(dom.window.document, view, {
+        onToggleItem: (item, view, desiredDone) => {
+            seen.push([item.done, view.moduleId, desiredDone]);
+            return Promise.resolve(false);
+        },
+    });
+    const check = root.querySelector(".sw__home-module-item-check");
+    check.click();
+    assert.equal(check.getAttribute("aria-pressed"), "true", "toggle remains optimistic before the Promise settles");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(seen, [[true, "tasks", true]], "the host keeps the historical view argument and receives the desired state explicitly");
+    assert.equal(check.getAttribute("aria-pressed"), "false", "a false write result restores the previous state");
+});
+
+test("home view ignores stale toggle failures after a newer click (T-7144)", async () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const pending = [];
+    const view = buildHomeModuleView({moduleId: "tasks", title: "Tasks"}, {ok: true, snapshot: {items: [
+        {label: "Rapid task", value: "task-race", done: false},
+    ]}});
+    const root = renderHomeModuleView(dom.window.document, view, {
+        onToggleItem: (item, _view, desiredDone) => new Promise((resolve, reject) => {
+            pending.push({item, desiredDone, resolve, reject});
+        }),
+    });
+    const check = root.querySelector(".sw__home-module-item-check");
+
+    check.click();
+    check.click();
+    assert.equal(pending.length, 2);
+    assert.equal(pending[0].desiredDone, true);
+    assert.equal(pending[1].desiredDone, false);
+    assert.equal(check.getAttribute("aria-pressed"), "false", "the latest click remains optimistic");
+
+    pending[0].resolve(false);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(check.getAttribute("aria-pressed"), "false", "a stale failure cannot roll back the newer state");
+
+    pending[1].reject(new Error("current write failed"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(check.getAttribute("aria-pressed"), "true", "the current failure still rolls back its own click");
+});
+
+test("home view keeps unavailable navigation rows visible but inert", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    let opened = false;
+    const view = buildHomeModuleView({moduleId: "recent-documents", title: "Recent"}, {
+        ok: true, snapshot: {items: [{label: "Deleted", value: "", disabled: true, secondary: "Unavailable"}]},
+    });
+    const root = renderHomeModuleView(dom.window.document, view, {onItem: () => { opened = true; }});
+    const button = root.querySelector(".sw__home-module-item-action");
+    assert.equal(button.disabled, true);
+    button.click();
+    assert.equal(opened, false);
+    assert.equal(button.textContent, "DeletedUnavailable");
+});
+
+
+test("home view renders config button only for configurable widgets", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const doc = dom.window.document;
+    const calls = [];
+    const configurable = buildHomeModuleView({
+        moduleId: "fixed-document", title: "Pinned",
+        configSchema: [{key: "docId", label: "Doc", type: "text"}],
+    }, {ok: true, snapshot: {items: []}});
+    assert.equal(configurable.configurable, true);
+    const root = renderHomeModuleView(doc, configurable, {
+        onConfig: () => calls.push("config"),
+    });
+    const button = root.querySelector(".sw__home-module-toggle");
+    assert.ok(button, "config button should render");
+    button.click();
+    assert.deepEqual(calls, ["config"]);
+
+    // 无 configSchema 的组件不渲染配置按钮
+    const plainView = buildHomeModuleView({moduleId: "plain", title: "Plain"}, {ok: true, snapshot: {items: []}});
+    assert.equal(plainView.configurable, false);
+    const plainRoot = renderHomeModuleView(doc, plainView, {onConfig: () => calls.push("bad")});
+    assert.equal(plainRoot.querySelectorAll(".sw__home-module-toggle").length, 0);
+});
+
+test("home view reuses the cached updated-at formatter across cards", () => {
+    // The formatter is cached for speed; repeated calls must stay correct
+    // rather than returning the first card's timestamp for every card.
+    const morning = new Date(2026, 8, 15, 9, 5).getTime();
+    const evening = new Date(2026, 8, 15, 21, 30).getTime();
+    const first = formatUpdatedAt(morning);
+    const second = formatUpdatedAt(morning);
+    const other = formatUpdatedAt(evening);
+    assert.notEqual(first, "");
+    assert.equal(first, second, "same input must render identically through the cache");
+    assert.notEqual(first, other, "cached formatter must still format the supplied date");
+    assert.notEqual(formatUpdatedAt(evening), "");
+    assert.equal(formatUpdatedAt(-1), "");
+    assert.equal(formatUpdatedAt(Number.NaN), "");
+});
+
+
+test("home view renders a contribution heatmap for viewType heatmap", () => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const items = [
+        {label: "2026-09-14", count: 0, level: 0},
+        {label: "2026-09-15", count: 4, level: 2},
+        {label: "2026-09-16", count: 12, level: 4},
+        {label: "", count: 0, level: -1, outside: true},
+    ];
+    const view = buildHomeModuleView({moduleId: "external-github-contrib", title: "GitHub 贡献", viewType: "heatmap"}, {ok: true, snapshot: {items}});
+    assert.equal(view.viewType, "heatmap", "view whitelist must retain the catalog viewType");
+    const root = renderHomeModuleView(dom.window.document, view);
+    const grid = root.querySelector(".sw__home-heatmap");
+    assert.ok(grid, "heatmap grid present");
+    const cells = grid.querySelectorAll(".sw__home-heatmap-cell");
+    assert.equal(cells.length, 4, "week-alignment placeholders survive normalization");
+    assert.equal(grid.querySelectorAll(".is-level-2").length, 1);
+    assert.equal(grid.querySelectorAll(".is-level-4").length, 1);
+    assert.equal(grid.querySelectorAll(".is-outside").length, 1);
+    assert.equal(cells[1].getAttribute("aria-label"), "2026-09-15 4 次贡献");
+    assert.equal(cells[0].getAttribute("aria-label"), "2026-09-14 无贡献");
+});
+
+test("heatmap lifts the item ceiling without loosening other view types", () => {
+    const make = (count) => Array.from({length: count}, (_, index) => ({label: `2026-01-${String((index % 28) + 1).padStart(2, "0")}`, count: 1, level: 1}));
+    const heatmap = buildHomeModuleView({moduleId: "external-github-contrib", title: "GitHub", viewType: "heatmap"}, {ok: true, snapshot: {items: make(200)}});
+    assert.equal(heatmap.items.length, 200, "heatmap may exceed the 24/42 list ceilings");
+    const capped = buildHomeModuleView({moduleId: "external-github-contrib", title: "GitHub", viewType: "heatmap"}, {ok: true, snapshot: {items: make(600)}});
+    assert.equal(capped.items.length, 371, "hard cap still applies");
+    const list = buildHomeModuleView({moduleId: "tasks", title: "Tasks"}, {ok: true, snapshot: {items: Array.from({length: 60}, (_, index) => ({label: `Task ${index}`}))}});
+    assert.equal(list.items.length, 24, "list ceiling unchanged");
+});

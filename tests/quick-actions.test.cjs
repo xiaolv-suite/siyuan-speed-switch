@@ -1,0 +1,277 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const {
+    sanitizeQuickActions,
+    getDefaultQuickActions,
+    getBuiltinQuickActions,
+    getGlobalQuickActions,
+    getDefaultQuickActionTargets,
+    resolveQuickActionSupport,
+    shouldRenderQuickAction,
+    appendQuickAction,
+    graphemeLength,
+} = require("../src/quick-actions.js");
+
+test("quick actions: missing storage returns safe defaults", () => {
+    const result = sanitizeQuickActions(undefined);
+    assert.equal(result.changed, false);
+    assert.equal(result.items.length, 3);
+    assert.deepEqual(result.items.map((item) => item.value), ["search", "journal", "settings"]);
+});
+
+test("quick actions: invalid entries and duplicate ids are removed", () => {
+    const result = sanitizeQuickActions([
+        {id: "a", kind: "builtin", value: "journal", label: "日记", targets: ["desktop"], order: 10, enabled: true},
+        {id: "a", kind: "builtin", value: "settings"},
+        {id: "bad", kind: "builtin", value: "runAnything"},
+        null,
+    ]);
+    assert.equal(result.changed, true);
+    assert.equal(result.items.length, 1);
+    assert.equal(result.items[0].id, "a");
+});
+
+test("quick actions: labels are capped by grapheme, icons are constrained", () => {
+    const result = sanitizeQuickActions([{id: "x", kind: "dock", value: "outline", label: "一二三四五", icon: "not-safe"}]);
+    assert.equal(result.items[0].label, "一二三四");
+    assert.equal(result.items[0].icon, "iconDock");
+    assert.equal(graphemeLength("👨‍👩‍👧‍👦"), 1);
+});
+
+test("quick actions: composed emoji labels are not split", () => {
+    const result = sanitizeQuickActions([{id: "emoji", kind: "dock", value: "outline", label: "👨‍👩‍👧‍👦入口"}]);
+    assert.equal(result.items[0].label, "👨‍👩‍👧‍👦入口");
+});
+
+test("quick actions: defaults are cloned", () => {
+    const a = getDefaultQuickActions();
+    a[0].label = "改";
+    assert.equal(getDefaultQuickActions()[0].label, "搜索");
+});
+
+test("quick actions: empty labels receive an accessible fallback", () => {
+    const result = sanitizeQuickActions([{id: "empty-label", kind: "command", value: "checkin::open", label: ""}]);
+    assert.equal(result.items[0].label, "chec");
+});
+
+test("quick actions: optional built-ins remain available without becoming defaults", () => {
+    assert.deepEqual(getDefaultQuickActions().map((item) => item.value), ["search", "journal", "settings"]);
+    assert.deepEqual(getBuiltinQuickActions().map((item) => item.value),
+        ["switcher", "search", "journal", "settings", "home", "snippet-studio", "quick-capture", "previous-tab", "next-tab", "scroll-top", "scroll-bottom", "sync-now", "insert-template", "cycle-doc-set", "cycle-ball-preset", "throw-window", "hide-keyboard", "jump-back", "jump-forward", "mark-set", "mark-jump", "clipboard", "close-tab", "glean-keep-roaming", "stack-capture"]);
+    assert.equal(resolveQuickActionSupport("builtin", "journal", "sidebar"), "supported");
+    assert.equal(resolveQuickActionSupport("builtin", "home", "mobile"), "supported");
+    assert.equal(resolveQuickActionSupport("builtin", "sync-now", "mobile"), "supported",
+        "the kernel is local to the device, so manual sync is mobile-safe");
+    assert.deepEqual(getBuiltinQuickActions().find((item) => item.value === "throw-window").targets, ["desktop"],
+        "openWindow is a desktop-only host API");
+    assert.deepEqual(getBuiltinQuickActions().find((item) => item.value === "hide-keyboard").targets, ["mobile"],
+        "the Android keyboard bridge only exists on mobile");
+    assert.equal(resolveQuickActionSupport("builtin", "insert-template", "sidebar"), "unsupported",
+        "the sidebar dock has no document editor to insert into");
+});
+
+test("quick actions: an explicit empty target list stays empty", () => {
+    const result = sanitizeQuickActions([
+        {id: "parked", kind: "builtin", value: "journal", label: "日记", icon: "iconCalendar", targets: [], order: 10, enabled: true},
+    ]);
+    assert.deepEqual(result.items[0].targets, []);
+});
+
+test("quick actions: legacy switcher and search entries are retained", () => {
+    const result = sanitizeQuickActions([
+        {id: "switcher", kind: "builtin", value: "switcher", label: "切换", targets: ["desktop"], order: 10, enabled: true},
+        {id: "search", kind: "builtin", value: "search", label: "搜索", targets: ["mobile"], order: 20, enabled: true},
+    ]);
+    assert.deepEqual(result.items.map((item) => item.value), ["switcher", "search"]);
+});
+
+test("quick actions: adapter actions keep only serializable routing data", () => {
+    const result = sanitizeQuickActions([{id: "plugin-x", kind: "adapter", value: "plugin-x/open", label: "插件", targets: ["desktop", "unknown"], order: 3, enabled: true}]);
+    assert.equal(result.items.length, 1);
+    assert.deepEqual(result.items[0].targets, ["desktop"]);
+    assert.equal(result.items[0].value, "plugin-x/open");
+    assert.equal(result.items[0].icon, "iconPlugin");
+});
+
+test("quick actions: removed iconCommand fallback migrates to a real plugin icon", () => {
+    const result = sanitizeQuickActions([{id: "legacy-command", kind: "command", value: "plugin::open", label: "打开", icon: "iconCommand"}]);
+    assert.equal(result.items[0].icon, "iconPlugin");
+    assert.equal(result.changed, true);
+});
+
+test("quick actions: plugin-registered symbol ids survive sanitization", () => {
+    const result = sanitizeQuickActions([
+        {id: "media", kind: "dock", value: "SiyuanMediaSidebar", label: "思播", icon: "siyuan-media-player-icon"},
+        {id: "reader", kind: "adapter", value: "reader/open", label: "思阅", icon: "lucide-book-search"},
+    ]);
+    assert.equal(result.items[0].icon, "siyuan-media-player-icon");
+    assert.equal(result.items[1].icon, "lucide-book-search");
+});
+
+test("quick actions: external plugin commands are retained", () => {
+    const result = sanitizeQuickActions([{id: "command-clock-open", kind: "command", value: "siyuan-clock::open", label: "打卡", targets: ["desktop", "mobile"], order: 5, enabled: true}]);
+    assert.equal(result.items.length, 1);
+    assert.equal(result.items[0].kind, "command");
+    assert.equal(result.items[0].value, "siyuan-clock::open");
+});
+
+test("quick actions: an explicit empty list stays empty", () => {
+    const result = sanitizeQuickActions([]);
+    assert.equal(result.changed, false);
+    assert.deepEqual(result.items, []);
+});
+
+test("quick actions: invalid and duplicate entries do not consume the cap", () => {
+    const journal = {id: "journal", kind: "builtin", value: "journal", label: "日记", targets: ["desktop"]};
+    const settings = {id: "settings", kind: "builtin", value: "settings", label: "设置", targets: ["desktop"]};
+    const result = sanitizeQuickActions([
+        null,
+        {id: "invalid", kind: "builtin", value: "invalid"},
+        journal,
+        {...journal},
+        settings,
+        {id: "search", kind: "builtin", value: "search", label: "搜索", targets: ["desktop"]},
+    ], 2);
+    assert.deepEqual(result.items.map((item) => item.value), ["journal", "settings"]);
+    assert.equal(result.changed, true);
+});
+
+test("quick actions: truncating valid entries reports a change", () => {
+    const result = sanitizeQuickActions(getBuiltinQuickActions(), 2);
+    assert.deepEqual(result.items.map((item) => item.value), ["switcher", "search"]);
+    assert.equal(result.changed, true);
+});
+
+test("quick actions: support matrix keeps unknown mobile commands explicit", () => {
+    assert.equal(resolveQuickActionSupport("dock", "outline", "desktop"), "supported");
+    assert.equal(resolveQuickActionSupport("dock", "outline", "sidebar"), "supported");
+    assert.equal(resolveQuickActionSupport("dock", "outline", "mobile"), "unsupported");
+    assert.equal(resolveQuickActionSupport("command", "clock::open", "mobile"), "unknown");
+    assert.equal(resolveQuickActionSupport("adapter", "checkin/open", "mobile", ["desktop", "mobile"]), "supported");
+    assert.equal(resolveQuickActionSupport("adapter", "checkin/open", "sidebar", ["desktop", "mobile"]), "unsupported");
+});
+
+test("quick actions: third-party defaults are conservative and cloned", () => {
+    const commandTargets = getDefaultQuickActionTargets("command", "clock::open");
+    assert.deepEqual(commandTargets, ["desktop", "sidebar"]);
+    commandTargets.push("mobile");
+    assert.deepEqual(getDefaultQuickActionTargets("command", "clock::open"), ["desktop", "sidebar"]);
+    assert.deepEqual(getDefaultQuickActionTargets("adapter", "checkin/open", ["desktop", "mobile"]), ["desktop", "mobile"]);
+});
+
+test("quick actions: switcher is suppressed while the user-requested search shortcut remains visible", () => {
+    const switcher = {kind: "builtin", value: "switcher", targets: ["desktop", "sidebar", "mobile"], enabled: true};
+    const search = {kind: "builtin", value: "search", targets: ["desktop", "sidebar", "mobile"], enabled: true};
+    const journal = {kind: "builtin", value: "journal", targets: ["desktop", "mobile"], enabled: true};
+    assert.equal(shouldRenderQuickAction(switcher, "desktop", "switcher"), false);
+    assert.equal(shouldRenderQuickAction(search, "mobile", "switcher"), true);
+    assert.equal(shouldRenderQuickAction(search, "sidebar", "switcher"), true);
+    assert.equal(shouldRenderQuickAction(journal, "mobile", "switcher"), true);
+});
+
+test("quick actions: append rejects duplicates and does not default commands to mobile", () => {
+    const original = getDefaultQuickActions();
+    const candidate = {id: "command-clock-open", kind: "command", value: "clock::open", label: "打卡", icon: "iconPlugin"};
+    const added = appendQuickAction(original, candidate, 12);
+    assert.equal(added.added, true);
+    assert.deepEqual(added.items.at(-1).targets, ["desktop", "sidebar"]);
+    assert.equal(added.items.at(-1).order, 40);
+    assert.equal(original.length, 3);
+    const duplicate = appendQuickAction(added.items, candidate, 12);
+    assert.equal(duplicate.added, false);
+    assert.equal(duplicate.reason, "duplicate");
+});
+
+test("quick actions: append normalizes external labels and icons", () => {
+    const result = appendQuickAction([], {
+        id: "plugin-task",
+        kind: "command",
+        value: "plugin::open\nTask",
+        label: "  新建\n任务  ",
+        icon: "iconCommand",
+    });
+    assert.equal(result.added, true);
+    assert.equal(result.items[0].label, "新建 任");
+    assert.equal(result.items[0].icon, "iconPlugin");
+    assert.deepEqual(result.items[0].targets, ["desktop", "sidebar"]);
+});
+
+test("host commands: catalog carries source-verified surface declarations", () => {
+    const globals = getGlobalQuickActions();
+    assert.equal(globals.length, 12);
+    assert.equal(new Set(globals.map((item) => item.value)).size, 12, "command keys stay unique");
+    globals.forEach((item) => {
+        assert.equal(item.kind, "global");
+        assert.ok(Array.isArray(item.targets) && item.targets.length > 0, `${item.value} declares targets`);
+    });
+    // global.ts mobile branch (v3.8.1+ source) covers these six commands.
+    for (const key of ["outline", "bookmark", "tag", "inbox", "backlinks", "recentDocs"]) {
+        const action = globals.find((item) => item.value === key);
+        assert.deepEqual(action.targets, ["desktop", "mobile"], `${key} is desktop+mobile`);
+    }
+    // Desktop-only: absent from the global.ts mobile switch.
+    for (const key of ["recentClosed", "riffCard", "editReadonly"]) {
+        const action = globals.find((item) => item.value === key);
+        assert.deepEqual(action.targets, ["desktop"], `${key} stays desktop-only until mobile evidence exists`);
+    }
+});
+
+test("host commands: support follows declarations and sanitizing keeps the kind", () => {
+    assert.equal(resolveQuickActionSupport("global", "riffCard", "desktop", ["desktop"]), "supported");
+    assert.equal(resolveQuickActionSupport("global", "riffCard", "mobile", ["desktop"]), "unsupported");
+    assert.equal(resolveQuickActionSupport("global", "outline", "mobile", ["desktop", "mobile"]), "supported");
+    assert.equal(resolveQuickActionSupport("global", "outline", "mobile", undefined), "unknown",
+        "undeclared host commands keep the conservative mobile unknown state");
+    assert.equal(resolveQuickActionSupport("global", "outline", "sidebar", ["desktop", "mobile"]), "unsupported");
+    assert.equal(getDefaultQuickActionTargets("global", "outline", undefined)[0], "desktop");
+    const result = sanitizeQuickActions([
+        {id: "global-outline", kind: "global", value: "outline", label: "大纲", targets: ["desktop", "mobile"], order: 10, enabled: true},
+    ]);
+    assert.equal(result.items[0].kind, "global", "the global kind survives storage sanitizing");
+    assert.deepEqual(result.items[0].targets, ["desktop", "mobile"]);
+});
+
+test("quick actions catalog: wave-3 expansion and label i18n resolution (T-6856/T-6845)", () => {
+    // 目录规模：25 内建（含 glean-keep-roaming、stack-capture） + 12 宿主命令 = 37 项
+    assert.equal(getBuiltinQuickActions().length, 25);
+    assert.equal(getGlobalQuickActions().length, 12);
+    // 新内建动作声明三端 targets 且带 langKey / keyLang
+    for (const value of ["mark-set", "mark-jump", "clipboard", "close-tab", "stack-capture"]) {
+        const entry = getBuiltinQuickActions().find((item) => item.value === value);
+        assert.ok(entry, `${value} must exist in the builtin catalog`);
+        assert.ok(entry.langKey || entry.keyLang, `${value} must carry a langKey or keyLang`);
+        assert.ok(entry.targets.length >= 1);
+    }
+    assert.deepEqual(getBuiltinQuickActions().find((item) => item.value === "close-tab").targets, ["desktop", "sidebar"]);
+    // 新宿主命令（源码 global.ts 双分支核对）
+    for (const value of ["fileTree", "mainMenu", "globalSearch"]) {
+        const entry = getGlobalQuickActions().find((item) => item.value === value);
+        assert.ok(entry && entry.langKey, `${value} must exist with langKey`);
+    }
+    // 标签解析：i18n 命中 > catalog 中文兜底；langKey 不进持久化也能解析（按 id 回查）
+    const {resolveQuickActionLabel} = require("../src/quick-actions.js");
+    const action = {id: "mark-jump", kind: "builtin", value: "mark-jump", label: "跳回标记"};
+    assert.equal(resolveQuickActionLabel(action, {actionMarkJump: "Jump to mark"}), "Jump to mark");
+    assert.equal(resolveQuickActionLabel(action, null), "跳回标记");
+    assert.equal(resolveQuickActionLabel(action, {}), "跳回标记");
+    // global 目录同样按 id 回查
+    const globalAction = {id: "global-file-tree", kind: "global", value: "fileTree", label: "文档树"};
+    assert.equal(resolveQuickActionLabel(globalAction, {actionFileTree: "File tree"}), "File tree");
+    // 未知动作原样返回 label
+    assert.equal(resolveQuickActionLabel({id: "x", kind: "dock", value: "x", label: "Dock"}, {anything: "y"}), "Dock");
+});
+
+test("quick actions catalog: every langKey resolves in both language files (T-6845)", () => {
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const zh = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "src", "i18n", "zh-CN.json"), "utf8"));
+    const en = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "src", "i18n", "en.json"), "utf8"));
+    const keys = [...getBuiltinQuickActions(), ...getGlobalQuickActions()]
+        .map((item) => item.langKey || item.keyLang)
+        .filter(Boolean);
+    assert.equal(keys.length, 37, "catalog entries must all carry langKey");
+    for (const key of keys) {
+        assert.ok(zh[key] && zh[key].length > 0, `${key} must exist in zh-CN.json`);
+        assert.ok(en[key] && en[key].length > 0, `${key} must exist in en.json`);
+    }
+});

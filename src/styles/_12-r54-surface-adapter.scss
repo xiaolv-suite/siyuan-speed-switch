@@ -1,0 +1,1837 @@
+@use "00-tokens" as *;
+
+// T-7242：把小驴闪卡 R54 的“画布 / 工作面 / 主动作”层级迁移到雷切三面板。
+// 这里是 scoped 适配层：只消费思源主题变量和既有 sw-* token，不接管业务状态、
+// 数据源或事件。三面板仍保留各自的工作方式，只共享材质、间距、边界和响应式节奏。
+
+:is(.speed-switch, .sw-home, .sw-studio, .sw-platform-shell) {
+    --sw-r54-canvas: color-mix(in srgb, var(--b3-theme-background) 90%, var(--b3-theme-primary) 3%);
+    --sw-r54-surface: var(--b3-theme-surface, var(--b3-theme-background));
+    --sw-r54-soft: color-mix(in srgb, var(--b3-theme-surface) 78%, var(--b3-theme-background));
+    --sw-r54-line: color-mix(in srgb, var(--b3-border-color) 78%, transparent);
+    --sw-r54-line-soft: color-mix(in srgb, var(--b3-border-color) 56%, transparent);
+    --sw-r54-radius-card: 16px;
+    --sw-r54-radius-control: 12px;
+    // R54 names remain compatibility aliases; the shared spacing scale owns values.
+    --sw-r54-space-1: var(--sw-space-xs, 4px);
+    --sw-r54-space-2: var(--sw-space-md, 8px);
+    --sw-r54-space-3: var(--sw-space-lg, 12px);
+    --sw-r54-space-4: var(--sw-space-xl, 16px);
+    --sw-r54-space-5: var(--sw-space-2xl, 24px);
+    --sw-r54-shadow-card: 0 1px 2px color-mix(in srgb, #29304c 5%, transparent),
+        0 8px 24px color-mix(in srgb, #29304c 7%, transparent);
+}
+
+// R54 的普通卡片主要依靠明度、边框和间距建立层次；阴影只留给真正的工作面。
+:is(.sw-platform-surface, .sw-studio, .sw-home) {
+    color: var(--b3-theme-on-background);
+    background: var(--sw-r54-canvas);
+}
+
+// 自定义 Dialog 的真实宽度可能小于浏览器视口；把容器查询锚在表面根节点，
+// 让 R54 降级规则按面板宽度生效，而不是按外层窗口宽度猜测。
+.sw-platform-surface {
+    container-name: sw-r54-surface;
+    container-type: inline-size;
+}
+
+// 第一面板：搜索和预览是一条连续的阅读工作面，空态也保留明确的主动作区域。
+.speed-switch {
+    &.sw__body { border-radius: var(--sw-platform-radius-lg, 16px); }
+
+    .sw__main { min-width: 0; }
+
+    .sw__toolbar {
+        min-height: 64px;
+        gap: var(--sw-r54-space-2);
+        padding: var(--sw-r54-space-3) var(--sw-r54-space-4);
+        border-bottom: 1px solid var(--sw-r54-line);
+        background: var(--sw-r54-surface);
+    }
+
+    .sw__search-wrap { flex-basis: 280px; }
+    .sw__search { border-radius: var(--sw-r54-radius-control); }
+
+    .sw__scroll {
+        display: flex;
+        flex-direction: column;
+        padding: var(--sw-r54-space-4) var(--sw-r54-space-5) var(--sw-space-md, 8px);
+        background: var(--sw-r54-canvas);
+    }
+
+    .sw__dock {
+        width: 184px;
+        border-right: 1px solid var(--sw-r54-line);
+        background: var(--sw-r54-surface);
+    }
+
+    .sw__dock-item {
+        min-height: 46px;
+        margin: var(--sw-space-2xs, 2px) var(--sw-space-md, 8px);
+        border-radius: var(--sw-r54-radius-control);
+    }
+
+    .sw__empty {
+        min-height: 220px;
+        padding: 40px var(--sw-r54-space-4);
+        border: 1px dashed var(--sw-r54-line);
+        border-radius: var(--sw-r54-radius-card);
+        background: var(--sw-r54-surface);
+    }
+
+    .sw__tab-preview {
+        gap: var(--sw-r54-space-4);
+        padding: var(--sw-r54-space-4);
+        border: 1px solid var(--sw-r54-line);
+        border-radius: var(--sw-r54-radius-card);
+        background: var(--sw-r54-surface);
+        box-shadow: var(--sw-r54-shadow-card);
+    }
+
+    :is(.sw__tab-preview, .sw__doc-results, .sw__unified-section).sw--with-preview {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) clamp(280px, 34%, 520px);
+        grid-template-rows: minmax(min-content, 1fr);
+        align-items: stretch;
+        flex: 1 0 auto;
+        height: auto;
+        min-height: calc(100% - var(--sw-space-md, 8px));
+    }
+
+    .sw__doc-preview,
+    :is(.sw__tab-preview, .sw__doc-results, .sw__unified-section).sw--with-preview .sw__doc-preview {
+        border: 1px solid var(--sw-r54-line);
+        border-radius: var(--sw-r54-radius-control);
+        background: var(--sw-card-float-bg, var(--b3-theme-surface));
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+        display: flex;
+        flex-direction: column;
+        position: sticky;
+        top: 8px;
+        align-self: start;
+        height: min(calc(100cqh - 32px), calc(100vh - 160px));
+        max-height: min(calc(100cqh - 32px), calc(100vh - 160px));
+        grid-row: 1 / -1;
+        overflow: hidden;
+
+        .sw__doc-preview-header {
+            flex-shrink: 0;
+            background: var(--sw-card-float-bg, var(--b3-theme-surface));
+            padding-block: var(--sw-space-xs, 4px) var(--sw-space-md, 8px);
+        }
+
+        .sw__doc-preview-body {
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+        }
+    }
+
+    :is(.sw__tab-preview, .sw__doc-results, .sw__unified-section).sw--with-preview .sw__doc-preview {
+        position: sticky;
+        top: 8px;
+        align-self: start;
+        height: min(calc(100cqh - 32px), calc(100vh - 160px));
+        max-height: min(calc(100cqh - 32px), calc(100vh - 160px));
+    }
+
+    .sw__group-header { min-height: 40px; margin-bottom: 10px; }
+}
+
+// 第二面板：工作台首屏先给页面标题/动作空间，再进入可重排的组件网格；
+// 商店沿用同一套目录—详情工作面，避免“目录卡片 + 预览卡片”材质割裂。
+.sw-home {
+    padding: var(--sw-r54-space-4) var(--sw-r54-space-5) 0;
+
+    &__bar {
+        min-height: 48px;
+        margin-bottom: var(--sw-r54-space-4);
+        padding: 0 0 var(--sw-r54-space-3);
+        border-bottom: 1px solid var(--sw-r54-line);
+    }
+
+    &__body { scrollbar-gutter: stable; }
+
+    &__grid {
+        gap: var(--sw-r54-space-4);
+        padding-bottom: var(--sw-r54-space-4);
+    }
+
+    &__cell {
+        border: 1px solid var(--sw-r54-line);
+        border-radius: var(--sw-r54-radius-card);
+        background: var(--sw-r54-surface);
+        box-shadow: var(--sw-r54-shadow-card);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        transition: border-color $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease, transform $sw-dur-fast $sw-ease;
+
+        &:hover {
+            border-color: color-mix(in srgb, var(--b3-theme-primary) 34%, var(--sw-r54-line));
+            box-shadow: 0 8px 24px color-mix(in srgb, #29304c 10%, transparent);
+        }
+    }
+
+    &__empty {
+        min-height: 220px;
+        border-radius: var(--sw-r54-radius-card);
+        background: var(--sw-r54-surface);
+    }
+
+    .sw-home__empty--unavailable {
+        display: flex;
+        min-height: 220px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: var(--sw-r54-space-2);
+        padding: var(--sw-r54-space-5) var(--sw-r54-space-4);
+        text-align: center;
+
+        > h2 {
+            margin: 0;
+            color: var(--b3-theme-on-background);
+            font-size: 14px;
+            font-weight: var(--sw-weight-emphasis, 650);
+            line-height: var(--sw-leading-ui, 1.4);
+        }
+        p { max-width: 42em; margin: 0; }
+        .sw-home__empty-actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: var(--sw-r54-space-2);
+            margin-top: var(--sw-r54-space-2);
+        }
+    }
+
+    .sw-home__body--unavailable { display: flex; flex-direction: column; }
+    .sw-home__grid--unavailable {
+        flex: 1 0 auto;
+        align-content: stretch;
+        grid-template-rows: minmax(220px, 1fr);
+        grid-auto-rows: minmax(96px, auto);
+    }
+    .sw-home__cell--unavailable {
+        min-height: 96px;
+    }
+}
+
+.sw-home-store {
+    background: var(--sw-r54-canvas);
+
+    &__search,
+    &__filter-bar,
+    &__tabs {
+        border-color: var(--sw-r54-line-soft);
+    }
+
+    &__catalog,
+    &__detail { background: var(--sw-r54-canvas); }
+
+    &__card {
+        border-color: var(--sw-r54-line);
+        border-radius: var(--sw-r54-radius-card);
+        background: var(--sw-r54-surface);
+        box-shadow: none;
+    }
+
+    &__card:hover,
+    &__card:focus-within { box-shadow: var(--sw-r54-shadow-card); }
+
+    &__detail-head,
+    &__detail .sw-home-store__live-preview,
+    &__detail-actions {
+        border-radius: var(--sw-r54-radius-card);
+        box-shadow: var(--sw-r54-shadow-card);
+    }
+}
+
+// 第三面板：编辑器是主工作面，预览和 AI 是清晰分开的辅助面；
+// 头部只保留当前片段上下文和可继续的动作，不额外堆叠装饰。
+.sw-studio {
+    background: var(--sw-r54-canvas);
+
+    &__header {
+        min-height: 64px;
+        padding: var(--sw-r54-space-3) var(--sw-r54-space-5);
+        border-bottom-color: var(--sw-r54-line);
+        background: var(--sw-r54-surface);
+    }
+
+    &__layout { gap: 0; }
+
+    &__library {
+        padding: var(--sw-r54-space-4);
+        border-right-color: var(--sw-r54-line);
+        background: var(--sw-r54-soft);
+    }
+
+    &__main { gap: var(--sw-r54-space-4); padding: var(--sw-r54-space-4); }
+
+    &__preview-section,
+    &__details,
+    &__editor-section,
+    &__ai {
+        border-color: var(--sw-r54-line);
+        border-radius: var(--sw-r54-radius-card);
+        box-shadow: none;
+    }
+
+    &__preview-section,
+    &__editor-section { background: var(--sw-r54-surface); }
+    &__preview { border-radius: var(--sw-r54-radius-control); }
+    &__details,
+    &__ai { background: var(--sw-r54-soft); }
+    &__button { min-height: 40px; border-radius: var(--sw-r54-radius-control); }
+    &__library-item,
+    &__catalog-item { border-radius: var(--sw-r54-radius-control); }
+}
+
+// 以容器为准适配宿主窄面板；不改变领域逻辑，只把三面板降级成单一主滚动区。
+@container sw-r54-surface (max-width: 760px) {
+    .sw-home { padding-inline: var(--sw-r54-space-3); }
+    .sw-home__grid { gap: var(--sw-r54-space-3); }
+    .sw-studio__layout { grid-template-columns: minmax(180px, 220px) minmax(0, 1fr); }
+    .sw-studio__ai { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--sw-r54-line); }
+}
+
+@container sw-r54-surface (max-width: 560px) {
+    .speed-switch .sw__scroll { padding: var(--sw-r54-space-3) var(--sw-r54-space-3) 20px; }
+    .speed-switch .sw__dock { display: none; }
+    .sw-home { padding: var(--sw-r54-space-3) var(--sw-r54-space-3) 0; }
+    // _05-settings-widgets.scss keeps the legacy mobile stack with !important.
+    // Match that specificity and importance here so ADR 0217's two-column
+    // surface rule is the effective production cascade.
+    .sw-home.sw-home--mobile .sw-home__cell { grid-column: 1 / -1 !important; }
+    .sw-home.sw-home--mobile .sw-home__grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: var(--sw-space-sm, 6px);
+    }
+    // 手机端2列双拼Bento：微瓦片(xs)占1列并排，列表与大卡占满2列(1/-1)
+    .sw-home.sw-home--mobile .sw-home__cell[data-size="xs"] { grid-column: span 1 !important; }
+    // 窄桌面容器 (如侧栏 Dock 或紧凑浮层)：单列卡片自适应平铺，消除 span 6 横向溢出与截断
+    .sw-home:not(.sw-home--mobile) {
+        .sw-home__grid {
+            grid-template-columns: 1fr !important;
+            gap: var(--sw-space-sm, 6px);
+        }
+        .sw-home__cell {
+            grid-column: 1 / -1 !important;
+        }
+    }
+    // When every saved widget is unavailable, the ghost cards are diagnostic
+    // placeholders rather than layout tiles. Keep each one readable across
+    // the full narrow work area instead of preserving its stale desktop span.
+    .sw-home__grid--unavailable .sw-home__cell--unavailable {
+        grid-column: 1 / -1 !important;
+        width: 100%;
+        min-width: 0;
+    }
+    .sw-studio__layout {
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior-y: contain;
+    }
+    .sw-studio__library { flex: 0 0 auto; max-height: 190px; border-right: 0; border-bottom: 1px solid var(--sw-r54-line); }
+    .sw-studio__main { flex: 1 1 auto; min-height: 540px; }
+    .sw-studio__ai { flex: 0 0 auto; min-height: 320px; }
+}
+
+// T-7461：超窄视口（<=360px）Bento 瓦片自动回退单列，确保内容舒适可读
+@container sw-r54-surface (max-width: 360px) {
+    .sw-home.sw-home--mobile .sw-home__grid {
+        grid-template-columns: 1fr !important;
+        gap: var(--sw-space-xs, 4px);
+    }
+    .sw-home.sw-home--mobile .sw-home__cell[data-size="xs"] {
+        grid-column: 1 / -1 !important;
+    }
+}
+
+// T-7461：工作台 Bento 瓦片小组件在极窄容器与双拼下的内容裁剪与防挤压守卫
+.sw-home .sw-home__cell {
+    min-width: 0;
+
+    .sw-home__cell-header {
+        min-width: 0;
+
+        .sw-home__cell-title {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    }
+
+    .sw__home-module-item-action {
+        min-width: 0;
+    }
+
+    .sw__home-module-item-label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .sw__home-module-item-secondary {
+        flex-shrink: 0;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .sw__home-stat-value {
+        font-variant-numeric: tabular-nums;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+}
+
+@media (pointer: coarse) {
+    .sw-home__bar .b3-button,
+    .sw-home-store button,
+    .sw-studio__button,
+    .sw-studio__library-item,
+    .sw-studio__library-filter { min-height: 44px; }
+
+    // 触控设备专属极速反馈（GPU 硬件加速，零 CPU 占用）
+    .sw-home .sw-home__cell:active {
+        transform: scale(0.985);
+        transition: transform $sw-dur-fast $sw-ease;
+    }
+
+    // 待办勾选框保留 14px 视觉内芯；透明伪元素把触控命中区扩到 44px，
+    // 不改变行高或卡片密度。
+    .sw-home .sw__home-module-list .sw__home-module-item-check {
+        position: relative;
+        z-index: 1;
+        width: 14px;
+        height: 14px;
+        touch-action: manipulation;
+    }
+    .sw-home .sw__home-module-list .sw__home-module-item-check::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 50%;
+        width: 44px;
+        height: 44px;
+        transform: translateY(-50%);
+        pointer-events: auto;
+        background: transparent;
+    }
+}
+
+// isMobile 由宿主注入，即使设备没有暴露 coarse pointer 也保留同一命中区。
+.sw-home.sw-home--mobile .sw__home-module-list .sw__home-module-item-check {
+    position: relative;
+    z-index: 1;
+    width: 14px;
+    height: 14px;
+    touch-action: manipulation;
+}
+.sw-home.sw-home--mobile .sw__home-module-list .sw__home-module-item-check::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translateY(-50%);
+    pointer-events: auto;
+    background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .speed-switch .sw__tab-preview,
+    .sw-home .sw-home__cell,
+    .sw-home-store__card,
+    .sw-studio__button { transition: none !important; }
+}
+
+// T-7274：只有非全屏工作台启用轻量小组件密度。
+// 该覆盖位于 R54 最终皮肤层之后的层叠位置，避免 11-ui-polish 把卡片重新放大。
+.sw-home.sw-home--compact {
+    padding: var(--sw-space-md, 8px) var(--sw-space-lg, 12px);
+
+    &:not(.sw-home--mobile) { padding: var(--sw-space-sm, 6px) var(--sw-space-md, 8px); }
+
+    // 紧凑桌面窗口只有约 920px 宽；平台头部保持一行，避免导航
+    // 自己占掉一整行，把组件挤成“只剩标题”的大卡片。
+    &:not(.sw-home--mobile) > .sw-platform-chrome .sw-platform-header {
+        grid-template-columns: minmax(0, 1fr) minmax(240px, 320px) minmax(0, 1fr);
+        grid-template-areas: "brand nav actions";
+        gap: var(--sw-space-sm, 6px);
+        min-height: 36px;
+        padding: var(--sw-space-2xs, 2px) var(--sw-space-sm, 6px);
+    }
+    &:not(.sw-home--mobile) > .sw-platform-chrome .sw-platform-header__brand-mark {
+        flex-basis: 24px;
+        width: 24px;
+        height: 24px;
+    }
+    &:not(.sw-home--mobile) > .sw-platform-chrome .sw-platform-header__brand-subtitle { display: none; }
+    &:not(.sw-home--mobile) > .sw-platform-chrome .sw-platform-header__actions { gap: var(--sw-space-xs, 4px); }
+    &:not(.sw-home--mobile) > .sw-platform-chrome .sw-platform-header__icon-action,
+    &:not(.sw-home--mobile) > .sw-platform-chrome .sw-platform-header__close {
+        width: 28px;
+        height: 28px;
+        min-width: 28px;
+    }
+    &:not(.sw-home--mobile) > .sw-platform-chrome .sw-platform-header__close-group {
+        gap: var(--sw-space-xs, 4px);
+        padding-left: var(--sw-space-sm, 6px);
+    }
+    &:not(.sw-home--mobile) > .sw-platform-chrome .sw-platform-surface-nav { padding: var(--sw-space-2xs, 2px); }
+    &:not(.sw-home--mobile) > .sw-platform-chrome .sw-platform-surface-nav__item {
+        min-height: var(--sw-control-h-sm, 28px);
+        gap: var(--sw-space-xs, 4px);
+        padding: var(--sw-space-2xs, 2px) var(--sw-space-sm, 6px);
+    }
+    &:not(.sw-home--mobile) > .sw-platform-chrome .sw-platform-surface-nav__hint,
+    &:not(.sw-home--mobile) > .sw-platform-chrome .sw-platform-header__close-hint { display: none; }
+    &:not(.sw-home--mobile) > .sw-platform-chrome .sw-platform-context {
+        display: none;
+    }
+    &:not(.sw-home--mobile) > .sw-platform-chrome .sw-platform-context__hint { display: none; }
+
+    .sw-home__body { padding: 0 var(--sw-space-md, 8px); }
+    .sw-home__grid {
+        gap: var(--sw-space-sm, 6px);
+        // 保留渲染层写入的 span h，让 small/medium/tall 在 compact 里仍有
+        // 可见高度差；使用小行高收紧画布，不再把所有组件压成同一条。
+        // `--sw-control-h-sm` is the global 20px control token.  Compact
+        // widget tracks intentionally use the dedicated 28px rhythm so the
+        // renderer's span values produce visible small/medium/tall shapes.
+        grid-auto-rows: 28px;
+    }
+    &:not(.sw-home--mobile) .sw-home__bar {
+        min-height: var(--sw-control-h-sm, 28px);
+        margin-bottom: var(--sw-space-xs, 4px);
+        gap: var(--sw-space-xs, 4px);
+
+        > button {
+            min-height: var(--sw-control-h-sm, 28px);
+            padding-block: var(--sw-space-2xs, 2px);
+        }
+
+        .sw-home__refresh,
+        .sw-home__add {
+            width: 28px;
+            min-width: 28px;
+            justify-content: center;
+            padding-inline: 0;
+
+            > span { display: none; }
+            svg { width: 16px; height: 16px; }
+        }
+    }
+
+    // T-7291: compact 查看态收拢工具条边距，首屏聚焦小组件内容；编辑态展开完整间隙
+    &:not(.sw-home--mobile):not(.is-editing) .sw-home__bar {
+        margin-bottom: var(--sw-space-2xs, 2px);
+    }
+
+    // T-7291 质感升级：日常查看态隐藏折叠与配置把手，Hover/Focus 优雅浮现，内容即界面
+    &:not(.is-editing) .sw-home__cell {
+        .sw__home-module-toggle {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity $sw-dur-fast $sw-ease;
+        }
+        &:hover .sw__home-module-toggle,
+        &:focus-within .sw__home-module-toggle {
+            opacity: 0.72;
+            pointer-events: auto;
+            &:hover { opacity: 1; }
+        }
+    }
+
+    .sw-home__cell {
+        padding: var(--sw-space-xs, 4px) var(--sw-space-sm, 6px);
+        border-radius: $sw-radius-md;
+        max-height: none;
+        min-height: 0;
+        overflow: hidden;
+        backdrop-filter: none;
+        box-shadow: var(--sw-rim-light, none);
+        transform: translateZ(0);
+        will-change: transform;
+
+        &:hover {
+            transform: none;
+        }
+    }
+
+    .sw-home__cell-body { padding: var(--sw-space-xs, 4px) var(--sw-space-sm, 6px); }
+    .sw__home-module-header {
+        min-height: 24px;
+        margin-bottom: var(--sw-space-xs, 4px);
+        gap: var(--sw-space-xs, 4px);
+        padding-block: 0;
+    }
+    .sw__home-module-header .sw__home-module-icon { width: 22px; height: 22px; }
+    .sw__home-module-header .sw__home-module-title { font-size: var(--sw-font-sm, 12px); }
+    .sw__home-module-header .sw__home-module-config { width: 18px; height: 18px; }
+    .sw__home-module-item-action {
+        min-height: 24px;
+        padding: var(--sw-space-2xs, 2px) var(--sw-space-xs, 4px);
+        font-size: var(--sw-font-sm, 12px);
+        line-height: var(--sw-leading-ui, 1.4);
+    }
+    .sw__home-module-status--empty,
+    .sw__home-module-status--error { min-height: var(--sw-control-h-sm, 28px); padding-block: var(--sw-space-2xs, 2px); }
+    .sw-home__quick-actions {
+        display: none;
+    }
+    &:not(.sw-home--mobile) .sw-home__receipt {
+        min-height: 24px;
+        gap: var(--sw-space-xs, 4px);
+        padding: var(--sw-space-2xs, 2px) var(--sw-space-sm, 6px);
+        font-size: var(--sw-font-xs, 11px);
+
+        .sw-home__receipt-details {
+            min-height: 24px;
+            padding-inline: var(--sw-space-xs, 4px);
+            font-size: var(--sw-font-xs, 11px);
+        }
+
+        // T-7291: 正常健康状态收成轻量状态行；发生错误或超时异常时显眼警示
+        &[data-state="ready"] {
+            border-top-color: transparent;
+            opacity: 0.8;
+        }
+        &[data-state="error"] {
+            border-top-color: color-mix(in srgb, var(--b3-theme-error) 40%, var(--b3-border-color));
+            background: color-mix(in srgb, var(--b3-theme-error) 6%, transparent);
+        }
+    }
+
+    &:not(.sw-home--mobile) .sw__home-source-health:is(.is-fresh, .is-cached) {
+        width: 7px;
+        height: 7px;
+        padding: 0;
+        border-radius: 50%;
+        font-size: 0;
+        line-height: 0;
+    }
+    &:not(.sw-home--mobile) .sw__home-source-health.is-fresh { background: var(--sw-platform-success, var(--b3-theme-success, #3b9861)); }
+    &:not(.sw-home--mobile) .sw__home-source-health.is-cached { border-style: dashed; }
+
+    // 默认七卡先展示内容；完整更新时间保留在标题提示与可读描述中。
+    &:not(.sw-home--mobile) .sw-home__cell:is([data-module-id="recent-documents"], [data-module-id="favorites"], [data-module-id="today-journal"], [data-module-id="today-tasks"], [data-module-id="external-local-time"], [data-module-id="year-progress"], [data-module-id="note-stats"]) {
+        .sw-home__cell-body { padding: var(--sw-space-lg, 12px) var(--sw-space-xl, 16px); }
+        .sw__home-module-header { min-height: 28px; padding: 0; margin-bottom: var(--sw-space-md, 8px); }
+        .sw__home-module-header .sw__home-module-title { font-size: var(--sw-font-md, 13px); font-weight: 650; }
+        .sw__home-module-toggle {
+            width: 24px;
+            height: 24px;
+            min-width: 24px;
+            min-height: 24px;
+            padding: 0;
+        }
+        .sw__home-module-meta:not(.is-stale),
+        .sw__home-source-health:not(.is-stale) {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            clip-path: inset(50%);
+        }
+        .sw__home-module-body { padding: 0; }
+        .sw__home-stat { padding: var(--sw-space-xs, 4px) 0; min-height: 32px; }
+        .sw__home-stat-value {
+            font-size: clamp(26px, 3.2vw, 36px);
+            font-weight: 800;
+            line-height: 1.15;
+            letter-spacing: -0.02em;
+        }
+        .sw__home-module-list .sw__home-module-item-action { min-height: 28px; padding-block: var(--sw-space-2xs, 2px); }
+        .sw__home-module-status--empty { min-height: 0; margin: 0; padding: 0; opacity: 1; }
+
+        // 今日待办：紧凑交互打勾与弹簧微动效
+        .sw__home-module-item-check {
+            width: 14px;
+            height: 14px;
+            border-radius: 4px;
+            border-width: 1.5px;
+            margin-right: var(--sw-space-xs, 4px);
+            transition: transform $sw-dur-fast $sw-ease, background-color $sw-dur-fast $sw-ease, border-color $sw-dur-fast $sw-ease;
+
+            &:active { transform: scale(0.88); }
+            &.is-done {
+                box-shadow: 0 0 6px color-mix(in srgb, var(--b3-theme-primary) 40%, transparent);
+            }
+        }
+        .sw__home-module.is-empty-content[data-module-id="today-tasks"] {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+
+            .sw__home-module-body[aria-hidden="false"] {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+            }
+        }
+    }
+
+    // 时间铭牌：Bento 现代材质、大数字科技感排版与双层柔影
+    &:not(.sw-home--mobile) .sw-home__cell[data-module-id="external-local-time"] {
+        --sw-home-cell-fg: var(--b3-theme-on-surface, var(--b3-theme-on-background));
+        color: var(--sw-home-cell-fg);
+        background: var(--sw-card-float-bg, var(--b3-theme-surface));
+        border: 1px solid color-mix(in srgb, var(--sw-platform-accent) 25%, var(--b3-border-color));
+        box-shadow: var(--sw-shadow-bento);
+
+        .sw__home-stat { min-height: 24px; }
+        .sw__home-stat .sw__home-stat-value {
+            font-family: var(--sw-font-mono, var(--b3-font-family-code, monospace));
+            font-size: clamp(24px, 3.2vw, 32px);
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -0.03em;
+            font-weight: 750;
+            color: var(--sw-platform-accent, var(--b3-theme-primary));
+        }
+        .sw__home-stat-label { display: none; }
+        .sw__home-module-list .sw__home-module-item-action {
+            padding: 0;
+            border: 0;
+            font-size: var(--sw-font-xs, 11px);
+            white-space: normal;
+            overflow-wrap: anywhere;
+            cursor: default;
+
+            &::before { display: none; }
+        }
+        .sw__home-day-progress {
+            height: 2px;
+            margin: var(--sw-space-2xs, 2px) 0 0;
+            background: color-mix(in srgb, var(--b3-theme-on-background) 8%, transparent);
+        }
+        .sw__home-day-progress-bar { height: 100%; }
+    }
+
+    // 周期进度：百分数 + 细轨道 + 并排天数，取消重复圆环。
+    &:not(.sw-home--mobile) .sw-home__cell[data-module-id="year-progress"] {
+        .sw__home-stat-copy { width: 100%; justify-content: space-between; }
+        .sw__home-stat-arc { display: none; }
+        .sw__home-progress { height: 3px; margin: var(--sw-space-2xs, 2px) 0; }
+        .sw__home-module-list { display: flex; flex-wrap: wrap; gap: 0 var(--sw-space-md, 8px); }
+        .sw__home-module-item { flex: 1 1 auto; }
+        .sw__home-module-list .sw__home-module-item-action {
+            padding: 0;
+            border: 0;
+            font-size: var(--sw-font-xs, 11px);
+            cursor: default;
+
+            &::before { display: none; }
+        }
+    }
+
+    // 笔记统计：主指标与两列明细并排，不把四项计数铺成长列表。
+    &:not(.sw-home--mobile) .sw-home__cell[data-module-id="note-stats"] {
+        .sw__home-module[data-status="ready"] .sw__home-module-body[aria-hidden="false"] {
+            display: grid;
+            grid-template-columns: minmax(64px, 1fr) minmax(0, 3fr);
+            align-items: center;
+            gap: var(--sw-space-sm, 6px);
+        }
+        .sw__home-stat-copy { flex-direction: column; align-items: flex-start; gap: var(--sw-space-2xs, 2px); }
+        .sw__home-stat-label { font-size: var(--sw-font-xs, 11px); }
+        .sw__home-module-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--sw-space-sm, 6px); }
+        .sw__home-module-list .sw__home-module-item-action {
+            padding: 0;
+            border: 0;
+            font-size: var(--sw-font-xs, 11px);
+            line-height: var(--sw-leading-compact, 1.2);
+            white-space: normal;
+            overflow-wrap: anywhere;
+            cursor: default;
+
+            &::before { display: none; }
+        }
+        .sw__home-item-bar { display: none; }
+    }
+
+    // 可选效果组件也遵守 compact 的单值摘要语言；保留配置、折叠和异常入口，
+    // 只收紧常规内容的材质、字号与行距，避免天气/倒数把小窗口撑成海报卡。
+    &:not(.sw-home--mobile) .sw-home__cell:is([data-module-id="external-weather-open-meteo"], [data-module-id="countdown"]) {
+        color: var(--b3-theme-on-background);
+        background: var(--b3-theme-background);
+        background-image: none;
+        border: 1px solid var(--b3-border-color);
+        .sw-home__cell-body { padding: var(--sw-space-xs, 4px) var(--sw-space-sm, 6px); }
+        .sw__home-module-header { min-height: 24px; padding: 0; margin-bottom: var(--sw-space-xs, 4px); }
+        .sw__home-module-header .sw__home-module-title { font-size: var(--sw-font-sm, 12px); }
+        .sw__home-module-toggle {
+            width: 24px;
+            height: 24px;
+            min-width: 24px;
+            min-height: 24px;
+            padding: 0;
+        }
+        .sw__home-module-meta:not(.is-stale),
+        .sw__home-source-health:not(.is-stale) {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            clip-path: inset(50%);
+        }
+        .sw__home-module-body { padding: 0; }
+        .sw__home-stat-value {
+            font-size: var(--sw-font-2xl, 20px);
+            font-weight: var(--sw-weight-semibold, 600);
+            letter-spacing: 0;
+        }
+    }
+
+    // 天气 compact：中性表面 + 温度铭牌 + 四列短预报；城市和来源仍可读但不抢主值。
+    &:not(.sw-home--mobile) .sw-home__cell[data-module-id="external-weather-open-meteo"] {
+        --sw-home-accent: var(--b3-theme-primary);
+
+        :is(.sw__home-module-header, .sw__home-module-title, .sw__home-module-meta, .sw__home-stat-label, .sw__home-stat-value) {
+            color: var(--b3-theme-on-background);
+        }
+        .sw__home-module-icon {
+            color: var(--b3-theme-primary);
+        }
+        .sw__home-module-context {
+            display: block;
+            flex: 0 1 36%;
+            max-width: 36%;
+            padding: 0;
+            overflow: hidden;
+            background: transparent;
+            color: var(--b3-theme-on-surface-light);
+            font-size: var(--sw-font-xs, 11px);
+            line-height: var(--sw-leading-compact, 1.2);
+            text-align: end;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .sw__home-stat {
+            align-items: baseline;
+            gap: var(--sw-space-sm, 6px);
+            min-height: 24px;
+            padding: 0;
+        }
+        .sw__home-stat-label {
+            min-width: 0;
+            overflow: hidden;
+            font-size: var(--sw-font-xs, 11px);
+            opacity: 0.78;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .sw__home-module-list {
+            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            gap: 0 var(--sw-space-sm, 6px);
+            margin-top: var(--sw-space-2xs, 2px);
+        }
+        .sw__home-module-item-action {
+            display: block;
+            min-height: 16px;
+            padding: 0;
+            font-size: var(--sw-font-xs, 11px);
+            line-height: 1;
+            /* 补全截断三件套：此前 ellipsis 缺 overflow/nowrap 完全失效，长标签会溢出瓦片 */
+            overflow: hidden;
+            white-space: nowrap;
+            max-width: 100%;
+            text-overflow: ellipsis;
+        }
+        .sw__home-module-item-secondary {
+            color: var(--b3-theme-on-surface-light);
+            margin-left: var(--sw-space-2xs, 2px);
+        }
+        .sw__home-module-item.has-link { grid-column: 1 / -1; }
+        .sw__home-module-item.has-link .sw__home-module-item-action {
+            min-height: 12px;
+            line-height: 1;
+            color: var(--b3-theme-on-surface-light);
+            font-size: var(--sw-font-2xs, 10px);
+            opacity: 0.82;
+        }
+    }
+
+    // 倒数 compact：单值优先，里程碑徽标贴近主值，不再额外制造大块空白。
+    &:not(.sw-home--mobile) .sw-home__cell[data-module-id="countdown"] {
+        .sw__home-stat {
+            align-items: baseline;
+            gap: var(--sw-space-sm, 6px);
+            min-height: var(--sw-control-h-md, 26px);
+            padding: 0;
+        }
+        .sw__home-stat-value { line-height: 1; }
+        .sw__home-stat-label {
+            min-width: 0;
+            overflow: hidden;
+            color: var(--b3-theme-on-surface-light);
+            font-size: var(--sw-font-xs, 11px);
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .sw__home-stat-milestone {
+            display: inline-flex;
+            flex: none;
+            align-items: center;
+            margin: 0 0 0 auto;
+            padding: 1px var(--sw-space-xs, 4px);
+            border: 1px solid color-mix(in srgb, var(--b3-theme-primary) 24%, var(--b3-border-color));
+            border-radius: 999px;
+            color: var(--b3-theme-primary);
+            font-size: var(--sw-font-2xs, 10px);
+            font-weight: var(--sw-weight-medium, 500);
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+        .sw__home-module-list .sw__home-module-item-action {
+            min-height: var(--sw-control-h-sm, 20px);
+            padding: 0;
+            color: var(--b3-theme-on-surface-light);
+            font-size: var(--sw-font-xs, 11px);
+            line-height: var(--sw-leading-compact, 1.2);
+        }
+    }
+}
+
+// 窄紧凑工作台恢复两行头部；底部健康回执保留状态语义，头部隐藏重复徽标。
+@container sw-platform (max-width: 760px) {
+    .sw-home.sw-home--compact:not(.sw-home--mobile) > .sw-platform-chrome .sw-platform-header {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas: "brand actions" "nav nav";
+        gap: var(--sw-space-xs, 4px) var(--sw-space-sm, 6px);
+        min-height: 0;
+        padding: var(--sw-space-xs, 4px) var(--sw-space-sm, 6px);
+    }
+    .sw-home.sw-home--compact > .sw-platform-chrome .sw-platform-status { display: none; }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 移动端顶部 3 行收敛 + 单一底栏（消除 6 层叠罗汉、截断与双底栏叠压）
+// ══════════════════════════════════════════════════════════════════════════
+.b3-dialog:has(> .sw-mobile-switcher-dialog) {
+    align-items: flex-start !important;
+    padding: 0 !important;
+}
+
+.sw-mobile-switcher-dialog {
+    position: relative;
+    top: var(--sw-visual-viewport-top, 0px);
+
+    .sw__mobile::before,
+    .sw__mobile-close-btn,
+    .sw__quick-actions { display: none !important; }
+
+    .sw__mobile-toolbar {
+        flex-wrap: nowrap !important;
+        min-height: 40px;
+        padding: var(--sw-space-xs, 4px) var(--sw-space-md, 8px) !important;
+        gap: var(--sw-space-xs, 4px) !important;
+        background: var(--b3-theme-background, #ffffff) !important;
+
+        .sw__search-wrap { flex: 1 1 0; min-width: 120px; }
+        .sw__search {
+            height: var(--sw-control-h, 34px);
+            font-size: 16px !important;
+            background: color-mix(in srgb, var(--b3-theme-background, #ffffff) 96%, #0f172a) !important;
+            border: 1px solid color-mix(in srgb, var(--b3-theme-on-background, #0f172a) 10%, transparent) !important;
+            border-radius: 10px !important;
+        }
+        .sw__search:focus {
+            background: var(--b3-theme-background, #ffffff) !important;
+            border-color: var(--b3-theme-primary, #2563eb) !important;
+        }
+        .sw__sort-btn { width: 38px; min-width: 38px; height: 38px; }
+
+        .sw__toolbar-row2 {
+            flex: 0 0 auto;
+            width: auto;
+            padding: 0;
+            gap: var(--sw-space-xs, 4px);
+            overflow: visible;
+
+            .sw__mobile-fav-btn,
+            .sw__settings-btn,
+            .sw__help-guide-btn,
+            .sw__history-dd,
+            .sw__history-trigger-text,
+            .sw__mobile-chip-label { display: none !important; }
+
+            .sw__journal-btn { width: 38px; min-width: 38px; height: 38px; min-height: 38px; padding: 0; justify-content: center; }
+        }
+    }
+
+    .sw__mode-chips-bar {
+        min-height: 32px;
+        padding: var(--sw-space-2xs, 2px) var(--sw-space-md, 8px);
+        background: var(--b3-theme-background, #ffffff) !important;
+        .sw__mode-chip { min-height: var(--sw-control-h-md, 26px); height: var(--sw-control-h-md, 26px); }
+    }
+
+    .sw__scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        padding: var(--sw-space-md, 8px) var(--sw-space-md, 8px) var(--sw-space-lg, 12px);
+
+        .sw__card.sw__mobile-card {
+            background: var(--b3-theme-surface) !important;
+            border: 1px solid var(--b3-border-color, color-mix(in srgb, var(--b3-theme-on-background, #0f172a) 12%, transparent)) !important;
+            box-shadow: 0 2px 8px -2px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+            border-radius: 12px !important;
+        }
+    }
+}
+
+:is(.sw-mobile-switcher-dialog .sw__mobile, .sw-home.sw-home--mobile) > .sw-platform-chrome {
+    .sw-platform-context,
+    .sw-platform-header__brand-copy,
+    .sw-platform-surface-nav__icon,
+    .sw-platform-surface-nav__hint,
+    .sw-platform-header__help,
+    .sw-platform-header__help-label,
+    .sw-platform-header__close-hint { display: none !important; }
+
+    .sw-platform-header {
+        grid-template-columns: auto minmax(0, 1fr) auto !important;
+        grid-template-areas: "brand nav actions" !important;
+        min-height: 40px !important;
+        height: 40px !important;
+        padding: 0 var(--sw-space-md, 8px) !important;
+        gap: var(--sw-space-sm, 6px) !important;
+        background: var(--b3-theme-background, #ffffff) !important;
+    }
+
+    .sw-platform-header__brand-mark { width: 28px; height: 28px; flex: 0 0 28px; font-size: var(--sw-font-sm, 12px); }
+
+    .sw-platform-surface-nav {
+        justify-self: center !important;
+        width: auto !important;
+        max-width: 100%;
+        padding: var(--sw-space-2xs, 2px);
+        gap: var(--sw-space-2xs, 2px);
+        border-radius: var(--sw-platform-radius-pill, 999px);
+        background: var(--sw-platform-surface-muted);
+    }
+
+    .sw-platform-surface-nav__item {
+        flex: 0 1 auto;
+        min-height: 30px !important;
+        height: 30px;
+        padding: 0 10px !important;
+        border-color: transparent;
+        border-radius: var(--sw-platform-radius-pill, 999px);
+        &:is(.is-active, [aria-current="page"]) { background: var(--sw-platform-bg); box-shadow: var(--sw-shadow-xs); }
+    }
+
+    .sw-platform-header__actions { gap: var(--sw-space-xs, 4px) !important; }
+    .sw-platform-status { width: 12px; min-width: 12px; height: 12px; min-height: 12px; padding: 0; gap: 0; border: 0; background: transparent; font-size: 0; justify-content: center; overflow: visible; }
+    .sw-platform-header__close-group { padding-left: 0; border-left: 0; }
+
+    :is(.sw-platform-header__icon-action, .sw-platform-header__close) {
+        position: relative;
+        width: 38px !important;
+        min-width: 38px !important;
+        height: 38px !important;
+        min-height: 38px !important;
+        border-radius: var(--sw-platform-radius-pill, 999px);
+        &::after { content: ""; position: absolute; inset: -3px; }
+    }
+}
+
+@media (max-width: 680px) {
+    .sw__mobile > .sw-platform-chrome .sw-platform-context { display: none !important; }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 全表面窄屏、二级弹窗与桌面窄侧栏 Dock 深度响应式收口
+// ══════════════════════════════════════════════════════════════════════════
+
+// 1. 片段商店桌面隐藏「返回列表」，窄屏 (<=720px) 启用列表/详情单列切换
+.sw-studio__store-back {
+    display: none;
+}
+
+// 2. 桌面侧边栏 Dock (.sw--sidebar, 240px~300px 极窄宽度) 防溢出与紧凑对齐
+.speed-switch.sw--sidebar {
+    overflow-x: hidden;
+
+    > .sw-platform-chrome {
+        .sw-platform-header {
+            grid-template-columns: minmax(0, 1fr) auto !important;
+            grid-template-areas: "nav actions" !important;
+            min-height: 36px !important;
+            padding: var(--sw-space-xs, 4px) var(--sw-space-md, 8px) !important;
+            gap: var(--sw-space-xs, 4px) !important;
+        }
+        .sw-platform-surface-nav {
+            justify-self: stretch !important;
+            width: 100% !important;
+            padding: var(--sw-space-2xs, 2px) !important;
+            gap: var(--sw-space-2xs, 2px) !important;
+        }
+        .sw-platform-surface-nav__icon { display: none !important; }
+        .sw-platform-surface-nav__item {
+            min-height: var(--sw-control-h-md) !important;
+            height: var(--sw-control-h-md) !important;
+            padding: 0 var(--sw-space-xs, 4px) !important;
+            font-size: var(--sw-font-xs, 11px) !important;
+        }
+        .sw-platform-surface-nav__label { font-size: var(--sw-font-xs, 11px) !important; }
+        .sw-platform-header__actions { gap: var(--sw-space-2xs, 2px) !important; }
+        .sw-platform-header__close-group { padding-left: var(--sw-space-2xs, 2px) !important; border-left: 0 !important; gap: var(--sw-space-2xs, 2px) !important; }
+        :is(.sw-platform-header__icon-action, .sw-platform-header__close) {
+            width: 26px !important;
+            height: 26px !important;
+            min-width: 26px !important;
+            min-height: 26px !important;
+        }
+    }
+
+    .sw__toolbar {
+        min-height: 0 !important;
+        padding: var(--sw-space-sm, 6px) var(--sw-space-md, 8px) !important;
+        gap: var(--sw-space-xs, 4px) !important;
+        flex-wrap: wrap !important;
+
+        .sw__search-wrap {
+            flex: 1 1 100% !important;
+            min-width: 0 !important;
+        }
+        .sw__search {
+            height: 32px !important;
+            font-size: var(--sw-font-sm, 12px) !important;
+        }
+        .sw__select-wrap {
+            flex: 1 1 0 !important;
+            min-width: 0 !important;
+        }
+        .sw__sort-trigger-label,
+        .sw__help-guide-btn {
+            display: none !important;
+        }
+        .sw__sort-trigger,
+        .sw__fav-trigger,
+        .sw__history-trigger {
+            min-height: 28px !important;
+            height: 28px !important;
+            min-width: 0 !important;
+            width: 100% !important;
+            padding: 0 var(--sw-space-sm, 6px) !important;
+            font-size: var(--sw-font-xs, 11px) !important;
+        }
+        .sw__history-dd--icon .sw__history-trigger {
+            width: 28px !important;
+            min-width: 28px !important;
+            padding: 0 !important;
+        }
+        .sw__icon-btn {
+            width: 28px !important;
+            height: 28px !important;
+            min-width: 28px !important;
+            min-height: 28px !important;
+            padding: 0 !important;
+        }
+    }
+
+    .sw__mode-chips-bar {
+        padding: var(--sw-space-2xs, 2px) var(--sw-space-md, 8px) !important;
+        min-height: 28px !important;
+    }
+
+    .sw__scroll {
+        padding: var(--sw-space-md, 8px) var(--sw-space-md, 8px) var(--sw-space-lg, 12px) !important;
+        overflow-x: hidden !important;
+    }
+
+    :is(.sw__tab-preview, .sw__doc-results, .sw__unified-section).sw--with-preview {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    .sw__card,
+    .sw__doc-item {
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    .sw__quick-actions {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        scrollbar-width: none;
+        &::-webkit-scrollbar { display: none; }
+    }
+}
+
+// 3. 窄容器下第一面板预览栏自动退化为单列，防止 280px 右栏撑出横向滚动
+@container sw-r54-surface (max-width: 680px) {
+    .speed-switch :is(.sw__tab-preview, .sw__doc-results, .sw__unified-section).sw--with-preview {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+}
+
+// 4. 片段实验室与链滴社区片段商店窄屏 (<=720px) 完整单列化与 44x44 关闭按钮
+@media (max-width: 720px) {
+    .sw-studio > .sw-platform-chrome {
+        .sw-platform-context,
+        .sw-platform-header__brand-copy,
+        .sw-platform-surface-nav__icon,
+        .sw-platform-surface-nav__hint,
+        .sw-platform-header__help-label,
+        .sw-platform-header__close-hint { display: none !important; }
+
+        .sw-platform-header {
+            grid-template-columns: auto minmax(0, 1fr) auto !important;
+            grid-template-areas: "brand nav actions" !important;
+            min-height: 44px !important;
+            height: 44px !important;
+            padding: 0 var(--sw-space-md, 8px) !important;
+            gap: var(--sw-space-sm, 6px) !important;
+        }
+        .sw-platform-surface-nav {
+            justify-self: center !important;
+            width: auto !important;
+            max-width: 100%;
+            padding: var(--sw-space-2xs, 2px);
+        }
+        .sw-platform-surface-nav__item {
+            min-height: 30px !important;
+            height: 30px;
+            padding: 0 var(--sw-space-md, 8px) !important;
+        }
+        .sw-platform-header__close-group { padding-left: 0; border-left: 0; }
+        :is(.sw-platform-header__icon-action, .sw-platform-header__close) {
+            width: 44px !important;
+            min-width: 44px !important;
+            height: 44px !important;
+            min-height: 44px !important;
+        }
+    }
+
+    .sw-studio {
+        .sw-studio__header {
+            flex-wrap: wrap !important;
+            align-items: center !important;
+            min-height: 0 !important;
+            padding: var(--sw-space-md, 8px) var(--sw-space-lg, 12px) !important;
+            gap: var(--sw-space-sm, 6px) !important;
+        }
+        .sw-studio__header-actions {
+            flex-direction: row !important;
+            flex-wrap: wrap !important;
+            align-items: center !important;
+            justify-content: flex-start !important;
+            width: 100%;
+            gap: var(--sw-space-sm, 6px) !important;
+        }
+        .sw-studio__layout,
+        .sw-studio__layout[data-ai-collapsed="true"] {
+            display: flex !important;
+            flex-direction: column !important;
+            flex: 1 1 auto !important;
+            min-height: 0 !important;
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+        }
+        .sw-studio__library {
+            flex: 0 0 auto !important;
+            max-height: 200px !important;
+            min-height: 0 !important;
+            border-right: 0 !important;
+            border-bottom: 1px solid var(--sw-r54-line) !important;
+            padding: 10px var(--sw-space-lg, 12px) !important;
+        }
+        .sw-studio__library-filters {
+            flex-wrap: nowrap !important;
+            overflow-x: auto;
+            scrollbar-width: none;
+            &::-webkit-scrollbar { display: none; }
+        }
+        .sw-studio__library-filter { flex: 0 0 auto; white-space: nowrap; }
+        .sw-studio__main {
+            display: flex !important;
+            flex-direction: column !important;
+            flex: 0 0 auto !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+            padding: 10px var(--sw-space-lg, 12px) !important;
+            gap: 10px !important;
+        }
+        .sw-studio__preview-dual {
+            grid-template-columns: minmax(0, 1fr) !important;
+        }
+        .sw-studio__lower {
+            grid-template-columns: minmax(0, 1fr) !important;
+            gap: 10px !important;
+        }
+        .sw-studio__ai {
+            flex: 0 0 auto !important;
+            border-left: 0 !important;
+            border-top: 1px solid var(--sw-r54-line) !important;
+            padding: var(--sw-space-lg, 12px) !important;
+        }
+
+        // 片段商店 / 选择器窄屏单列列表 + 点击切详情视图
+        .sw-studio__picker {
+            position: fixed !important;
+            inset: 0 !important;
+            padding: var(--sw-space-xs, 4px) !important;
+        }
+        .sw-studio__picker-sheet,
+        .sw-studio__picker-sheet--store {
+            width: 100% !important;
+            max-width: 100% !important;
+            height: calc(100dvh - 8px) !important;
+            max-height: calc(100dvh - 8px) !important;
+            padding: 10px var(--sw-space-lg, 12px) !important;
+            border-radius: var(--sw-radius-card, 14px) !important;
+
+            > .sw-studio__section-bar {
+                flex-wrap: nowrap !important;
+                gap: var(--sw-space-xs, 4px) !important;
+
+                > strong:first-child {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                > .sw-studio__button {
+                    min-height: 38px;
+                    padding: 0 var(--sw-space-md, 8px);
+                    font-size: var(--sw-font-xs, 11px);
+                    white-space: nowrap;
+                }
+                > .sw-studio__button:last-child {
+                    min-width: 44px !important;
+                    min-height: 44px !important;
+                    justify-content: center;
+                }
+            }
+        }
+        .sw-studio__catalog,
+        .sw-studio__group-items {
+            grid-template-columns: minmax(0, 1fr) !important;
+        }
+        .sw-studio__store-body {
+            display: flex !important;
+            flex-direction: column !important;
+            flex: 1 1 auto !important;
+            min-height: 0 !important;
+            overflow: hidden !important;
+        }
+        .sw-studio__store-catalog-col {
+            flex: 1 1 auto !important;
+            min-height: 0 !important;
+            overflow-y: auto !important;
+            padding-right: 0 !important;
+        }
+        .sw-studio__picker:not([data-detail-open="true"]) .sw-studio__store-preview {
+            display: none !important;
+        }
+        .sw-studio__picker[data-detail-open="true"] {
+            .sw-studio__filters,
+            .sw-studio__category-pills,
+            .sw-studio__recent,
+            .sw-studio__store-catalog-col {
+                display: none !important;
+            }
+            .sw-studio__store-preview {
+                display: flex !important;
+                flex: 1 1 auto !important;
+                min-height: 0 !important;
+                overflow-y: auto !important;
+            }
+            .sw-studio__store-back {
+                display: inline-flex !important;
+                align-items: center;
+                align-self: flex-start;
+                min-height: 44px !important;
+                padding: 0 var(--sw-space-lg, 12px) !important;
+                font-weight: var(--sw-weight-semibold, 600);
+            }
+        }
+    }
+}
+
+// 5. 工作台、组件商店、设置弹窗、动作画板与次级弹窗窄屏 (<=680px) 全闭环收口
+.sw-home.sw-home--mobile .sw-home__cell {
+    .sw__home-module-toggle,
+    .sw__home-module-config {
+        opacity: 0.78 !important;
+        pointer-events: auto !important;
+        transform: none !important;
+    }
+}
+
+@media (pointer: coarse) {
+    .sw-home .sw-home__cell {
+        .sw__home-module-toggle,
+        .sw-home__cell-tools,
+        .sw__home-module-config {
+            opacity: 0.78 !important;
+            pointer-events: auto !important;
+            transform: none !important;
+        }
+    }
+}
+
+// 文档集差异与配置包导入差异弹窗基础排版
+.sw-doc-set-diff,
+.sw-config-pack-diff {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-md, 8px);
+    padding: var(--sw-space-lg, 12px) var(--sw-space-xl, 16px);
+    max-height: 75dvh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    box-sizing: border-box;
+
+    &__meta { margin: 0; font-size: var(--sw-font-sm, 12px); color: var(--b3-theme-on-surface-light); }
+    &__line,
+    &__row {
+        padding: var(--sw-space-xs, 4px) var(--sw-space-md, 8px);
+        border-radius: var(--sw-radius-sm, 6px);
+        background: var(--b3-theme-surface);
+        font-size: var(--sw-font-sm, 12px);
+        overflow-wrap: anywhere;
+    }
+    &__actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: var(--sw-space-md, 8px);
+        margin-top: var(--sw-space-sm, 6px);
+        padding-top: var(--sw-space-md, 8px);
+        border-top: 1px solid var(--b3-border-color);
+    }
+}
+
+@media (max-width: 680px) {
+    // 移动端/窄屏统一消除双关闭按钮，保证单一 44x44 触控关闭口
+    .b3-dialog__container:has(.sw-dialog__mobile-close-btn) > .b3-dialog__close,
+    .b3-dialog__header:has(.sw-dialog__mobile-close-btn) .b3-dialog__close:not(.sw-dialog__mobile-close-btn) {
+        display: none !important;
+    }
+    .b3-dialog:has([class*="sw-"], [id*="sw-"]) .b3-dialog__header .b3-dialog__close {
+        width: 44px !important;
+        height: 44px !important;
+        min-width: 44px !important;
+        min-height: 44px !important;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    // 所有非全屏次级弹窗（设置/差异对比/快捷键说明/预览）严禁溢出 360px 视口
+    .b3-dialog:has([class*="sw-"], [id*="sw-"]) .b3-dialog__container:not(.sw-dialog--fullscreen):not(.sw-mobile-switcher-dialog):not(.sw-home-store-dialog) {
+        width: calc(100vw - 16px) !important;
+        min-width: 0 !important;
+        max-width: calc(100vw - 16px) !important;
+        max-height: calc(100dvh - 16px) !important;
+        margin: 0 auto !important;
+    }
+
+    // 工作台工具栏单行紧凑横滑，禁止多行堆叠
+    .sw-home .sw-home__bar {
+        flex-wrap: nowrap !important;
+        justify-content: flex-start !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        gap: var(--sw-space-sm, 6px) !important;
+        margin: var(--sw-space-xs, 4px) 0 var(--sw-space-md, 8px) !important;
+        padding-bottom: var(--sw-space-2xs, 2px) !important;
+        scrollbar-width: none;
+        &::-webkit-scrollbar { display: none; }
+
+        > button {
+            flex: 0 0 auto !important;
+            white-space: nowrap !important;
+            min-height: 36px !important;
+        }
+    }
+
+    .sw-home .sw-home__cell {
+        .sw__home-module-toggle,
+        .sw__home-module-config {
+            opacity: 0.82 !important;
+            pointer-events: auto !important;
+            transform: none !important;
+        }
+    }
+
+    // 组件商店窄屏 (<=680px)：无论 device 是 desktop/sidebar/mobile，强制单列 + 底部详情抽屉
+    .b3-dialog__container.sw-home-store-dialog {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        border: 0 !important;
+    }
+
+    .sw-home-store {
+        .sw-home-store__close-bar {
+            padding: var(--sw-space-xs, 4px) var(--sw-space-md, 8px) !important;
+            min-height: 44px !important;
+        }
+        .sw-home-store__close {
+            width: 44px !important;
+            height: 44px !important;
+            min-width: 44px !important;
+            min-height: 44px !important;
+        }
+        .sw-home-store__layout {
+            grid-template-columns: minmax(0, 1fr) !important;
+        }
+        .sw-home-store__catalog {
+            border-right: 0 !important;
+            padding: var(--sw-space-md, 8px) var(--sw-space-lg, 12px) var(--sw-space-xl, 16px) !important;
+
+            .sw-home-store__grid {
+                grid-template-columns: minmax(0, 1fr) !important;
+            }
+        }
+        .sw-home-store__filter-bar {
+            align-items: center !important;
+            gap: var(--sw-space-sm, 6px) !important;
+
+            .sw-home-store__tabs {
+                flex-wrap: nowrap !important;
+                overflow-x: auto !important;
+                margin: 0 !important;
+                scrollbar-width: none;
+                &::-webkit-scrollbar { display: none; }
+            }
+            .sw-home-store__tab {
+                flex: 0 0 auto !important;
+                min-height: 36px !important;
+                padding: 0 var(--sw-space-lg, 12px) !important;
+            }
+            .sw-home-store__sort {
+                margin-bottom: 0 !important;
+                height: 36px !important;
+            }
+        }
+        .sw-home-store__detail {
+            position: absolute !important;
+            inset: auto 0 0 0 !important;
+            max-height: 82% !important;
+            z-index: 4 !important;
+            display: none !important;
+            padding: var(--sw-space-xl, 16px) var(--sw-space-lg, 12px) calc(18px + env(safe-area-inset-bottom, 0px)) !important;
+            border-radius: var(--sw-sheet-radius, 16px) var(--sw-sheet-radius, 16px) 0 0 !important;
+            border: 0 !important;
+            border-top: 1px solid var(--b3-border-color) !important;
+            background: color-mix(in srgb, var(--b3-theme-surface) 97%, var(--b3-theme-background)) !important;
+            box-shadow: var(--sw-sheet-shadow) !important;
+        }
+        &[data-detail-open="true"] .sw-home-store__detail {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: var(--sw-space-md, 8px) !important;
+        }
+        &[data-detail-open="true"] .sw-home-store__layout::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: 3;
+            background: var(--sw-overlay-scrim, rgba(0, 0, 0, 0.32));
+            pointer-events: none;
+        }
+    }
+
+    // 设置弹窗窄屏 (<=680px)：顶部横向胶囊导航 + 下方 100% 全宽独立滚动表单
+    .b3-dialog__container.sw-settings-dialog {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+
+        > .b3-dialog__header {
+            min-height: 46px !important;
+            padding: max(4px, env(safe-area-inset-top, 0px)) var(--sw-space-md, 8px) var(--sw-space-xs, 4px) 14px !important;
+        }
+    }
+
+    .sw-home.sw-home--mobile .sw__home-stat-value,
+    .sw-home.sw-home--mobile .sw__home-stat--large .sw__home-stat-value,
+    .sw-home.sw-home--mobile .sw__home-stat--xl .sw__home-stat-value {
+        font-size: 20px !important;
+    }
+
+    .sw-settings {
+        flex-direction: column !important;
+
+        .sw-settings__tabs {
+            flex: 0 0 auto !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            min-height: 48px !important;
+            height: auto !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            gap: var(--sw-space-sm, 6px) !important;
+            padding: var(--sw-space-sm, 6px) var(--sw-space-md, 8px) !important;
+            border-right: 0 !important;
+            border-bottom: 1px solid var(--b3-border-color) !important;
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+            scrollbar-width: none;
+            &::-webkit-scrollbar { display: none; }
+        }
+
+        .sw-settings__tab {
+            flex: 0 0 auto !important;
+            min-width: max-content !important;
+            min-height: 38px !important;
+            padding: var(--sw-space-xs, 4px) var(--sw-space-lg, 12px) !important;
+            border-radius: 999px !important;
+            white-space: nowrap !important;
+            text-align: center !important;
+            box-shadow: none !important;
+
+            &.is-active {
+                background: var(--b3-theme-primary) !important;
+                color: var(--b3-theme-on-primary, #fff) !important;
+                box-shadow: var(--sw-shadow-xs) !important;
+            }
+        }
+
+        .sw-settings__panels {
+            flex: 1 1 auto !important;
+            width: 100% !important;
+            min-height: 0 !important;
+            padding: var(--sw-space-lg, 12px) var(--sw-space-lg, 12px) calc(18px + env(safe-area-inset-bottom, 0px)) !important;
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+        }
+
+        .sw-settings__search {
+            margin: -12px -12px var(--sw-space-md, 8px) !important;
+            padding: var(--sw-space-md, 8px) var(--sw-space-lg, 12px) !important;
+        }
+
+        .sw-settings__item {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: var(--sw-space-md, 8px) !important;
+            margin-inline: 0 !important;
+            padding: 10px var(--sw-space-md, 8px) !important;
+
+            .sw-settings__item-action {
+                width: 100% !important;
+                justify-content: flex-start !important;
+
+                > .b3-select,
+                > .sw-settings__range-number {
+                    width: 100% !important;
+                    min-width: 0 !important;
+                }
+            }
+        }
+    }
+
+    // 快捷键帮助弹窗与动作画板窄屏收口
+    .sw-platform-guide__shortcuts-grid {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+    .sw-platform-guide__close {
+        min-height: 44px !important;
+    }
+
+    .sw__palette-backdrop {
+        align-items: flex-end !important;
+        padding: 0 !important;
+    }
+    .sw__palette {
+        max-width: 100% !important;
+        max-height: 82dvh !important;
+        border-radius: var(--sw-sheet-radius, 16px) var(--sw-sheet-radius, 16px) 0 0 !important;
+        border-bottom: 0 !important;
+        padding-bottom: max(var(--sw-space-lg, 12px), env(safe-area-inset-bottom, 12px)) !important;
+
+        .sw__palette-hint { display: none !important; }
+        .sw__palette-close {
+            width: 44px !important;
+            height: 44px !important;
+            min-width: 44px !important;
+        }
+        .sw__palette-item {
+            min-height: 44px !important;
+            padding: 10px 14px !important;
+        }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 高对比度模式 (W3C forced-colors: active / Windows High Contrast · Epoch 5)
+// 补全系统变量映射、轮廓、边框与无障碍焦点环（系统剔除 box-shadow）
+// ══════════════════════════════════════════════════════════════════════════
+@media (forced-colors: active) {
+    :is(.speed-switch, .sw-fab-root, .sw-settings, .sw-settings-dialog, .sw-home, .sw-studio, .sw-platform-shell, .sw-platform-surface) {
+        --sw-page-bg: Canvas;
+        --sw-control-bg: Canvas;
+        --sw-surface-muted: Canvas;
+        --sw-accent-soft: Canvas;
+        --sw-accent-pressed: Highlight;
+        --sw-r54-canvas: Canvas;
+        --sw-r54-surface: Canvas;
+        --sw-r54-soft: Canvas;
+        --sw-r54-line: CanvasText;
+        --sw-r54-line-soft: CanvasText;
+        --sw-r54-shadow-card: none;
+        --sw-shadow-xs: none;
+        --sw-shadow-sm: none;
+        --sw-shadow-md: none;
+        --sw-sheet-shadow: none;
+        --sw-rim-light: none;
+        --sw-focus-glow: none;
+
+        --b3-theme-background: Canvas;
+        --b3-theme-surface: Canvas;
+        --b3-theme-on-background: CanvasText;
+        --b3-theme-on-surface: CanvasText;
+        --b3-theme-primary: Highlight;
+        --b3-theme-on-primary: HighlightText;
+        --b3-border-color: CanvasText;
+        --b3-dialog-shadow: none;
+
+        :is(
+            .sw__dock,
+            .sw__toolbar,
+            .sw__tab-preview,
+            .sw__doc-preview,
+            .sw__empty,
+            .sw-home__cell,
+            .sw-home__bar,
+            .sw-home-store__card,
+            .sw-studio__preview-section,
+            .sw-studio__editor-section,
+            .sw-studio__details,
+            .sw-studio__ai,
+            .sw-studio__button,
+            .sw-studio__library-item,
+            .sw-studio__catalog-item,
+            .b3-button,
+            .b3-text-field,
+            .b3-select,
+            .sw__dock-item,
+            .sw-platform-header,
+            .sw-platform-surface-nav__item,
+            .sw-fab-btn
+        ) {
+            border: 1px solid CanvasText;
+        }
+
+        :is(
+            .b3-dialog__container,
+            .sw-settings-dialog,
+            .speed-switch.sw__body
+        ) {
+            border: 2px solid CanvasText;
+            background: Canvas;
+        }
+
+        :is(
+            .b3-button--primary,
+            .sw-studio__button.is-primary
+        ) {
+            background: Highlight !important;
+            color: HighlightText !important;
+            border: 1px solid Highlight !important;
+        }
+
+        :is(
+            .sw__dock-item.active,
+            .sw-home-store__tab.is-active,
+            .sw-platform-surface-nav__item.is-active,
+            .sw__list-item--active,
+            .sw-studio__library-item.is-active
+        ) {
+            outline: 2px solid Highlight !important;
+            outline-offset: 1px;
+            background: Highlight !important;
+            color: HighlightText !important;
+        }
+
+        :where(button, a, input, select, textarea, [tabindex="0"]):focus-visible {
+            outline: 2px solid Highlight !important;
+            outline-color: Highlight !important;
+            outline-offset: 2px;
+        }
+
+        // 状态指示器与开关：禁止系统颜色破坏语义
+        :is(
+            .sw__dot,
+            .sw-badge,
+            .sw-chip-icon,
+            .sw__status-indicator,
+            .sw__home-source-health,
+            .sw__home-module-item-check,
+            input[type="checkbox"].b3-switch,
+            input[type="checkbox"].b3-switch::after,
+            svg
+        ) {
+            forced-color-adjust: none;
+        }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 用户高对比度偏好 (prefers-contrast: more · Epoch 5)
+// 强化容器与控件边框，粗体强调激活项，加粗焦点环
+// ══════════════════════════════════════════════════════════════════════════
+@media (prefers-contrast: more) {
+    :is(.speed-switch, .sw-fab-root, .sw-settings, .sw-settings-dialog, .sw-home, .sw-studio, .sw-platform-shell, .sw-platform-surface) {
+        :is(
+            .sw__dock,
+            .sw__toolbar,
+            .sw__tab-preview,
+            .sw__doc-preview,
+            .sw-home__cell,
+            .sw-home-store__card,
+            .sw-studio__preview-section,
+            .sw-studio__editor-section,
+            .b3-button,
+            .b3-text-field,
+            .b3-select,
+            .sw__dock-item
+        ) {
+            border: 1px solid var(--b3-theme-on-background);
+        }
+
+        :is(
+            .sw__dock-item.active,
+            .sw-home-store__tab.is-active,
+            .sw-platform-surface-nav__item.is-active,
+            .sw__list-item--active,
+            .sw-studio__library-item.is-active
+        ) {
+            outline: 2px solid var(--b3-theme-primary);
+            outline-offset: 1px;
+            font-weight: 700;
+        }
+
+        :where(button, a, input, select, textarea, [tabindex="0"]):focus-visible {
+            outline: 3px solid var(--b3-theme-primary);
+            outline-offset: 2px;
+        }
+    }
+}
+
