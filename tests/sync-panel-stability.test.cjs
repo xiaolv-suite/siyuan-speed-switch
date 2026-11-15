@@ -1,0 +1,51 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const root = path.resolve(__dirname, '..');
+const {readSourceText}=require('./source-scan.cjs');
+const {declaresIn}=require('./css-block-scan.cjs');
+
+// 2026-09-16（T-6280 / D-396 第二十批）：1 条 TS 窗口改「锚定 syncFinish + 有界窗口」；
+// 2 条 CSS 窗口迁移为块级；TS 源码读取改走 readSourceText。
+const source = readSourceText('src/index.ts');
+const css = readSourceText('src/index.scss');
+const base={topLevel: true};
+const syncFinishBody = source.slice(source.indexOf('const syncFinish = (failed = false) => {'), source.indexOf('const syncFinish = (failed = false) => {') + 700);
+
+test('sync start event is subscribed', () => assert.match(source, /eventBus\.on\("sync-start"/));
+test('sync end event is subscribed', () => assert.match(source, /eventBus\.on\("sync-end"/));
+test('sync failure event is subscribed', () => assert.match(source, /eventBus\.on\("sync-fail"/));
+test('sync handlers are removed on unload', () => assert.match(source, /eventBus\.off\("sync-start"/));
+test('sync end schedules a sidebar refresh', () => assert.match(source, /syncFinish[\s\S]*?scheduleSidebarRefresh/));
+test('sync state is tracked explicitly', () => assert.match(source, /private syncing = false/));
+test('sync state marks roots busy', () => assert.match(source, /setAttribute\("aria-busy", String\(syncing\)\)/));
+test('home root receives sync class', () => assert.match(source, /classList\.toggle\("sw--syncing", syncing\)/));
+test('loaded protyle does not refresh during sync', () => assert.match(source, /if \(this\.syncing\) return/));
+test('home root is positioned for sync notice', () => assert.match(css, /\.sw-home \{[\s\S]*?position: relative/));
+test('sync notice blocks pointer churn', () => assert.match(css, /&\.sw--syncing \{[\s\S]*?pointer-events: none/));
+test('sync notice uses bounded overlay text', () => assert.match(css, /正在同步，组件面板暂时保持稳定/));
+test('newly rendered sidebar inherits current sync state', () => assert.match(source, /this\.setSyncPresentation\(this\.syncing\)/));
+test('scheduled sidebar refresh is gated while syncing', () => assert.match(source, /if \(!this\.syncing && this\.sidebarElement\?\.isConnected\)/));
+test('direct sidebar refresh is gated while syncing', () => assert.match(source, /private refreshSidebar\(\) \{\s*if \(this\.syncing\) return;/));
+test('overlapping sync starts use a depth counter', () => assert.match(source, /private syncDepth = 0/));
+test('sync start increments depth', () => assert.match(source, /this\.syncDepth \+= 1/));
+test('sync end decrements depth before unfreezing', () => assert.match(source, /this\.syncDepth -= 1/));
+test('nested sync does not finish early', () => assert.match(source, /if \(this\.syncDepth > 0\) return/));
+test('sync failure clears all nested depth', () => assert.match(source, /if \(failed\) \{\s*this\.syncDepth = 0/));
+test('sync refresh intent is tracked', () => assert.match(source, /private syncRefreshPending = false/));
+test('sync start records pending refresh', () => assert.match(source, /this\.syncRefreshPending = true/));
+test('sync finish clears pending refresh', () => assert.match(source, /this\.syncRefreshPending = false/));
+test('sync state is exposed to roots', () => assert.match(source, /root\.dataset\.syncing = String\(syncing\)/));
+test('unload clears sync depth', () => assert.match(source, /this\.syncDepth = 0;[\s\S]*this\.syncRefreshPending = false/));
+test('sync watchdog constant is defined', () => assert.match(source, /SYNC_WATCHDOG_MS/));
+test('sync start arms watchdog', () => assert.match(source, /this\.armSyncWatchdog\(\)/));
+test('sync finish clears watchdog', () => assert.match(source, /this\.clearSyncWatchdog\(\)/));
+test('watchdog timer is stored', () => assert.match(source, /private syncWatchdogTimer: number \| null = null/));
+test('watchdog clears existing timer', () => assert.match(source, /private armSyncWatchdog\(\) \{\s*this\.clearSyncWatchdog\(\)/));
+test('watchdog exits when sync already finished', () => assert.match(source, /this\.syncWatchdogTimer = null;[\s\S]*if \(!this\.syncing\) return/));
+test('watchdog resets depth', () => assert.match(source, /this\.syncDepth = 0;[\s\S]*this\.setSyncPresentation\(false\)/));
+test('watchdog schedules recovery refresh', () => assert.match(source, /this\.setSyncPresentation\(false\);[\s\S]*this\.scheduleSidebarRefresh\(\)/));
+test('watchdog clears on unload', () => assert.match(source, /this\.syncing = false;[\s\S]*this\.clearSyncWatchdog\(\)/));
+test('watchdog uses bounded timeout', () => assert.match(source, /SYNC_WATCHDOG_MS\);/));

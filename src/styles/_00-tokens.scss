@@ -1,0 +1,242 @@
+// ============================================================
+// 小驴雷切（LvSpeed Switch）—— 紧凑、克制的现代工作界面。
+// 配色独立于思源宿主主题：默认使用本插件固定的明/暗双套色板，
+// 宿主切换主题不会污染插件界面。可选皮肤（_10-skins.scss）
+// 通过插件根作用域覆盖同一组变量，机制保持不变。
+// ============================================================
+
+// ------------------------------------------------------------
+// 动效令牌（编译期常量，刻意用 SCSS 变量而非 CSS 自定义属性）
+//
+// 为什么是 SCSS 变量：颜色/圆角/阴影需要跟随宿主主题在运行时变化，因此用
+// --sw-* CSS 变量；而动效时长与曲线是固定的设计常量，不需要运行时可变。
+// 走 SCSS 变量在编译期展开为字面量，既不引入自定义属性的解析开销，也避免
+// 四十余处 var() 调用带来的体积膨胀（实测比 CSS 变量方案更省）。
+//
+// 时长刻度收敛为四档，替代此前散落的 0.12/0.15/0.18/0.2/0.25/0.3/0.35s 七种值：
+//   fast  —— 微反馈：hover、focus、颜色与边框
+//   base  —— 标准：阴影、小位移、图标
+//   slow  —— 较大位移与层级变化
+//   panel —— 面板/抽屉的展开收起
+//
+// 曲线：Apple 流体设计强调"即时响应"——动画必须立刻开始，而非缓慢启动。
+// CSS 默认的 ease（cubic-bezier(.25,.1,.25,1)）起步偏钝，微交互上显得迟滞，
+// 故统一替换为快速启动、平滑停止的曲线；对称曲线留给需要进出平衡的场景。
+// linear 仅保留给旋转加载动画（匀速旋转是正确语义）。
+// ------------------------------------------------------------
+$sw-dur-fast: 120ms;
+$sw-dur-base: 160ms;
+$sw-dur-slow: 200ms;
+$sw-dur-panel: 260ms;
+$sw-dur-skeleton: 1s;
+$sw-ease: cubic-bezier(0.32, 0.72, 0, 1);
+$sw-ease-sym: cubic-bezier(0.65, 0, 0.35, 1);
+$sw-z-base: 0;
+$sw-z-raised: 1;
+$sw-radius-sm: 6px;
+$sw-radius-md: 8px;
+$sw-space-2xs: 2px;
+$sw-space-xs: 4px;
+$sw-space-sm: 6px;
+$sw-space-md: 8px;
+$sw-space-lg: 12px;
+$sw-space-xl: 16px;
+$sw-space-2xl: 24px;
+
+// ------------------------------------------------------------
+// 字号刻度（T-7206）。CSS 自定义属性、挂插件根容器——
+// 遵循 ADR 0073 作用域纪律（绝不写 :root/body）。T-7201：FAB 根（sw-fab-root，
+// portal 挂 body）与设置弹窗（sw-settings，独立 Dialog）同样不在 .speed-switch
+// 内，token 取不到——根选择器三容器并列共享一份定义（避免镜像档双源漂移）。
+// 刻度冻结为七档整数 px，半像素值（10.5/11.5/12.5）与 9px 档已退役
+// （门禁见 tests/font-scale-gate.test.cjs，退役值出现即失败）。
+// 侧栏 compact（T-7207）与皮肤密度调整只改这里的档位定义。
+// ------------------------------------------------------------
+.speed-switch,
+.sw-fab-root,
+.sw-settings,
+.sw-settings-dialog,
+.sw-home,
+.sw-home-store-dialog,
+.sw-studio,
+.sw-platform-shell,
+.sw-platform-surface {
+    --sw-font-2xs: 10px;  // 徽标/角标下限（10px 以下仅限登记豁免）
+    --sw-font-xs: 11px;   // 元信息/时间戳/识别行
+    --sw-font-sm: 12px;   // 辅助说明/状态行
+    --sw-font-md: 13px;   // 正文/列表行/表单
+    --sw-font-lg: 15px;   // 小标题
+    --sw-font-xl: 17px;   // 标题
+    --sw-font-2xl: 20px;  // 大数字/英雄位
+
+    // T-7244：文本排版语义。图标盒子、品牌专用字重不套用正文刻度。
+    --sw-leading-compact: 1.2;  // 单行元信息/键位说明
+    --sw-leading-ui: 1.4;       // 状态说明/紧凑标题
+    --sw-leading-body: 1.5;     // 正文/表单说明
+    --sw-leading-reading: 1.65; // 多行预览与中文段落舒适阅读行高（1.6~1.75区间）
+    --sw-weight-regular: 400;   // 正文
+    --sw-weight-medium: 500;    // 元信息
+    --sw-weight-semibold: 600; // 上下文对象/小标题
+    --sw-weight-emphasis: 650; // 当前项/组件标题
+    --sw-weight-bold: 700;     // 导航标题
+
+    // T-7200：模态浮层遮罩与底部 sheet 材质。遮罩取蓝灰暗调（明暗主题通用），
+    // scrim-strong 供不支持 backdrop-filter 的引擎加深补偿（见各浮层 @supports not 块）。
+    --sw-overlay-scrim: rgba(32, 37, 58, 0.36);
+    --sw-overlay-scrim-strong: rgba(32, 37, 58, 0.46);
+    --sw-overlay-blur: blur(2px);
+    --sw-sheet-radius: 16px;
+    --sw-sheet-shadow: 0 -12px 32px rgb(0 0 0 / 18%);
+
+    // T-7198：圆角刻度补档（与 _03 根块的 --sw-radius-control/card/panel 同一刻度族）。
+    // 碎片档 5/7/9/11px 已退役就近归档（门禁见 tests/radius-scale-gate.test.cjs）；
+    // 2/3/4px 微件档保留（checkbox/kbd 内芯等视觉敏感场景）。
+    --sw-radius-xs: 4px;   // 微件
+    --sw-radius-sm: #{$sw-radius-sm};   // 小件（chip/行内块）
+    --sw-radius-md: #{$sw-radius-md};   // 紧凑控件
+    --sw-radius-lg: 12px;  // 中件/分区
+
+    // T-7198：elevation 阴影三档（蓝灰调，与 --sw-card/float/sheet-shadow 同族分层）。
+    // 语义环/指示条、主题色阴影（color-mix primary）、皮肤专属阴影、FAB 材质阴影
+    // 不入此刻度；门禁退役清单见 tests/shadow-scale-gate.test.cjs。
+    --sw-shadow-xs: 0 1px 3px rgb(35 42 75 / 6%);
+    --sw-shadow-sm: 0 5px 16px rgb(35 42 75 / 16%);
+    --sw-shadow-md: 0 7px 20px rgb(35 42 75 / 20%);
+    // T-7202：控件高度三档（跨表面主输入/次级输入/徽标开关）。
+    --sw-control-h-sm: 20px;  // 徽标级开关/状态 chip
+    --sw-control-h-md: 26px;  // 次级输入/折叠钮/diff 头
+    --sw-control-h: 34px;     // 主输入/标准按钮
+
+    // T-7209：面板玻璃模糊五档（模态遮罩另有 --sw-overlay-blur；皮肤 saturate
+    // 组合为皮肤专属材质不入档）。T-7857 增补 Liquid Glass 3.0 高透档：
+    // xl = 16px 收纳芯片，2xl = 28px Bento 瓷贴，3xl = 40px 商店画廊/英雄玻璃。
+    --sw-blur-sm: blur(4px);   // 小浮件（回顶钮）
+    --sw-blur-md: blur(8px);   // 粘性条/芯片
+    --sw-blur-lg: blur(20px);  // 大玻璃面板（拖拽浮卡）
+    --sw-blur-xl: blur(16px);  // 轻玻璃芯片（T-7857：工作台收纳胶囊/商店指南药丸）
+    --sw-blur-2xl: blur(28px); // Liquid Glass 瓷贴（T-7857：工作台卡片/商店目录卡）
+    --sw-blur-3xl: blur(40px); // Liquid Glass 英雄玻璃（T-7857：商店弹窗容器/实时预览）
+
+    // T-7204：图标尺寸三档（24/20/16px——跨表面 icon box 统一档位）。
+    --sw-icon-xs: 14px;  // 紧凑内联图标（搜索框/组头箭头）
+    --sw-icon-sm: 16px;
+    --sw-icon-md: 20px;
+    --sw-icon-lg: 24px;
+
+    // T-7207：间距密度刻度（消费方：侧栏 compact 与密度系统）。值与偶数节奏一致；
+    // 新间距优先消费档位，字面只允许作为回退参数出现。
+    --sw-space-2xs: #{$sw-space-2xs};
+    --sw-space-xs: #{$sw-space-xs};
+    --sw-space-sm: #{$sw-space-sm};
+    --sw-space-md: #{$sw-space-md};
+    --sw-space-lg: #{$sw-space-lg};
+    --sw-space-xl: #{$sw-space-xl};
+    --sw-space-2xl: #{$sw-space-2xl};
+
+    // 现代科技感与物理质感微光 Token（随宿主主题自适应反光与发光焦点）
+    --sw-rim-light: inset 0 1px 0 0 color-mix(in srgb, var(--b3-theme-on-background) 8%, transparent);
+    --sw-focus-glow: 0 0 0 1px var(--b3-theme-background), 0 0 0 3px color-mix(in srgb, var(--b3-theme-primary) 35%, transparent);
+
+    // 精密等宽字体与触控命中区基线
+    --sw-font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    --sw-touch-target: 44px;
+
+    // ------------------------------------------------------------
+    // 插件作用域颜色别名：默认锁定为雷切自有浅色板（下含暗色覆写块），
+    // 宿主 --b3-* 全局值不再直接进入插件；_10-skins.scss 的皮肤以更高
+    // 优先级覆盖同名变量，皮肤机制不受影响。
+    // ------------------------------------------------------------
+    --b3-theme-background: #f5f5fa;
+    --b3-theme-surface: #ffffff;
+    --b3-theme-surface-lighter: #edeff6;
+    --b3-theme-primary: #5b5bd6;
+    --b3-theme-on-primary: #ffffff;
+    --b3-theme-on-background: #23222e;
+    --b3-theme-on-surface: #4c4a5e;
+    --b3-theme-on-surface-light: #65627a;
+    --b3-border-color: rgba(35, 34, 46, 0.1);
+    --b3-theme-background-light: #eef0f7;
+    --b3-theme-surface-light: #eef0f7;
+    --b3-theme-primary-light: rgba(91, 91, 214, 0.12);
+    --b3-theme-primary-lightest: rgba(91, 91, 214, 0.06);
+    --b3-theme-success: #2d9865;
+    --b3-theme-warning: #b7761d;
+    --b3-theme-error: #c7515b;
+    --b3-list-hover: rgba(91, 91, 214, 0.08);
+    color-scheme: light;
+
+    // 统一步调语义色彩令牌（由上方插件作用域色板派生，零宿主依赖）
+    --sw-color-accent: var(--b3-theme-primary);
+    --sw-color-accent-soft: color-mix(in srgb, var(--sw-color-accent) 12%, transparent);
+    --sw-color-accent-hover: color-mix(in srgb, var(--sw-color-accent) 88%, #000 12%);
+    --sw-color-accent-pressed: color-mix(in srgb, var(--sw-color-accent) 78%, #000 22%);
+    --sw-color-on-accent: var(--b3-theme-on-primary, #ffffff);
+
+    --sw-color-bg: var(--b3-theme-background);
+    --sw-color-surface: var(--b3-theme-surface);
+    --sw-color-surface-muted: var(--b3-theme-surface-lighter, color-mix(in srgb, var(--sw-color-bg) 60%, var(--sw-color-surface)));
+    --sw-color-surface-raised: color-mix(in srgb, var(--sw-color-surface) 92%, var(--sw-color-accent-soft));
+    --sw-color-line: var(--b3-border-color, color-mix(in srgb, var(--sw-color-text) 14%, transparent));
+    --sw-color-line-soft: color-mix(in srgb, var(--sw-color-line) 55%, transparent);
+
+    --sw-color-text: var(--b3-theme-on-background);
+    --sw-color-text-subtle: var(--b3-theme-on-surface, #3c4048);
+    --sw-color-text-muted: var(--b3-theme-on-surface-light, #767b8a);
+
+    --sw-color-success: var(--b3-theme-success, #2d9865);
+    --sw-color-warning: var(--b3-theme-warning, #b7761d);
+    --sw-color-error: var(--b3-theme-error, #c7515b);
+
+    // 小驴全生态品牌与午夜黑金卡 Token (Epoch 6 联邦规范)
+    --lv-brand: #8B5CF6; /* 星际电光紫 */
+    --lv-brand-soft: color-mix(in srgb, var(--lv-brand) 12%, transparent);
+    --lv-accent-gold: #FACC15; /* 钛金雷刃黄 */
+    --lv-midnight-card: #1B1E2E; /* 参考图午夜深空黑金卡底色 */
+
+    // 视觉辨识度与细节品质核心规范：
+    // 1. 同族极浅底色托底 + 纯白浮卡双层结构
+    --sw-bg-tinted: color-mix(in srgb, var(--sw-color-accent) 4.5%, var(--b3-theme-background));
+    --sw-card-float-bg: var(--b3-theme-surface, #ffffff);
+
+    // 2. 两色分工：数据语义色（色轮顺时针偏转25°极光青绿，承载连续打卡、热力等正向数据）
+    --sw-color-data: color-mix(in srgb, var(--sw-color-accent) 60%, #10b981 40%);
+    --sw-color-data-soft: color-mix(in srgb, var(--sw-color-data) 14%, transparent);
+
+    // 3. 重点对比块（深色重音卡片：明度10%~14%主题色相近黑，配近白文字）
+    --sw-card-accent-dark: color-mix(in srgb, var(--sw-color-accent) 12%, #0e111a);
+    --sw-card-accent-dark-text: #f8fafc;
+    --sw-card-accent-dark-muted: #94a3b8;
+
+    // 4. 近距小模糊 + 远距大模糊双层复合柔影
+    --sw-shadow-bento: 0 1px 3px rgb(35 42 75 / 4%), 0 8px 24px rgb(35 42 75 / 6%);
+    --sw-shadow-bento-hover: 0 2px 6px rgb(35 42 75 / 6%), 0 14px 32px rgb(35 42 75 / 10%);
+
+    // 5. 4倍大落差英雄位主数据字号
+    --sw-font-stat-hero: 36px;
+}
+
+// ------------------------------------------------------------
+// 默认固定色板 · 暗色覆写（宿主进入暗色模式时启用，仍独立于宿主配色）。
+// 特异性与 _10-skins.scss 的皮肤块持平且位置在前，显式选择的皮肤照常覆盖。
+// ------------------------------------------------------------
+:is(html[data-theme-mode="dark"], [data-theme-mode="dark"], body.body--dark, .b3-theme-dark)
+    :is(.speed-switch, .sw-fab-root, .sw-settings, .sw-settings-dialog, .sw-home, .sw-home-store-dialog, .sw-studio, .sw-platform-shell, .sw-platform-surface) {
+    --b3-theme-background: #17171f;
+    --b3-theme-surface: #20202b;
+    --b3-theme-surface-lighter: #2a2a38;
+    --b3-theme-primary: #a5a1ff;
+    --b3-theme-on-primary: #17171f;
+    --b3-theme-on-background: #ecebf4;
+    --b3-theme-on-surface: #b8b6c9;
+    --b3-theme-on-surface-light: #9b98b0;
+    --b3-border-color: rgba(236, 235, 244, 0.12);
+    --b3-theme-background-light: #23232f;
+    --b3-theme-surface-light: #23232f;
+    --b3-theme-primary-light: rgba(165, 161, 255, 0.14);
+    --b3-theme-primary-lightest: rgba(165, 161, 255, 0.07);
+    --b3-theme-success: #34d399;
+    --b3-theme-warning: #f0b45c;
+    --b3-theme-error: #ff7a76;
+    --b3-list-hover: rgba(165, 161, 255, 0.1);
+    color-scheme: dark;
+}

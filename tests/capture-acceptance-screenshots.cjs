@@ -1,0 +1,203 @@
+// T-7020 验收截图基建：表面×主题矩阵 → PNG（服务 T-7015/T-7036 视觉验收）。
+// 驱动机制与 tests/surface-switch-browser-smoke.cjs 同源（esbuild 打真实
+// src/index.ts bundle + siyuan-stub + CDP 驱动真实 Chromium）。
+// 主题为近似调色板（b3 变量子集），真实思源主题观感归 B-005——本工具产出
+// 结构性视觉证据，不冒充真实宿主验收。
+const fs = require("node:fs");
+const path = require("node:path");
+const os = require("node:os");
+const crypto = require("node:crypto");
+const {spawn} = require("node:child_process");
+const {createRequire} = require("node:module");
+const esbuild = createRequire(require.resolve("esbuild-loader"))("esbuild");
+
+const repo = process.cwd();
+const outDir = path.join(repo, "acceptance-screenshots");
+fs.mkdirSync(outDir, {recursive: true});
+const artifactDir = path.join(repo, ".tmp", "acceptance-shots");
+fs.mkdirSync(artifactDir, {recursive: true});
+const profile = fs.mkdtempSync(path.join(artifactDir, "profile-"));
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const cssPath = path.join(repo, "dist", "index.css");
+if (!fs.existsSync(cssPath) || fs.statSync(cssPath).size < 1024) {
+    throw new Error("Production CSS is missing or empty; run pnpm build before capturing UI screenshots");
+}
+fs.copyFileSync(cssPath, path.join(artifactDir, "index.css"));
+
+const bundle = esbuild.buildSync({
+    stdin: {contents: 'import * as mod from "./index.ts";\nglobalThis.__SpeedSwitch = mod.default ?? mod;',
+        resolveDir: path.join(repo, "src"), loader: "ts"},
+    bundle: true, format: "iife", platform: "browser", write: false,
+    alias: {siyuan: path.join(repo, "tests", "fixtures", "siyuan-stub.ts")},
+    loader: {".scss": "empty", ".svg": "empty"},
+}).outputFiles[0].text;
+fs.writeFileSync(path.join(artifactDir, "bundle.js"), bundle);
+
+const i18nJson = fs.readFileSync(path.join(repo, "src", "i18n", "zh-CN.json"), "utf8");
+// 近似 b3 调色板：仅覆盖主要变量，让明暗主题在截图里可区分；真实主题归 B-005。
+const PALETTES = {
+    light: "--b3-theme-primary:#3575f0;--b3-theme-primary-light:#7a9ff5;--b3-theme-primary-lightest:#dce6fc;--b3-theme-background:#ffffff;--b3-theme-surface:#f5f5f5;--b3-theme-background-light:#fafafa;--b3-theme-on-background:#1f1f1f;--b3-theme-on-surface:#3f3f3f;--b3-theme-on-primary:#ffffff;--b3-border-color:#e0e0e0;--b3-list-hover:#e8e8e8;",
+    dark: "--b3-theme-primary:#5b8cf0;--b3-theme-primary-light:#3a5db0;--b3-theme-primary-lightest:#1f2a44;--b3-theme-background:#1e1e1e;--b3-theme-surface:#2a2a2a;--b3-theme-background-light:#252525;--b3-theme-on-background:#dddddd;--b3-theme-on-surface:#bbbbbb;--b3-theme-on-primary:#ffffff;--b3-border-color:#3f3f3f;--b3-list-hover:#333333;",
+};
+
+function pageHtml(theme) {
+    // 脚手架需清零 body 默认 8px margin，否则插件 100vw/100% 面板会叠加出 16px
+    // 横向溢出，截图里出现"横向滚动条"假阳性；overflow 不隐藏，真实溢出仍会暴露。
+    return `<!doctype html><html data-theme-mode="${theme}"><head><meta charset="utf-8"><link rel="stylesheet" href="./index.css"><style>html,body{margin:0;padding:0}*,*::before,*::after{box-sizing:border-box}:root{${PALETTES[theme]}}.b3-dialog__content,.b3-dialog__body{height:100%;min-height:0}</style></head><body>
+<script>window.__stubI18n = ${i18nJson};</script>
+<script>window.__bootLog = [];</script>
+<script src="./bundle.js"></script>
+<script>
+(async () => {
+    try {
+        window.siyuan = {zIndex: 90, config: {snippet: {}, lang: "zh_CN"}};
+        window.fetch = async (url) => {
+            const u = String(url);
+            const ok = (body) => new Response(JSON.stringify(body), {status: 200, headers: {"Content-Type": "application/json"}});
+            if (u.includes("/api/snippet/")) return ok({snippets: [], css: [], js: []});
+            if (u.includes("/api/notebook/")) return ok({notebooks: []});
+            if (u.includes("/api/query/sql")) return ok({code: 0, msg: "", data: []});
+            if (u.includes("/api/tag/getTag") || u.includes("/api/bookmark/getBookmark")) return ok({code: 0, msg: "", data: []});
+            return ok({code: 0, msg: "", data: []});
+        };
+        if (typeof window.__SpeedSwitch !== "function") throw new Error("bundle did not define the plugin class");
+        const plugin = new window.__SpeedSwitch();
+        await plugin.onload();
+        plugin.onLayoutReady();
+        window.__plugin = plugin;
+        window.__bootState = "booted";
+    } catch (e) {
+        window.__bootState = "boot-failed: " + (e && e.message);
+    }
+})();
+</script></body></html>`;
+}
+
+// 表面×主题矩阵：新增验收面时在 CASES 追加（契约 tests/screenshot-infra.test.cjs 钉住锚点）
+const CASES = [
+    {id: "switcher-light", theme: "light", action: "window.__plugin.showSwitcher()"},
+    {id: "switcher-dark", theme: "dark", action: "window.__plugin.showSwitcher()"},
+    {id: "workbench-light", theme: "light", action: 'window.__plugin.openPlatformSurface("workbench")'},
+    {id: "workbench-dark", theme: "dark", action: 'window.__plugin.openPlatformSurface("workbench")'},
+    {id: "studio-light", theme: "light", action: 'window.__plugin.openPlatformSurface("studio")'},
+    {id: "studio-dark", theme: "dark", action: 'window.__plugin.openPlatformSurface("studio")'},
+    // T-7036 本地部分：响应式矩阵——工作台在窄视口/竖屏/短横屏下的结构性证据
+    //（dvh 浮层、网格收缩、移动降级类；真实宿主观感归 B-005）。
+    {id: "workbench-narrow", theme: "light", viewport: {width: 420, height: 768}, action: 'window.__plugin.openPlatformSurface("workbench")'},
+    {id: "workbench-portrait", theme: "light", viewport: {width: 390, height: 844}, action: 'window.__plugin.openPlatformSurface("workbench")'},
+    {id: "workbench-landscape-short", theme: "light", viewport: {width: 844, height: 360}, action: 'window.__plugin.openPlatformSurface("workbench")'},
+];
+
+// 浏览器解析统一收口到 support/browser.cjs：本机 Edge 会触发 0x1A 蓝屏，自动化只走 Chrome
+const {resolveBrowserExecutable} = require("./support/browser.cjs");
+const browserPath = resolveBrowserExecutable();
+
+async function main() {
+    const child = spawn(browserPath, ["--headless=new", "--disable-gpu", "--disable-extensions", "--no-first-run",
+        "--allow-file-access-from-files",
+        "--remote-debugging-port=0", `--user-data-dir=${profile}`, "about:blank"], {stdio: "ignore", windowsHide: true});
+    let socket;
+    const failures = [];
+    try {
+        const portFile = path.join(profile, "DevToolsActivePort");
+        for (let i = 0; !fs.existsSync(portFile) && i < 100; i += 1) await delay(100);
+        const port = Number(fs.readFileSync(portFile, "utf8").split(/\r?\n/)[0]);
+        const targets = await fetch(`http://127.0.0.1:${port}/json/list`).then((r) => r.json());
+        socket = new WebSocket(targets.find((t) => t.type === "page").webSocketDebuggerUrl);
+        await new Promise((resolve, reject) => { socket.addEventListener("open", resolve, {once: true}); socket.addEventListener("error", reject, {once: true}); });
+        let seq = 0;
+        const pending = new Map();
+        socket.addEventListener("message", (event) => {
+            const msg = JSON.parse(String(event.data));
+            if (msg.id && pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id); }
+        });
+        const send = (method, params = {}) => new Promise((resolve, reject) => {
+            const id = ++seq;
+            const timer = setTimeout(() => { pending.delete(id); reject(new Error(`CDP timeout: ${method}`)); }, 20000);
+            pending.set(id, (msg) => { clearTimeout(timer); msg.error ? reject(new Error(JSON.stringify(msg.error))) : resolve(msg.result); });
+            socket.send(JSON.stringify({id, method, params}));
+        });
+        const evalJs = async (expression) => {
+            const r = await send("Runtime.evaluate", {expression, awaitPromise: true, returnByValue: true});
+            if (r.exceptionDetails) throw new Error("PAGE ERROR: " + JSON.stringify(r.exceptionDetails).slice(0, 600));
+            return r.result.value;
+        };
+        await send("Page.enable");
+        await send("Emulation.setDeviceMetricsOverride", {width: 1366, height: 768, deviceScaleFactor: 1, mobile: false});
+        // T-7036 本地部分：逐 case 应用视口（响应式矩阵——窄视口/竖屏/短横屏）
+        const applyViewport = (viewport) => {
+            const vp = viewport || {width: 1366, height: 768};
+            return send("Emulation.setDeviceMetricsOverride", {
+                width: vp.width, height: vp.height, deviceScaleFactor: 1, mobile: false});
+        };
+        for (const entry of CASES) {
+            await applyViewport(entry.viewport);
+            const page = path.join(artifactDir, `page-${entry.theme}.html`);
+            fs.writeFileSync(page, pageHtml(entry.theme));
+            await send("Page.navigate", {url: "file:///" + page.replace(/\\/g, "/")});
+            for (let i = 0; i < 40; i += 1) {
+                await delay(150);
+                const state = await evalJs("window.__bootState || 'loading'");
+                if (state !== "loading") break;
+            }
+            const state = await evalJs("window.__bootState || 'loading'");
+            if (state !== "booted") { failures.push(`${entry.id}: boot ${state}`); continue; }
+            const cssState = await evalJs(`(() => {
+                const sheet = [...document.styleSheets].find((item) => item.href && item.href.endsWith("/index.css"));
+                try { return {loaded: Boolean(sheet && sheet.cssRules.length > 20), rules: sheet?.cssRules.length || 0}; }
+                catch (_) { return {loaded: false, rules: 0}; }
+            })()`);
+            if (!cssState?.loaded) { failures.push(`${entry.id}: production CSS missing or not loaded (${cssState?.rules || 0} rules)`); continue; }
+            await applyViewport(entry.viewport);
+            await evalJs(entry.action);
+            const targetSelector = entry.id.startsWith("switcher-") ? ".sw__main"
+                : entry.id.startsWith("studio-") ? ".sw-studio, .sw-snippet-studio-host"
+                    : '[data-sw-surface="workbench"]';
+            let panelStatus = {visible: false};
+            let panelState = "";
+            for (let attempt = 0; attempt < 30; attempt += 1) {
+                await delay(100);
+                panelState = await evalJs(`(() => {
+                    const target = document.querySelector(${JSON.stringify(targetSelector)});
+                    if (!target) return JSON.stringify({visible: false, targetFound: false,
+                        dialogs: [...document.querySelectorAll(".b3-dialog")].map((dialog) => ({
+                            open: dialog.isConnected, surface: dialog.querySelector("[data-sw-surface]")?.dataset.swSurface || null,
+                            classes: dialog.className,
+                        }))});
+                    const rect = target.getBoundingClientRect();
+                    const style = getComputedStyle(target);
+                    return JSON.stringify({visible: rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden",
+                        targetFound: true, rect: {width: Math.round(rect.width), height: Math.round(rect.height)},
+                        display: style.display, visibility: style.visibility,
+                        dialogs: [...document.querySelectorAll(".b3-dialog")].map((dialog) => ({
+                            open: dialog.isConnected, surface: dialog.querySelector("[data-sw-surface]")?.dataset.swSurface || null,
+                            classes: dialog.className,
+                        }))});
+                })()`);
+                panelStatus = JSON.parse(panelState);
+                if (panelStatus.visible) break;
+            }
+            if (!panelStatus.visible) { failures.push(`${entry.id}: expected panel surface is not visible (${targetSelector}): ${panelState}`); continue; }
+            const shot = await send("Page.captureScreenshot", {format: "png"});
+            const out = path.join(outDir, `${entry.id}.png`);
+            const png = Buffer.from(shot.data, "base64");
+            if (png.length < 10_000) { failures.push(`${entry.id}: screenshot is unexpectedly small (${png.length} bytes)`); continue; }
+            fs.writeFileSync(out, png);
+            console.log(`captured ${entry.id} -> ${path.relative(repo, out)} (${png.length} bytes)`);
+        }
+        if (failures.length) throw new Error(failures.join("; "));
+        const packageJson = JSON.parse(fs.readFileSync(path.join(repo, "package.json"), "utf8"));
+        fs.writeFileSync(path.join(outDir, "manifest.json"), JSON.stringify({
+            version: packageJson.version,
+            generatedAt: new Date().toISOString(),
+            cssSha256: crypto.createHash("sha256").update(fs.readFileSync(cssPath)).digest("hex"),
+            cases: CASES.map(({id, theme, viewport}) => ({id, theme, viewport: viewport || {width: 1366, height: 768}})),
+        }, null, 2) + "\n");
+        console.log(`acceptance screenshots: ${CASES.length} captured to acceptance-screenshots/`);
+    } finally {
+        socket?.close();
+        child.kill();
+    }
+}
+main().catch((e) => { console.error("HARNESS FAILED:", e.message); process.exit(1); });

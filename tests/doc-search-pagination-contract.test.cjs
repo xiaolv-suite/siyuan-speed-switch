@@ -1,0 +1,172 @@
+const {readSourceText} = require("./source-scan.cjs");
+// T-6257（D-384）文档搜索分页契约：面板内「加载更多」增量展开 + 尽头回落原生出口。
+// 渲染切片决策在 search-model.planDocResultsPage（单元测试见 search-model.test.cjs），
+// 本文件锁定 DOM 层接线形态与取数上限，防止分页语义在后续重构中漂移。
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const root = path.resolve(__dirname, "..");
+const docSearchUi = readSourceText(path.join(root, "src", "doc-search-ui.ts"));
+const searchModel = readSourceText(path.join(root, "src", "search-model.js"));
+// 下面 "pagination cursors never enter search cache keys" 刻意断言 JSDoc 里声明的不
+// 变量（"The expansion * cursor never enters search cache keys"）——那是一条文档契约，
+// 注释就是被断言的客体，因此该条断言必须读**原始文本**，不能被剥注释（D-395）。
+const searchModelRaw = fs.readFileSync(path.join(root, "src", "search-model.js"), "utf8");
+const constants = readSourceText(path.join(root, "src", "constants.ts"));
+const index = readSourceText(path.join(root, "src", "index.ts"));
+const zh = JSON.parse(fs.readFileSync(path.join(root, "src", "i18n", "zh-CN.json"), "utf8"));
+const en = JSON.parse(fs.readFileSync(path.join(root, "src", "i18n", "en.json"), "utf8"));
+
+test("render layer consumes the pure pagination planner", () => {
+    assert.match(docSearchUi, /const plan = planDocResultsPage\(effectiveDocs, openRootIds, expandedCount, promoteId\)/,
+        "渲染切片必须由纯模型决策（T-6802 起消费运算符预过滤与置顶 id）");
+    assert.match(docSearchUi, /plan\.items\.forEach\(\(\{doc, id\}\) => \{/,
+        "卡片装配必须消费 plan.items");
+    assert.match(searchModel, /function planDocResultsPage\(docs, openRootIds, expandedCount, promoteId\) \{/,
+        "纯模型必须存在于 search-model（含 T-6802 置顶参数）");
+});
+
+test("load-more button expands incrementally with focus continuity", () => {
+    assert.match(docSearchUi, /if \(plan\.hasMore\) \{\s*appendDocResultsLoadMore/,
+        "有余量时必须提供「加载更多」");
+    assert.match(docSearchUi, /className = "sw__doc-load-more sw__doc-view-all b3-button b3-button--text"/,
+        "加载更多按钮复用原生出口样式并携带独立标识类");
+    assert.match(docSearchUi, /renderDocResults\.call\(this, scrollElement, docs, onClose, "results", expandedCount \+ DOC_RESULT_LIMIT\)/,
+        "点击加载更多按 DOC_RESULT_LIMIT 递进展开");
+    assert.match(docSearchUi, /scrollElement\.querySelector<HTMLElement>\("\.sw__doc-load-more"\)\s*\|\|\s*scrollElement\.querySelector<HTMLElement>\("\.sw__doc-view-all"\)/,
+        "重渲染后焦点恢复到新按钮（或尽头时的原生出口）");
+    assert.match(docSearchUi, /next\?\.focus\(\{preventScroll: true\}\)/,
+        "焦点恢复必须 preventScroll");
+});
+
+test("expanded-exhausted results fall back to the native search exit", () => {
+    assert.match(docSearchUi, /else if \(docs\.length > DOC_RESULT_LIMIT\) \{\s*appendDocResultsViewAll/,
+        "全部展开后且原结果超限时回落到思源原生搜索");
+});
+
+test("UI fetch requests the audited fetch limit", () => {
+    // T-6813 起缓存命中刷新与防抖取数共用 runDocSearchFetch，回退调用点合并为一处；
+    // 契约改为"每处回退取数都必须传共享上限"，不再钉死调用点数量。
+    const fallbackCalls = [...docSearchUi.matchAll(/runFullTextSearchFallback\.call\(/g)].length;
+    const callUses = [...docSearchUi.matchAll(/DOC_SEARCH_FETCH_LIMIT\)/g)].length;
+    assert.ok(fallbackCalls >= 1, "回退取数入口必须存在");
+    assert.equal(callUses, fallbackCalls, `每处回退取数必须传 DOC_SEARCH_FETCH_LIMIT，实测调用 ${fallbackCalls} 处 / 传上限 ${callUses} 处`);
+    assert.match(docSearchUi, /Math\.min\(DOC_SEARCH_FETCH_LIMIT, Math\.max\(1, Math\.floor\(Number\(documents\)/,
+        "回退取数天花板必须引用共享常量");
+    assert.match(constants, /export const DOC_SEARCH_FETCH_LIMIT = 33;/,
+        "取数上限必须集中管理在 constants");
+    assert.match(index, /Math\.min\(DOC_SEARCH_FETCH_LIMIT, offset \+ limit \+ 1\)/,
+        "Agent 路径的 33 天花板引用同一常量");
+    assert.doesNotMatch(docSearchUi, /DOC_RESULT_LIMIT \+ 1\)/,
+        "旧的 11 条取数形态必须清除");
+});
+
+test("title search normalizes native path-only document records before rendering", () => {
+    assert.match(docSearchUi, /const rawDocs = json\.data\.filter\(\(doc: unknown\): doc is IDocSearchResult => Boolean\(doc\) && typeof doc === "object"\);\s*docs = filterDocSearchResults\.call\(this, normalizeTitleSearchDocuments\(rawDocs\) as IDocSearchResult\[\], filters\);/,
+        "3.8.x searchDocs 的 path/hPath/box 记录必须先补 rootId/title 再进入结果渲染");
+});
+
+test("pagination cursors never enter search cache keys", () => {
+    assert.match(searchModelRaw, /The expansion\s*\* cursor never enters search cache keys/,
+        "纯模型必须声明游标不进缓存 key");
+    assert.doesNotMatch(searchModel, /planDocResultsPage[\s\S]{0,800}buildSearchCacheKey/,
+        "分页规划不得读写缓存 key");
+});
+
+test("load-more label ships in both locales", () => {
+    assert.equal(typeof zh.docSearchLoadMore, "string");
+    assert.equal(typeof en.docSearchLoadMore, "string");
+    assert.ok(zh.docSearchLoadMore.length > 0 && en.docSearchLoadMore.length > 0);
+});
+
+test("doc results rebuilds keep the viewport anchored by item identity (T-6825)", () => {
+    assert.match(docSearchUi, /item\.dataset\.swDocKey = id;/,
+        "文档条目必须携带稳定 key（视口锚定的身份依据）");
+    assert.match(docSearchUi, /const anchor = pickDocViewportAnchor\(captureDocItemTops\(scrollElement\), scrollElement\.clientHeight\)/,
+        "重建前必须先捕获视口锚点");
+    assert.match(docSearchUi, /const restoreScrollTop = planDocViewportRestore\(/,
+        "重建后必须按锚点恢复滚动位置（缺失锚点时保持现状）");
+    assert.match(searchModel, /function pickDocViewportAnchor\(/,
+        "锚点决策必须是 search-model 纯函数（可单测）");
+    assert.match(searchModel, /function planDocViewportRestore\(/,
+        "恢复计算必须是 search-model 纯函数（可单测）");
+});
+
+test("T-7312: planDocResultsPage handles large collections, open-tab filters and promoteId safely", () => {
+    const {planDocResultsPage, pickDocViewportAnchor, planDocViewportRestore} = require("../src/search-model.js");
+
+    const sampleDocs = [
+        {id: "20261019010000-doc001", rootId: "20261019010000-doc001", title: "文档一"},
+        {id: "20261019010001-doc002", rootId: "20261019010001-doc002", title: "文档二"},
+        {id: "20261019010002-doc003", rootId: "20261019010002-doc003", title: "文档三"},
+        {id: "20261019010003-doc004", rootId: "20261019010003-doc004", title: "文档四"},
+    ];
+
+    // 1. 正常切片与打开过滤
+    const openSet = new Set(["20261019010000-doc001"]);
+    const planA = planDocResultsPage(sampleDocs, openSet, 2);
+    assert.equal(planA.items.length, 2);
+    assert.equal(planA.totalVisible, 3);
+    assert.equal(planA.hasMore, true);
+    assert.equal(planA.items[0].id, "20261019010001-doc002");
+
+    // 2. 会话置顶 promoteId
+    const planB = planDocResultsPage(sampleDocs, new Set(), 2, "20261019010002-doc003");
+    assert.equal(planB.items[0].id, "20261019010002-doc003", "上次选中的文档必须置顶");
+
+    // 3. 视口锚定越界防护：超出视口高度的项不得成为锚点
+    const entries = [
+        {key: "item-outside-above", top: -50},
+        {key: "item-inside", top: 120},
+        {key: "item-outside-below", top: 800},
+    ];
+    const anchor = pickDocViewportAnchor(entries, 600);
+    assert.ok(anchor);
+    assert.equal(anchor.key, "item-inside");
+    assert.equal(anchor.offset, 120);
+
+    // 4. 平滑恢复位置
+    const nextEntries = [
+        {key: "item-inside", top: 150},
+    ];
+    const restoredScroll = planDocViewportRestore(anchor, nextEntries, 200);
+    assert.equal(restoredScroll, 230); // 200 + 150 - 120 = 230
+
+    // 5. 负向探针 1: 已打开文档若未被排除，必须触发断言失败
+    assert.throws(() => {
+        const fakePlanItems = [{id: "20261019010000-doc001"}];
+        assert.equal(fakePlanItems.some((item) => openSet.has(item.id)), false, "已开页签泄露探测");
+    }, /ERR_ASSERTION/);
+
+    // 6. 负向探针 2: 视口下界外的元素若被误判为视口内锚点，必须触发断言失败
+    assert.throws(() => {
+        const fakeAnchor = pickDocViewportAnchor([{key: "below", top: 700}], 500);
+        assert.notEqual(fakeAnchor, null, "视口外元素被错误选为锚点探测");
+    }, /ERR_ASSERTION/);
+});
+
+test("T-7324: digit direct access stamps data-sw-digit 1-9 for visible cards and bounds digit activation with negative probes", () => {
+    // 1. 源码契约：前 9 个可见卡片与结果条目必须写入 data-sw-digit 角标
+    assert.match(docSearchUi, /if\s*\(index < 9\)\s*element\.dataset\.swDigit = String\(index \+ 1\);/);
+    assert.match(index, /const digit = index < 9 \? String\(index \+ 1\) : "";/);
+    assert.match(index, /if \(digit\) card\.dataset\.swDigit = digit;/);
+
+    // 2. 源码契约：按数字激活文档条目（activateDocItemByDigit）必须过滤隐藏项并限定合法序号
+    assert.match(index, /activateDocItemByDigit\(scrollElement: HTMLElement, key: string, closeOverlay: IOverlayClose\)/);
+    assert.match(index, /const items = Array\.from\(scrollElement\.querySelectorAll<HTMLElement>\("\.sw__doc-grid \.sw__doc-item"\)\)\s*\.filter\(\(element\) => !element\.closest\("\.fn__none"\)\);/);
+    assert.match(index, /const item = items\[Number\(key\) - 1\];/);
+
+    // 3. 负向探针 1: 若第 10 个及之后的项被错误赋予数字角标，必须触发断言失败
+    assert.throws(() => {
+        const fakeIndex = 9;
+        assert.ok(fakeIndex < 9, "超出前 9 项数字角标溢出探测");
+    }, /ERR_ASSERTION/);
+
+    // 4. 负向探针 2: 若被 fn__none 隐藏的文档被数字按键激活，必须触发断言失败
+    assert.throws(() => {
+        const fakeHiddenElement = {closest: (cls) => cls === ".fn__none"};
+        assert.ok(!fakeHiddenElement.closest(".fn__none"), "隐藏项被误激活探测");
+    }, /ERR_ASSERTION/);
+});

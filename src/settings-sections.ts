@@ -1,0 +1,3309 @@
+// 设置页各分节的 UI 构建函数（R4 重构 D-376：自 index.ts 外迁）。
+// 16 个 buildSettings*/buildFavGroupRowActions/buildQuickActionsTransferControls
+// 构建函数按字节原样搬移（缩进保持类内原样）：宿主通过 this 绑定提供 i18n、
+// DOM 构建器（settingItem/select/num 等）与数据访问方法，签名见 SettingsSectionsHost。
+// 分节内的相互调用改为同模块直接调用（.call(this)），不再绕道宿主。
+// ISwSettings/IFavoriteItem 等类型经 import type 引用（编译期擦除，无运行时循环依赖）。
+import {Dialog, getAllTabs, openTab} from "siyuan";
+import {showMessage, lvNotify, lvEcosystem, lvLaunchpad} from "./libs/lv-notice-kit";
+import {mountPlatformDialogCloseHint, mountPlatformDialogMobileClose, mountPlatformDialogTitleWrap} from "./platform-dom";
+import {logger} from "./logger";
+import {DIALOG_WIDTH_MIN_PX, DIALOG_WIDTH_MAX_PX, DIALOG_HEIGHT_MIN_PX, DIALOG_HEIGHT_MAX_PX, PANEL_SCALE_MIN, PANEL_SCALE_MAX, THUMB_HEIGHT_MIN_PX, THUMB_HEIGHT_MAX_PX, MOBILE_THUMB_HEIGHT_MIN_PX, MOBILE_THUMB_HEIGHT_MAX_PX, MOBILE_COLUMNS_SINGLE, MOBILE_COLUMNS_DOUBLE, MOBILE_COLUMNS_AUTO, DOCUMENT_SETS_KEY, DOCUMENT_SET_IMPORT_MAX_BYTES, QUICK_ACTIONS_MAX, MRU_KEY, HISTORY_KEY, CLOSED_HISTORY_KEY, PINNED_KEY, FAV_KEY, FAV_GROUPS_KEY, SETTINGS_KEY, QUICK_ACTIONS_KEY, QUICK_ACTIONS_DEFAULTS_KEY, HOME_STATE_KEY, THUMB_CACHE_KEY, FAV_COLLAPSED_KEY, RELATED_SWR_KEY, RSS_READ_KEY, SCHEMA_VERSION_KEY, SNIPPET_RECYCLE_KEY, SNIPPET_GROUPS_KEY, DEFAULT_HOTKEY, SECOND_PANEL_HOTKEY} from "./constants";
+import {formatStorageBytes, buildStorageUsageSummary} from "./settings-model";
+import {diffConfigPackGroups, configPackBaselineSignature, normalizeConfigPackImport} from "./config-pack-model";
+import {createDocumentSet, upsertDocumentSet, removeDocumentSet, rollbackDocumentSet, mergeDocumentSets, normalizeDocumentSets, planDocumentSetRestore, summarizeDocumentSetRestore, runDocumentSetRestore, buildDocumentSetRestoreReport, documentSetRestoreReportToMarkdown, orderDocumentSetRestoreEntries, diffDocumentSetVersion} from "./document-sets";
+import {mountQuickActionPicker} from "./quick-actions-ui";
+import {appendQuickAction, sanitizeQuickActions} from "./quick-actions";
+import {createDefaultFloatingBallConfig, normalizeFloatingBallConfig, selectFloatingBallFirstLayer, applyFloatingBallPreset, saveFloatingBallPreset, removeFloatingBallPreset, FLOATING_BALL_UI_SURFACES, FLOATING_BALL_ACTION_LIMIT, FLOATING_BALL_FIRST_LAYER_LIMIT, FLOATING_BALL_DIGIT_SLOT_COUNT} from "./floating-ball-model";
+import {selectFloatingBallMoreActions} from "./floating-ball-panel";
+import {FLOATING_BALL_SETTINGS_MAX_BYTES, buildFloatingBallSettingsRows, updateFloatingBallAction, moveFloatingBallAction, removeFloatingBallAction, restoreFloatingBallDefaults, serializeFloatingBallSettings, importFloatingBallSettings, checkFloatingBallSettingsBudget} from "./floating-ball-settings-model";
+import type {PanelSizeMode, HomeSizeMode, StudioSizeMode} from "./constants";
+import type {ISwSettings, IFavoriteItem, IQuickAction, IQuickActionPickerCandidate, QuickActionSupport, QuickActionTarget, SortBy, QuickActionDisplay, HomePalette, DockDisplay, SidebarLayout} from "./index";
+declare module "./document-sets" {
+    export function normalizeDocumentSets(value: unknown, max?: number): {schemaVersion: number; sets: unknown[]; changed: boolean};
+    export function createDocumentSet(name: string, entries: unknown[], options?: Record<string, unknown>): any;
+    export function orderDocumentSetRestoreEntries(value: unknown): any;
+    export function upsertDocumentSet(value: unknown, candidate: unknown, options?: Record<string, unknown>): any;
+    export function removeDocumentSet(value: unknown, setId: string, options?: Record<string, unknown>): any;
+    export function rollbackDocumentSet(value: unknown, setId: string, options?: Record<string, unknown>): {state: unknown; changed: boolean; item: any};
+    export function mergeDocumentSets(value: unknown, incoming: unknown, options?: Record<string, unknown>): any;
+    export function planDocumentSetRestore(value: unknown, openedRootIds?: unknown, availableRootIds?: unknown, max?: number): any;
+    export function summarizeDocumentSetRestore(plan: unknown, probe: unknown, execution?: {succeeded?: number; failed?: number; cancelled?: boolean}): {succeeded: number; failed: number; skipped: number; missing: number; unknown: number; available: number; cancelled: boolean; attempted: number};
+    export function runDocumentSetRestore(entries: Array<{rootId: string}>, openRoot: (rootId: string, entry: unknown) => Promise<unknown> | unknown, options?: {signal?: AbortSignal; shouldContinue?: () => boolean}): Promise<{succeeded: number; failed: number; attempted: number; cancelled: boolean; results: Array<{rootId: string; ok: boolean; error?: string}>}>;
+    export interface DocumentSetRestoreReportEntry {
+        rootId: string;
+        title: string;
+        status: "opened" | "restored" | "failed" | "missing" | "pending";
+        error?: string;
+    }
+    export interface DocumentSetRestoreReport {
+        schemaVersion: number;
+        generatedAt: number;
+        setId: string;
+        setName: string;
+        counts: {succeeded: number; failed: number; skipped: number; missing: number; unknown: number; available: number; cancelled: boolean; attempted: number};
+        entries: DocumentSetRestoreReportEntry[];
+    }
+    export function buildDocumentSetRestoreReport(plan: unknown, probe: unknown, execution?: {succeeded?: number; failed?: number; cancelled?: boolean; results?: Array<{rootId: string; ok: boolean; error?: string}>}, options?: {now?: number; essentials?: {results: Array<{rootId: string; status: "restored" | "failed" | "skipped"; error?: string}>} | null}): DocumentSetRestoreReport;
+    export function documentSetRestoreReportToMarkdown(report: unknown): string;
+    export function diffDocumentSetVersion(currentEntries: unknown, versionEntries: unknown): {restore: any[]; remove: any[]; changed: Array<any>; unchangedCount: number};
+}
+
+declare module "./quick-actions-ui" {
+    export function mountQuickActionPicker(options: {
+        trigger: HTMLElement;
+        host: HTMLElement;
+        candidates: Array<{id: string, label: string, icon: string, group?: string, secondary?: string, searchText?: string, fallbackIcon?: string | string[]}>;
+        searchPlaceholder?: string;
+        emptyText?: string;
+        onSelect: (candidate: any) => void;
+    }): HTMLElement | null;
+}
+
+function makeSettingEl<K extends keyof HTMLElementTagNameMap>(tag: K): HTMLElementTagNameMap[K] { return document.createElement(tag); }
+
+export interface SettingsSectionsHost {
+    // 宿主字段
+    i18n: Record<string, string>;
+    updateFloatingBallVisibility?: () => void; // T-7026：悬浮球模块开关变化后重算挂载（宿主可选能力）
+    settingsSceneReloader?: () => void; // T-7175：设置内切换后局部刷新当前面板，保持状态诚实
+    isMobile: boolean;
+    isUnloading: boolean;
+    favCollapsed: Set<string>;
+    activeDocumentSetRestoreControllers: Set<AbortController>;
+    app: any;            // 思源 Plugin 基类成员，仅透传给 openTab
+    data: any;
+    // DOM 构建器（宿主方法，设置页与其他面板共用）
+    settingItem(title: string, description: string | undefined, action: HTMLElement, column?: boolean): HTMLElement;
+    select(options: Array<{value: string, label: string}>, value: string, onChange: (v: string) => void): HTMLElement;
+    num(value: number, min: number, max: number, step: number, unit: string, onChange: (v: number) => void, label?: string): HTMLElement;
+    rangeNumber(value: number, min: number, max: number, step: number, unit: string, onChange: (v: number) => void, label?: string): HTMLElement;
+    notebookSelect(current: string, onPick: (id: string) => void): HTMLElement;
+    switcher(checked: boolean, onChange: (v: boolean) => void): HTMLElement;
+    // T-6872（RZ-2）：分组卡片与分段控件设置行
+    settingGroupTitle(text: string): HTMLElement;
+    settingGroupCard(...children: HTMLElement[]): HTMLElement;
+    settingSegmented(title: string, description: string | undefined, items: Array<{value: string, label: string}>, current: string, onChange: (value: string) => void): HTMLElement;
+    // T-6999：面板窗口预览入口——从设置页打开对应面板查看当前尺寸效果
+    openPanelPreview(surface: "switcher" | "workbench" | "studio"): void;
+    getAvailablePlatformSurfaces?: () => Array<"switcher" | "workbench" | "studio">;
+    getPlatformShortcutBindings?: () => {switcher?: string; workbench?: string};
+    // 行为与数据访问（宿主方法）
+    clampNum(value: any, min: number, max: number, fallback: number): number;
+    updateSettings(patch: Partial<ISwSettings>): void;
+    getSettings(): ISwSettings;
+    getDockPanels(): Array<{type: string; title: string; icon: string}>;
+    getFavoriteGroupNames(): string[];
+    getFavorites(): IFavoriteItem[];
+    getFavoriteSmartGroups(): Array<{name: string; tag: string; notebook?: string; updatedWithinDays?: number}>;
+    addFavoriteSmartGroup(name: string, tag: string, notebook?: string, updatedWithinDays?: number): boolean;
+    getFavoriteNotebookOptions(): Promise<Array<{id: string; name: string}>>;
+    exportConfigPack(): string;
+    importConfigPack(payload: unknown, options?: {groups?: string[]}): {ok: boolean; reason?: string; applied?: string[]};
+    removeFavoriteSmartGroup(name: string): void;
+    getFavoriteTagOptions(): Promise<Array<{name: string; count: string | number}>>;
+    getDocumentSetEssentials(): string[];
+    addDocumentSetEssentialsFromCurrentTabs(): number;
+    openDocumentSetEssentials(): Promise<{opened: number; failed: number; skipped: number; results: Array<{rootId: string; status: "restored" | "failed" | "skipped"; error?: string}>}>;
+    removeDocumentSetEssential(rootId: string): void;
+    buildDocumentSetEssentialsManager(): HTMLElement;
+    createFavoriteGroup(name: string): boolean;
+    deleteFavoriteGroup(name: string): void;
+    renameFavoriteGroup(from: string, to: string): void;
+    reorderFavoriteGroups(source: string, target: string): void;
+    reorderFavoritesInGroup(group: string, sourceKey: string, targetKey: string): void;
+    saveFavCollapsed(): void;
+    setFavoriteGroup(key: string, group: string): void;
+    updateFABVisibility(): void;
+    getQuickActions(): IQuickAction[];
+    getSavedSearches?: () => Array<{id: string; name: string; query: string; notebook?: string}>;
+    saveQuickActions(actions: IQuickAction[]): void;
+    getFloatingBallActions(): IQuickAction[];
+    getQuickActionSupport(action: IQuickAction, target: QuickActionTarget): QuickActionSupport;
+    getQuickActionPickerCandidates(actions: IQuickAction[]): IQuickActionPickerCandidate[];
+    openQuickActionIconPicker(action: IQuickAction, onPick: (icon: string) => void): void;
+    renderQuickActionIconButton(button: HTMLButtonElement, icon: string): void;
+    mobileOpenDoc(rootId: string): Promise<boolean>;
+    getDocumentSets(): any[];
+    currentDocumentSetEntries(): Array<{rootId: string; title: string}>;
+    saveDocumentSet(candidate: unknown): boolean;
+    probeDocumentSetEntries(entries: Array<{rootId: string; title: string}>, signal?: AbortSignal): Promise<{available: Array<{rootId: string; title: string}>; missing: Array<{rootId: string; title: string}>; unknown: Array<{rootId: string; title: string}>}>;
+    saveDataDebounced(key: string): void;
+    // T-6463 存储用量透明化
+    measureStorageUsage(): Promise<Array<{key: string, bytes: number}>>;
+    // T-7004 存储健康：schema 版本戳读取（纯读）与缩略图缓存清空（可重建数据）
+    getStorageSchemaHealth(): {stored: number | null; current: number; downgradeFrom: number | null};
+    clearThumbCache(): void;
+    // T-7003 分组恢复默认：keys 全部命中已知默认字段才应用（经 updateSettings，自动入撤销栈）
+    resetSettingsToDefaults(keys: string[]): boolean;
+}
+    // ===== 设置页 · 外观：皮肤、缩略图列数与高度 =====
+
+// T-7003：分组恢复默认注册表——groupTitleKey → 该组可控的设置 key（必须全部是
+// DEFAULT_SETTINGS 已知字段）。未登记的组不渲染重置按钮（宁缺勿滥，不猜组语义）。
+const SETTING_GROUP_DEFAULT_KEYS: Record<string, ReadonlyArray<string>> = {
+    settingsGroupTheme: ["skin"],
+    settingsGroupThumbnails: ["columns", "thumbHeight", "showCardUpdatedBadge"],
+    settingsGroupSortDensity: ["sortBy", "density"],
+    settingsGroupSearchOpen: ["pinyinMatch", "reuseOpenTabs", "rememberScrollPosition"],
+    settingsGroupPanelWindows: ["panelSizeMode", "panelScale", "dialogWidth", "dialogHeight", "studioSizeMode", "studioWidth", "studioHeight"],
+    settingsGroupMobileLayout: ["mobileColumns", "mobileThumbHeight"],
+    settingsGroupCompatibility: ["fabEnabled", "floatingBall"],
+    settingsGroupWorkbenchWindow: ["homeSizeMode", "homeWidth", "homeHeight", "homePalette"],
+    settingsGroupWorkbenchBehavior: ["homeStore"],
+    settingsGroupJournal: ["journalNotebook", "journalAutoCreate"],
+};
+
+// T-7003：组标题行尾追加「恢复默认」小按钮（仅注册过的组）。恢复经宿主
+// resetSettingsToDefaults → updateSettings（自动入撤销栈 + 触发现场重渲染），
+// 所以不设二次确认——撤销即可回退。组标题经静态映射引用 i18n（动态方括号
+// 访问被门禁禁止）；本地对象上的动态索引不受限（storageLabels 同例）。
+function appendGroupResetButton(this: SettingsSectionsHost, title: HTMLElement, groupTitleKey: string): HTMLElement {
+    const keys = SETTING_GROUP_DEFAULT_KEYS[groupTitleKey];
+    if (!keys || keys.length === 0) return title;
+    const labels: Record<string, string> = {
+        settingsGroupTheme: this.i18n.settingsGroupTheme,
+        settingsGroupThumbnails: this.i18n.settingsGroupThumbnails,
+        settingsGroupSortDensity: this.i18n.settingsGroupSortDensity,
+        settingsGroupSearchOpen: this.i18n.settingsGroupSearchOpen,
+        settingsGroupPanelWindows: this.i18n.settingsGroupPanelWindows,
+        settingsGroupWorkbenchWindow: this.i18n.settingsGroupWorkbenchWindow,
+        settingsGroupMobileLayout: this.i18n.settingsGroupMobileLayout,
+        settingsGroupCompatibility: this.i18n.settingsGroupCompatibility,
+        settingsGroupWorkbenchBehavior: this.i18n.settingsGroupWorkbenchBehavior,
+        settingsGroupJournal: this.i18n.settingsGroupJournal,
+    };
+    const button = makeSettingEl("button");
+    button.type = "button";
+    button.className = "sw-settings__group-reset";
+    button.textContent = this.i18n.settingGroupReset;
+    button.setAttribute("aria-label", `${this.i18n.settingGroupReset} · ${labels[groupTitleKey] || groupTitleKey}`);
+    button.title = button.getAttribute("aria-label") || "";
+    button.addEventListener("click", () => {
+        if (this.resetSettingsToDefaults([...keys])) {
+            showMessage(this.i18n.settingGroupResetDone, 3000, "info");
+        }
+    });
+    title.appendChild(button);
+    return title;
+}
+
+export function buildSettingsAppearance(this: SettingsSectionsHost, s: ISwSettings): HTMLElement {
+        const wrapper = makeSettingEl("div");
+        // T-6872（RZ-2）：标签页内按语义分组为多张卡片；2~4 个互斥取值改分段控件
+        wrapper.append(
+            // T-6796 皮肤：fusion=融合思源主题（默认），其余为独立皮肤
+            appendGroupResetButton.call(this, this.settingGroupTitle(this.i18n.settingsGroupTheme), "settingsGroupTheme"),
+            this.settingGroupCard(
+                this.settingSegmented(this.i18n.skinLabel, this.i18n.skinTip, [
+                    {value: "fusion", label: this.i18n.skinFusion},
+                    {value: "apple", label: this.i18n.skinApple},
+                    {value: "midnight", label: this.i18n.skinMidnight},
+                    {value: "paper", label: this.i18n.skinPaper},
+                ], s.skin || "fusion", (v) => this.updateSettings({skin: v as ISwSettings["skin"]})),
+            ),
+            // T-6999：切换器窗口尺寸已统一移入「面板」标签的“面板窗口”分组——
+            // 外观页保留 皮肤 + 缩略图 两组，避免同一组尺寸字段在两个标签重复出现。
+            appendGroupResetButton.call(this, this.settingGroupTitle(this.i18n.settingsGroupThumbnails), "settingsGroupThumbnails"),
+            this.settingGroupCard(
+                this.settingItem(this.i18n.setColumns, this.i18n.setColumnsTip,
+                    this.select([{value: "0", label: this.i18n.columnsAuto}].concat(
+                        [2, 3, 4, 5, 6, 7, 8].map((n) => ({value: String(n), label: String(n)})),
+                    ), String(s.columns), (v) => this.updateSettings({columns: this.clampNum(v, 0, 8, s.columns)}))),
+                this.settingItem(this.i18n.setThumbHeight, this.i18n.setThumbHeightTip,
+                    this.num(s.thumbHeight, THUMB_HEIGHT_MIN_PX, THUMB_HEIGHT_MAX_PX, 8, this.i18n.unitPx, (v) => this.updateSettings({thumbHeight: v}), this.i18n.setThumbHeight)),
+                // T-6848：页签卡更新时间与近 7 天改动标记共用显示开关
+                this.settingItem(this.i18n.cardUpdatedBadgeLabel, this.i18n.cardUpdatedBadgeTip,
+                    this.switcher(s.showCardUpdatedBadge === true, (v) => {
+                        this.updateSettings({showCardUpdatedBadge: v});
+                    })),
+            ),
+        );
+        return wrapper;
+    }
+
+    // ===== 设置页 · 行为：默认排序、全屏模式 =====
+export function buildSettingsBehavior(this: SettingsSectionsHost, s: ISwSettings): HTMLElement {
+        const wrapper = makeSettingEl("div");
+        const sortOptions: Array<{value: SortBy, label: string}> = [
+            {value: "mru", label: this.i18n.sortMru},
+            {value: "layout", label: this.i18n.sortLayout},
+            {value: "layoutDesc", label: this.i18n.sortLayoutDesc},
+            {value: "updatedDesc", label: this.i18n.sortUpdatedDesc},
+            {value: "titleAsc", label: this.i18n.sortTitleAsc},
+            {value: "titleDesc", label: this.i18n.sortTitleDesc},
+        ];
+        // T-6872（RZ-2）：分组卡片；密度开关升级为 舒适/紧凑 分段（语义不变）
+        wrapper.append(
+            appendGroupResetButton.call(this, this.settingGroupTitle(this.i18n.settingsGroupSortDensity), "settingsGroupSortDensity"),
+            this.settingGroupCard(
+                this.settingItem(this.i18n.setSortBy, this.i18n.setSortByTip,
+                    this.select(sortOptions, s.sortBy, (v) => this.updateSettings({sortBy: v as SortBy}))),
+                this.settingSegmented(this.i18n.densityLabel, this.i18n.densityCompactTip, [
+                    {value: "comfortable", label: this.i18n.densityComfortable},
+                    {value: "compact", label: this.i18n.densityCompact},
+                ], s.density === "compact" ? "compact" : "comfortable", (v) => {
+                    this.updateSettings({density: v === "compact" ? "compact" : "comfortable"});
+                }),
+            ),
+            appendGroupResetButton.call(this, this.settingGroupTitle(this.i18n.settingsGroupSearchOpen), "settingsGroupSearchOpen"),
+            this.settingGroupCard(
+                // T-6805 拼音辅助匹配：全拼/首字母匹配文档标题
+                this.settingItem(this.i18n.pinyinMatchLabel, this.i18n.pinyinMatchTip,
+                    this.switcher(s.pinyinMatch, (v) => {
+                        this.updateSettings({pinyinMatch: v});
+                    })),
+                // T-6830 打开策略：搜索结果命中已开页签时聚焦复用
+                this.settingItem(this.i18n.reuseTabsLabel, this.i18n.reuseTabsTip,
+                    this.switcher(s.reuseOpenTabs, (v) => {
+                        this.updateSettings({reuseOpenTabs: v});
+                    })),
+                this.settingItem(this.i18n.rememberScrollPositionLabel, this.i18n.rememberScrollPositionTip,
+                    this.switcher(s.rememberScrollPosition !== false, (v) => {
+                        this.updateSettings({rememberScrollPosition: v});
+                    })),
+            ),
+            this.settingGroupTitle(this.i18n.settingsGroupShortcuts),
+            this.settingGroupCard(
+                this.settingItem(this.i18n.shortcutBindingsLabel, this.i18n.shortcutBindingsTip, (() => {
+                    const list = makeSettingEl("dl");
+                    list.className = "sw-settings__shortcut-list";
+                    const current = this.getPlatformShortcutBindings?.() || {};
+                    [[this.i18n.shortcutSwitcher, current.switcher || DEFAULT_HOTKEY, DEFAULT_HOTKEY], [this.i18n.shortcutWorkbench, current.workbench || SECOND_PANEL_HOTKEY, SECOND_PANEL_HOTKEY]].forEach(([label, hotkey, fallback]) => {
+                        const term = makeSettingEl("dt");
+                        term.textContent = label;
+                        const value = makeSettingEl("dd");
+                        const kbd = makeSettingEl("kbd");
+                        kbd.textContent = hotkey;
+                        value.appendChild(kbd);
+                        if (hotkey !== fallback) {
+                            const defaultHint = makeSettingEl("span");
+                            defaultHint.className = "sw-settings__shortcut-default";
+                            defaultHint.textContent = `${this.i18n.shortcutDefaultPrefix || "默认"} ${fallback}`;
+                            value.appendChild(defaultHint);
+                        }
+                        list.append(term, value);
+                    });
+                    return list;
+                })(), true),
+            ),
+            this.settingGroupTitle(this.i18n.settingsGroupAgent),
+            this.settingGroupCard(
+                // T-6692b Agent 受控动作灰度开关：关闭后受控写入/批量动作与执行链一并停用
+                this.settingItem(this.i18n.agentActionsEnabled, this.i18n.agentActionsEnabledTip,
+                    this.switcher(s.agentActionsEnabled, (v) => {
+                        this.updateSettings({agentActionsEnabled: v});
+                    })),
+            ),
+        );
+        return wrapper;
+    }
+
+    // T-6999：面板窗口预览按钮——点击经宿主 openPanelPreview 打开对应面板
+    // 查看当前尺寸效果（单例守卫与 FAB 串行释放由宿主 openPlatformSurface 负责）。
+function buildPanelPreviewButton(this: SettingsSectionsHost, surface: "switcher" | "workbench" | "studio", surfaceLabel: string): HTMLElement {
+        const button = makeSettingEl("button");
+        button.type = "button";
+        button.className = "b3-button b3-button--text sw-settings__panel-preview";
+        const available = this.getAvailablePlatformSurfaces?.() || ["switcher", "workbench", "studio"];
+        const enabled = available.includes(surface);
+        button.textContent = enabled ? this.i18n.panelSizePreview : `${this.i18n.panelSizePreview} · ${this.i18n.moduleDisabled || "已停用"}`;
+        button.setAttribute("aria-label", `${this.i18n.panelSizePreview} · ${surfaceLabel}`);
+        button.title = enabled ? this.i18n.panelSizePreviewTip : (this.i18n.moduleVisibilityHint || "模块已停用");
+        button.disabled = !enabled;
+        button.setAttribute("aria-disabled", String(!enabled));
+        if (enabled) button.addEventListener("click", () => this.openPanelPreview(surface));
+        return button;
+    }
+
+    // ===== 设置页 · 面板：面板窗口、显示方式、侧边栏布局、各 dock 面板开关 =====
+export function buildSettingsPanels(this: SettingsSectionsHost, s: ISwSettings): HTMLElement {
+        const wrapper = makeSettingEl("div");
+        const dockOptions: Array<{value: DockDisplay, label: string}> = [
+            {value: "hidden", label: this.i18n.dockDisplayHidden},
+            {value: "collapsed", label: this.i18n.dockDisplayCollapsed},
+            {value: "full", label: this.i18n.dockDisplayFull},
+        ];
+        const sidebarOptions: Array<{value: SidebarLayout, label: string}> = [
+            {value: "enlarge", label: this.i18n.sidebarEnlarge},
+            {value: "columns", label: this.i18n.sidebarColumnsAuto},
+        ];
+        // T-6872（RZ-2）：分组卡片；枚举改分段控件
+        // T-6999：三面板窗口尺寸统一到本标签——切换器（第一面板）与片段实验室
+        // （第三面板，桌面端）的窗口组在此渲染；工作台（第二面板）窗口组在下方
+        // buildSettingsHomePanel 的组件面板分组内。三组都带默认值提示与预览入口，
+        // 提示明确「设置页自身保持独立自适应」，避免误解面板尺寸会联动设置窗口。
+        const panelWindows = makeSettingEl("div");
+        panelWindows.append(appendGroupResetButton.call(this, this.settingGroupTitle(this.i18n.settingsGroupPanelWindows), "settingsGroupPanelWindows"));
+        const defaultHint = makeSettingEl("p");
+        defaultHint.className = "sw-settings__tip sw-settings__panel-size-hint";
+        defaultHint.textContent = this.i18n.panelSizeDefaultHint;
+        defaultHint.setAttribute("role", "note");
+        // 切换器（第一面板）：沿用既有 panelSizeMode/panelScale/固定宽高 字段与文案
+        const switcherWindowCard = this.settingGroupCard(
+            this.settingSegmented(this.i18n.panelSizeMode, this.i18n.panelSizeModeTip, [
+                {value: "adaptive", label: this.i18n.panelSizeModeAdaptive},
+                {value: "custom", label: this.i18n.panelSizeModeCustom},
+                {value: "fullscreen", label: this.i18n.panelSizeModeFullscreen},
+            ], s.panelSizeMode, (v) => this.updateSettings({panelSizeMode: v as PanelSizeMode})),
+        );
+        if (s.panelSizeMode === "adaptive") {
+            switcherWindowCard.appendChild(this.settingItem(this.i18n.panelScale, this.i18n.panelScaleTip,
+                this.num(s.panelScale, PANEL_SCALE_MIN, PANEL_SCALE_MAX, 5, "%", (v) => this.updateSettings({panelScale: v}), this.i18n.panelScale)));
+        }
+        if (s.panelSizeMode === "custom") {
+            switcherWindowCard.appendChild(this.settingItem(this.i18n.setWidth, this.i18n.setWidthTip,
+                this.num(s.dialogWidth, DIALOG_WIDTH_MIN_PX, DIALOG_WIDTH_MAX_PX, 40, this.i18n.unitPx, (v) => this.updateSettings({dialogWidth: v}), this.i18n.setWidth)));
+            switcherWindowCard.appendChild(this.settingItem(this.i18n.setHeight, this.i18n.setHeightTip,
+                this.num(s.dialogHeight, DIALOG_HEIGHT_MIN_PX, DIALOG_HEIGHT_MAX_PX, 40, this.i18n.unitPx, (v) => this.updateSettings({dialogHeight: v}), this.i18n.setHeight)));
+        }
+        switcherWindowCard.appendChild(defaultHint);
+        switcherWindowCard.appendChild(this.settingItem(this.i18n.panelSizePreview, this.i18n.panelSizePreviewTip,
+            buildPanelPreviewButton.call(this, "switcher", this.i18n.platformSwitcher)));
+        // T-6999：组标题沿用既有「切换器窗口」键（原外观页窗口组整组迁入，文案不变）
+        panelWindows.appendChild(this.settingGroupTitle(this.i18n.settingsGroupWindow));
+        panelWindows.appendChild(switcherWindowCard);
+        // 片段实验室（第三面板）：T-6986 尺寸模式；桌面专属表面，移动端设置不渲染本组
+        if (!this.isMobile) {
+            const studioWindowCard = this.settingGroupCard(
+                this.settingSegmented(this.i18n.setStudioSizeMode, this.i18n.setStudioSizeModeTip, [
+                    {value: "adaptive", label: this.i18n.panelSizeModeAdaptive},
+                    {value: "custom", label: this.i18n.panelSizeModeCustom},
+                    {value: "fullscreen", label: this.i18n.panelSizeModeFullscreen},
+                ], s.studioSizeMode, (v) => this.updateSettings({studioSizeMode: v as StudioSizeMode})),
+            );
+            if (s.studioSizeMode === "custom") {
+                studioWindowCard.appendChild(this.settingItem(this.i18n.setStudioWidth, this.i18n.setStudioWidthTip,
+                    this.num(s.studioWidth, DIALOG_WIDTH_MIN_PX, DIALOG_WIDTH_MAX_PX, 40, this.i18n.unitPx, (v) => this.updateSettings({studioWidth: v}), this.i18n.setStudioWidth)));
+                studioWindowCard.appendChild(this.settingItem(this.i18n.setStudioHeight, this.i18n.setStudioHeightTip,
+                    this.num(s.studioHeight, DIALOG_HEIGHT_MIN_PX, DIALOG_HEIGHT_MAX_PX, 40, this.i18n.unitPx, (v) => this.updateSettings({studioHeight: v}), this.i18n.setStudioHeight)));
+            }
+            studioWindowCard.appendChild(this.settingItem(this.i18n.panelSizePreview, this.i18n.panelSizePreviewTip,
+                buildPanelPreviewButton.call(this, "studio", this.i18n.platformStudio)));
+            panelWindows.appendChild(this.settingGroupTitle(this.i18n.platformStudio));
+            panelWindows.appendChild(studioWindowCard);
+        }
+        wrapper.append(panelWindows);
+        wrapper.append(
+            this.settingGroupTitle(this.i18n.settingsGroupListSidebar),
+            this.settingGroupCard(
+                this.settingSegmented(this.i18n.setDockDisplay, this.i18n.setDockDisplayTip, dockOptions, s.dockDisplay, (v) => this.updateSettings({dockDisplay: v as DockDisplay})),
+                // 侧边栏缩略图布局：拉伸放大填满栏宽，或按宽度自动增加列数
+                this.settingSegmented(this.i18n.sidebarLayout, this.i18n.sidebarLayoutTip, sidebarOptions, s.sidebarLayout, (v) => {
+                    this.updateSettings({sidebarLayout: v as SidebarLayout});
+                }),
+            ),
+            this.settingGroupTitle(this.i18n.settingsGroupDocks),
+            this.settingGroupCard(
+                this.settingItem(this.i18n.setDocks, this.i18n.setDocksTip, buildSettingsDockToggles.call(this, s), true),
+            ),
+        );
+        // T-6998（ADR 0097）：遗留 homePanel 构建内容并入“面板”标签——保留 10 标签 IA，
+        // 组件面板调色与工作台窗口尺寸不再挂在不可达的 homePanel 死键上。
+        // 分组标题与分段控件复用既有双语键；设置搜索索引按生产 DOM 扫描，自动覆盖。
+        wrapper.appendChild(buildSettingsHomePanel.call(this, s));
+        // T-7026（ADR 0099）：模块管理——「启用=可见且可进入」单一语义；切换器为平台根
+        // 不设开关（防锁死保底）。悬浮球关闭后任何端不再挂载，已开面板保留至用户关闭。
+        const moduleVisibility = s.moduleVisibility || {workbench: true, studio: true, floatingBall: true};
+        const moduleToggles = makeSettingEl("div");
+        moduleToggles.className = "sw-setting__docks b3-label__text";
+        const moduleRows: Array<{key: "workbench" | "studio" | "floatingBall"; label: string}> = [
+            {key: "workbench", label: this.i18n.moduleWorkbench},
+            {key: "studio", label: this.i18n.moduleStudio},
+            {key: "floatingBall", label: this.i18n.moduleFloatingBall},
+        ];
+        moduleRows.forEach(({key, label}) => {
+            const row = makeSettingEl("div");
+            row.className = "sw-setting__dock-item";
+            const toggle = makeSettingEl("label");
+            toggle.className = "b3-switch sw-switch";
+            const checkbox = makeSettingEl("input");
+            checkbox.type = "checkbox";
+            checkbox.checked = moduleVisibility[key] !== false;
+            checkbox.dataset.moduleKey = key;
+            // The visible label is a sibling of the switch (the row cannot
+            // contain a nested <label>), so expose an explicit accessible name
+            // and make the whole row behave like the visual target.
+            checkbox.setAttribute("aria-label", label);
+            checkbox.addEventListener("change", () => {
+                const current = this.getSettings().moduleVisibility || {workbench: true, studio: true, floatingBall: true};
+                const next = {...current, [key]: checkbox.checked};
+                this.updateSettings({moduleVisibility: next});
+                this.settingsSceneReloader?.();
+                if (key === "floatingBall") this.updateFloatingBallVisibility?.();
+            });
+            const knob = makeSettingEl("span");
+            toggle.appendChild(checkbox);
+            toggle.appendChild(knob);
+            const title = makeSettingEl("span");
+            title.textContent = label;
+            row.appendChild(toggle);
+            row.appendChild(title);
+            row.addEventListener("click", (event) => {
+                const target = event.target as HTMLElement | null;
+                // Let the native label/input path handle clicks on the switch;
+                // clicks elsewhere in the row should activate the same control.
+                if (target?.closest(".sw-switch")) return;
+                checkbox.click();
+            });
+            moduleToggles.appendChild(row);
+        });
+        wrapper.append(
+            this.settingGroupTitle(this.i18n.settingsGroupModules),
+            this.settingGroupCard(
+                this.settingItem(this.i18n.moduleVisibilityLabel || this.i18n.settingsGroupModules, this.i18n.moduleVisibilityHint, moduleToggles, true),
+            ),
+        );
+        return wrapper;
+    }
+
+    // dock 面板开关列表：勾选的面板出现在切换器左侧，取消的隐藏
+export function buildSettingsDockToggles(this: SettingsSectionsHost, s: ISwSettings): HTMLElement {
+        const box = makeSettingEl("div");
+        box.className = "sw-setting__docks b3-label__text";
+        const dockPanels = this.getDockPanels();
+        const excluded = new Set(s.excludedDocks);
+        dockPanels.forEach((panel) => {
+            // 行容器用 div：开关本身是 label（b3-switch 标准结构 input+span），label 不可嵌套
+            const row = makeSettingEl("div");
+            row.className = "sw-setting__dock-item";
+            const toggle = makeSettingEl("label");
+            toggle.className = "b3-switch sw-switch";
+            const checkbox = makeSettingEl("input");
+            checkbox.type = "checkbox";
+            checkbox.checked = !excluded.has(panel.type);
+            checkbox.dataset.dockType = panel.type;
+            // The title is rendered beside the switch, so the input needs an
+            // explicit name for keyboard and screen-reader users.
+            checkbox.setAttribute("aria-label", panel.title);
+            checkbox.addEventListener("change", () => {
+                const next = new Set(this.getSettings().excludedDocks);
+                if (checkbox.checked) {
+                    next.delete(panel.type);
+                } else {
+                    next.add(panel.type);
+                }
+                this.updateSettings({excludedDocks: Array.from(next)});
+            });
+            const knob = makeSettingEl("span");
+            toggle.appendChild(checkbox);
+            toggle.appendChild(knob);
+            const title = makeSettingEl("span");
+            title.textContent = panel.title;
+            row.appendChild(toggle);
+            row.appendChild(title);
+            row.addEventListener("click", (event) => {
+                const target = event.target as HTMLElement | null;
+                if (target?.closest(".sw-switch")) return;
+                checkbox.click();
+            });
+            box.appendChild(row);
+        });
+        if (dockPanels.length === 0) {
+            box.textContent = this.i18n.noDockPanels;
+        }
+        return box;
+    }
+
+    // ===== 设置页 · 手机端：悬浮按钮开关、卡片布局 =====
+export function buildSettingsHomePanel(this: SettingsSectionsHost, s: ISwSettings): HTMLElement {
+        const wrapper = makeSettingEl("div");
+        const paletteOptions: Array<{value: HomePalette, label: string}> = [
+            {value: "auto", label: this.i18n.setHomePaletteAuto},
+            {value: "soft", label: this.i18n.setHomePaletteSoft},
+            {value: "mono", label: this.i18n.setHomePaletteMono},
+        ];
+        const modeOptions: Array<{value: HomeSizeMode, label: string}> = [
+            {value: "follow", label: this.i18n.setHomeSizeModeFollow},
+            {value: "adaptive", label: this.i18n.setHomeSizeModeAdaptive},
+            {value: "custom", label: this.i18n.setHomeSizeModeCustom},
+            {value: "fullscreen", label: this.i18n.setHomeSizeModeFullscreen},
+        ];
+        // T-6872（RZ-2）：分组卡片；枚举改分段控件
+        const workbenchHint = makeSettingEl("p");
+        workbenchHint.className = "sw-settings__tip sw-settings__panel-size-hint";
+        workbenchHint.textContent = this.i18n.panelSizeDefaultHint;
+        workbenchHint.setAttribute("role", "note");
+        const homeStore = s.homeStore || {};
+        const updateHomeStoreSettings = (patch: Record<string, unknown>) => {
+            const current = this.getSettings().homeStore || {};
+            if (patch.rememberState === false) {
+                this.updateSettings({homeStore: {
+                    rememberState: false,
+                    defaultViewMode: patch.defaultViewMode === "list" ? "list" : (current.defaultViewMode === "list" ? "list" : "grid"),
+                    retryFailed: typeof patch.retryFailed === "boolean" ? patch.retryFailed : current.retryFailed !== false,
+                }});
+                return;
+            }
+            this.updateSettings({homeStore: {...current, ...patch}});
+        };
+        wrapper.append(
+            this.settingGroupTitle(this.i18n.settingsGroupComponents),
+            this.settingGroupCard(
+                this.settingSegmented(this.i18n.setHomePalette, this.i18n.setHomePaletteTip, paletteOptions, s.homePalette, (v) => this.updateSettings({homePalette: v as HomePalette})),
+            ),
+            appendGroupResetButton.call(this, this.settingGroupTitle(this.i18n.settingsGroupWorkbenchBehavior), "settingsGroupWorkbenchBehavior"),
+            this.settingGroupCard(
+                this.settingItem(this.i18n.homeStoreRememberStateLabel, this.i18n.homeStoreRememberStateTip,
+                    this.switcher(homeStore.rememberState !== false, (value) => updateHomeStoreSettings({rememberState: value}))),
+                this.settingSegmented(this.i18n.homeStoreDefaultViewModeLabel, this.i18n.homeStoreDefaultViewModeTip, [
+                    {value: "grid", label: this.i18n.homeStoreViewGrid},
+                    {value: "list", label: this.i18n.homeStoreViewList},
+                ], homeStore.defaultViewMode === "list" ? "list" : "grid", (value) => updateHomeStoreSettings({defaultViewMode: value})),
+                this.settingItem(this.i18n.homeStoreRetryFailedLabel, this.i18n.homeStoreRetryFailedTip,
+                    this.switcher(homeStore.retryFailed !== false, (value) => updateHomeStoreSettings({retryFailed: value}))),
+            ),
+            appendGroupResetButton.call(this, this.settingGroupTitle(this.i18n.settingsGroupWorkbenchWindow), "settingsGroupWorkbenchWindow"),
+            this.settingGroupCard(
+                this.settingSegmented(this.i18n.setHomeSizeMode, this.i18n.setHomeSizeModeTip, modeOptions, s.homeSizeMode, (v) => this.updateSettings({homeSizeMode: v as HomeSizeMode})),
+                // T-6999：默认值提示 + 预览入口（与切换器/实验室窗口组同构）
+                workbenchHint,
+                this.settingItem(this.i18n.panelSizePreview, this.i18n.panelSizePreviewTip,
+                    buildPanelPreviewButton.call(this, "workbench", this.i18n.platformWorkbench)),
+            ),
+        );
+        if (s.homeSizeMode === "custom") {
+            wrapper.append(
+                this.settingGroupCard(
+                    this.settingItem(this.i18n.setHomeWidth, this.i18n.setHomeWidthTip,
+                        this.num(s.homeWidth, 480, 1920, 20, this.i18n.unitPx, (v) => this.updateSettings({homeWidth: v}), this.i18n.setHomeWidth)),
+                    this.settingItem(this.i18n.setHomeHeight, this.i18n.setHomeHeightTip,
+                        this.num(s.homeHeight, 360, 1280, 20, this.i18n.unitPx, (v) => this.updateSettings({homeHeight: v}), this.i18n.setHomeHeight)),
+                ),
+            );
+        }
+        return wrapper;
+    }
+
+export function buildSettingsMobile(this: SettingsSectionsHost, s: ISwSettings): HTMLElement {
+        const wrapper = makeSettingEl("div");
+        const panelNote = makeSettingEl("p");
+        panelNote.className = "sw-settings__tip sw-settings__mobile-home-note";
+        panelNote.textContent = this.i18n.mobileHomePanelFixed;
+        panelNote.setAttribute("role", "note");
+        // T-6872（RZ-2）：分组卡片；列数枚举改分段（自动=竖屏单列、横屏双列）
+        wrapper.append(
+            panelNote,
+            appendGroupResetButton.call(this, this.settingGroupTitle(this.i18n.settingsGroupMobileLayout), "settingsGroupMobileLayout"),
+            this.settingGroupCard(
+                this.settingSegmented(this.i18n.mobileLayout, this.i18n.mobileLayoutTip, [
+                    {value: String(MOBILE_COLUMNS_AUTO), label: this.i18n.mobileAuto},
+                    {value: String(MOBILE_COLUMNS_SINGLE), label: this.i18n.mobileSingle},
+                    {value: String(MOBILE_COLUMNS_DOUBLE), label: this.i18n.mobileDouble},
+                ], String(s.mobileColumns), (v) => this.updateSettings({mobileColumns: parseInt(v, 10)})),
+                this.settingItem(this.i18n.mobileThumbHeight, this.i18n.mobileThumbHeightTip,
+                    this.rangeNumber(s.mobileThumbHeight, MOBILE_THUMB_HEIGHT_MIN_PX, MOBILE_THUMB_HEIGHT_MAX_PX, 4, this.i18n.unitPx,
+                        (v) => this.updateSettings({mobileThumbHeight: v}), this.i18n.mobileThumbHeight)),
+            ),
+            this.settingGroupTitle(this.i18n.settingsGroupCompatibility),
+            this.settingGroupCard(
+                this.settingItem(this.i18n.fabEnabled, this.i18n.fabEnabledTip,
+                    this.switcher(s.floatingBall?.enabled?.mobile ?? s.fabEnabled, (v) => {
+                        const floatingBall = this.getSettings().floatingBall || {};
+                        this.updateSettings({
+                            fabEnabled: v,
+                            floatingBall: {
+                                ...floatingBall,
+                                enabled: {
+                                    ...(floatingBall.enabled || {}),
+                                    mobile: v,
+                                },
+                            },
+                        });
+                        this.updateFABVisibility();
+                    })),
+                (() => {
+                    const hint = makeSettingEl("p");
+                    hint.className = "sw-settings__tip sw-settings__mobile-fab-migration";
+                    hint.textContent = this.i18n.mobileFabMigrationHint;
+                    hint.setAttribute("role", "note");
+                    return hint;
+                })(),
+            ),
+        );
+        return wrapper;
+    }
+
+    // ===== 设置页 · 日记：默认日记笔记本 =====
+export function buildSettingsJournal(this: SettingsSectionsHost, s: ISwSettings): HTMLElement {
+        const wrapper = makeSettingEl("div");
+        wrapper.append(
+            appendGroupResetButton.call(this, this.settingGroupTitle(this.i18n.settingsGroupJournal), "settingsGroupJournal"),
+            this.settingGroupCard(
+                this.settingItem(this.i18n.journalNotebook, this.i18n.journalNotebookTip,
+                    this.notebookSelect(s.journalNotebook, (id) => this.updateSettings({journalNotebook: id}))),
+                this.settingItem(this.i18n.journalAutoCreate, this.i18n.journalAutoCreateTip,
+                    this.switcher(s.journalAutoCreate !== false, (value) => this.updateSettings({journalAutoCreate: value}))),
+            ),
+        );
+        return wrapper;
+    }
+
+    // ===== 设置页 · 收藏：新建分组、分组重命名/删除、调整收藏项所属分组 =====
+    // 内容随增删实时重建，故 render 回调在内部定义后传给各渲染 helper
+export function buildSettingsFavorites(this: SettingsSectionsHost, ): HTMLElement {
+        const box = makeSettingEl("div");
+        box.className = "sw-setting__favs";
+        const render = () => {
+            const favorites = this.getFavorites();
+            const groupNames = this.getFavoriteGroupNames();
+            box.innerHTML = "";
+            box.appendChild(buildSettingsFavCreateRow.call(this, render));
+            if (groupNames.length > 0) {
+                box.appendChild(buildSettingsFavGroupList.call(this, groupNames, favorites, render));
+            }
+            const ungrouped = favorites.filter((favorite) => !favorite.group);
+            if (ungrouped.length > 0) {
+                box.appendChild(buildSettingsFavSection.call(this, this.i18n.ungrouped, ungrouped, groupNames, render, false));
+            }
+            buildSettingsFavSmartGroups.call(this, box, render);
+        };
+        render();
+        return this.settingItem(this.i18n.manageFavorites, this.i18n.manageFavoritesTip, box, true);
+    }
+
+    // 新建分组行：输入名称即创建（空分组保留，收藏时可选用）
+// T-6804 智能分组配置：名称 + 标签选择（标签清单来自内核 getTag），最多 4 组。
+export function buildSettingsFavSmartGroups(this: SettingsSectionsHost, box: HTMLElement, render: () => void): void {
+    const section = makeSettingEl("div");
+    section.className = "sw-setting__fav-smart";
+    const title = makeSettingEl("div");
+    title.className = "sw-settings__item-title";
+    title.textContent = this.i18n.favSmartGroups;
+    const tip = makeSettingEl("p");
+    tip.className = "sw-settings__hint";
+    tip.textContent = this.i18n.favSmartGroupsTip;
+    section.append(title, tip);
+
+    const list = makeSettingEl("div");
+    list.className = "sw-setting__fav-smart-list";
+    const renderList = () => {
+        list.textContent = "";
+        const groups = this.getFavoriteSmartGroups();
+        if (!groups.length) {
+            const empty = makeSettingEl("p");
+            empty.className = "sw-settings__hint";
+            empty.textContent = this.i18n.favSmartGroupEmpty;
+            list.appendChild(empty);
+            return;
+        }
+        groups.forEach((group) => {
+            const row = makeSettingEl("div");
+            row.className = "sw-setting__fav-smart-item";
+            const name = makeSettingEl("span");
+            // T-6817：行内展示组合条件（笔记本范围 + 更新时间窗）
+            const scopeParts = [
+                `#${group.tag}`,
+                group.notebook ? `@${group.notebook}` : "",
+                group.updatedWithinDays ? `≤${group.updatedWithinDays}d` : "",
+            ].filter(Boolean);
+            name.textContent = `${group.name} · ${scopeParts.join(" ")}`;
+            const remove = makeSettingEl("button");
+            remove.type = "button";
+            remove.className = "b3-button b3-button--text";
+            remove.textContent = this.i18n.favSmartGroupRemove;
+            remove.addEventListener("click", () => {
+                this.removeFavoriteSmartGroup(group.name);
+                render();
+            });
+            row.append(name, remove);
+            list.appendChild(row);
+        });
+    };
+    renderList();
+
+    const addName = makeSettingEl("input");
+    addName.className = "b3-text-field";
+    addName.placeholder = this.i18n.favSmartGroupName;
+    addName.maxLength = 24;
+    addName.setAttribute("aria-label", this.i18n.favSmartGroupName);
+    const addTag = makeSettingEl("select");
+    addTag.className = "b3-select";
+    addTag.appendChild(new Option(this.i18n.favSmartGroupTagPick, ""));
+    void this.getFavoriteTagOptions().then((options) => {
+        if (!addTag.isConnected) return;
+        options.forEach((option) => addTag.appendChild(new Option(`#${option.name} (${option.count})`, option.name)));
+    });
+    // T-6817 动态组：可选笔记本范围与更新时间窗
+    const addNotebook = makeSettingEl("select");
+    addNotebook.className = "b3-select";
+    addNotebook.appendChild(new Option(this.i18n.favSmartGroupNotebookAny, ""));
+    void this.getFavoriteNotebookOptions().then((options) => {
+        if (!addNotebook.isConnected) return;
+        options.forEach((option) => addNotebook.appendChild(new Option(option.name, option.id)));
+    });
+    const addUpdated = makeSettingEl("select");
+    addUpdated.className = "b3-select";
+    addUpdated.appendChild(new Option(this.i18n.favSmartGroupUpdatedAny, ""));
+    // i18n 卫生门禁要求字面量访问：档位 → key 显式映射
+    const updatedLabels: Record<number, string> = {
+        7: this.i18n.favSmartGroupUpdated7,
+        30: this.i18n.favSmartGroupUpdated30,
+        90: this.i18n.favSmartGroupUpdated90,
+    };
+    for (const days of [7, 30, 90]) {
+        addUpdated.appendChild(new Option(updatedLabels[days], String(days)));
+    }
+    const addBtn = makeSettingEl("button");
+    addBtn.type = "button";
+    addBtn.className = "b3-button b3-button--outline";
+    addBtn.textContent = this.i18n.favSmartGroupAdd;
+    addBtn.addEventListener("click", () => {
+        if (!addName.value.trim() || !addTag.value) return;
+        if (this.addFavoriteSmartGroup(addName.value, addTag.value, addNotebook.value, Number(addUpdated.value) || 0)) render();
+    });
+    const addRow = makeSettingEl("div");
+    addRow.className = "sw-setting__fav-smart-add";
+    addRow.append(addName, addTag, addNotebook, addUpdated, addBtn);
+    section.append(list, addRow);
+    box.appendChild(section);
+}
+
+export function buildSettingsFavCreateRow(this: SettingsSectionsHost, render: () => void): HTMLElement {        const createRow = makeSettingEl("div");
+        createRow.className = "sw-setting__fav-create";
+        const nameInput = makeSettingEl("input");
+        nameInput.className = "b3-text-field";
+        nameInput.placeholder = this.i18n.groupName;
+        const createBtn = makeSettingEl("button");
+        createBtn.className = "b3-button b3-button--outline";
+        createBtn.textContent = this.i18n.createGroup;
+        const doCreate = () => {
+            if (this.createFavoriteGroup(nameInput.value)) {
+                nameInput.value = "";
+                render();
+            }
+        };
+        createBtn.addEventListener("click", doCreate);
+        nameInput.addEventListener("keydown", (event) => {
+            /* IME 合成期让路：Enter 属确认选字，误触会以拼音半成品创建。 */
+            if (event.isComposing || event.keyCode === 229) return;
+            if (event.key === "Enter") {
+                event.preventDefault();
+                doCreate();
+            }
+        });
+        createRow.appendChild(nameInput);
+        createRow.appendChild(createBtn);
+        return createRow;
+    }
+
+    // 分组列表：每行 名称 + 收藏数 + 行内重命名 + 删除（组内收藏项移出到未分组）
+export function buildSettingsFavGroupList(this: SettingsSectionsHost, groupNames: string[], favorites: IFavoriteItem[], render: () => void): HTMLElement {
+        const groupList = makeSettingEl("div");
+        groupList.className = "sw-setting__group-list";
+        groupNames.forEach((name, index) => {
+            groupList.appendChild(buildSettingsFavSection.call(this, name, favorites.filter((fav) => fav.group === name), groupNames, render, true, index));
+        });
+        return groupList;
+    }
+
+export function buildSettingsFavSection(this: SettingsSectionsHost, name: string, items: IFavoriteItem[], groupNames: string[], render: () => void, canManage: boolean, groupIndex = -1): HTMLElement {
+        const section = makeSettingEl("section");
+        section.className = "sw-setting__fav-section";
+        const collapseKey = name || this.i18n.ungrouped;
+        const collapsed = this.favCollapsed.has(collapseKey);
+        const header = makeSettingEl("div");
+        header.className = "sw-setting__fav-section-head";
+        if (canManage) {
+            header.draggable = !this.isMobile;
+            if (!this.isMobile) {
+                header.addEventListener("dragstart", (event) => event.dataTransfer?.setData("text/plain", name));
+                header.addEventListener("dragover", (event) => event.preventDefault());
+                header.addEventListener("drop", (event) => {
+                    event.preventDefault();
+                    const source = event.dataTransfer?.getData("text/plain");
+                    if (source && source !== name) {
+                        this.reorderFavoriteGroups(source, name);
+                        render();
+                    }
+                });
+            }
+        }
+        const toggle = makeSettingEl("button");
+        toggle.type = "button";
+        toggle.className = "b3-button b3-button--text sw-setting__fav-collapse";
+        toggle.setAttribute("aria-expanded", String(!collapsed));
+        toggle.title = this.i18n.favCollapseTip;
+        toggle.innerHTML = `<svg><use xlink:href="#iconRight"></use></svg>`;
+        toggle.addEventListener("click", () => {
+            if (this.favCollapsed.has(collapseKey)) this.favCollapsed.delete(collapseKey);
+            else this.favCollapsed.add(collapseKey);
+            this.saveFavCollapsed();
+            render();
+        });
+        const number = makeSettingEl("span");
+        number.className = "sw-setting__fav-order";
+        number.textContent = canManage ? String(groupIndex + 1) : "-";
+        const title = makeSettingEl("span");
+        title.className = "sw-setting__group-name";
+        title.textContent = name;
+        title.title = name;
+        const count = makeSettingEl("span");
+        count.className = "sw-setting__group-count";
+        count.textContent = String(items.length);
+        header.append(toggle, number, title, count);
+        if (canManage) {
+            header.append(buildFavGroupRowActions.call(this, name, render, groupNames, groupIndex));
+        }
+        section.appendChild(header);
+        if (!collapsed) {
+            const list = makeSettingEl("div");
+            list.className = "sw-setting__fav-section-items";
+            items.forEach((favorite, index) => list.appendChild(buildSettingsFavItemRow.call(this, favorite, index, items.length, groupNames, render)));
+            if (items.length === 0) {
+                const empty = makeSettingEl("div");
+                empty.className = "sw-setting__fav-empty";
+                empty.setAttribute("role", "status");
+                empty.textContent = this.i18n.noFavorites;
+                list.appendChild(empty);
+            }
+            section.appendChild(list);
+        }
+        return section;
+    }
+
+export function buildFavGroupRowActions(this: SettingsSectionsHost, name: string, render: () => void, groupNames: string[] = [], groupIndex = -1): HTMLElement {
+        const actions = makeSettingEl("span");
+        actions.className = "sw-setting__group-actions";
+        const button = (label: string, callback: () => void, danger = false) => {
+            const el = makeSettingEl("button");
+            el.type = "button";
+            el.className = `b3-button b3-button--small sw-setting__group-btn${danger ? " sw-setting__group-del" : ""}`;
+            el.textContent = label;
+            el.addEventListener("click", callback);
+            return el;
+        };
+        if (groupIndex > 0) {
+            actions.append(iconButton("iconUp", this.i18n.favMoveUp, () => {
+                this.reorderFavoriteGroups(name, groupNames[groupIndex - 1]);
+                render();
+            }));
+        }
+        if (groupIndex >= 0 && groupIndex < groupNames.length - 1) {
+            actions.append(iconButton("iconDown", this.i18n.favMoveDown, () => {
+                this.reorderFavoriteGroups(name, groupNames[groupIndex + 1]);
+                render();
+            }));
+        }
+        actions.append(
+            button(this.i18n.rename, () => {
+                const titleText = this.i18n.rename || "重命名";
+                const dialog = new Dialog({
+                    title: titleText,
+                    content: `<div class="b3-dialog__content" style="padding:16px;">
+                        <input class="b3-text-field fn__block" value="${name.replace(/"/g, '&quot;')}" />
+                    </div>
+                    <div class="b3-dialog__action">
+                        <button class="b3-button b3-button--cancel">${this.i18n.cancel || "取消"}</button>
+                        <div class="fn__space"></div>
+                        <button class="b3-button b3-button--text">${this.i18n.confirm || "确认"}</button>
+                    </div>`,
+                    width: "400px"
+                });
+                const input = dialog.element.querySelector("input") as HTMLInputElement;
+                const btns = dialog.element.querySelectorAll("button");
+                input?.focus();
+                input?.select();
+                const submit = () => {
+                    const next = input.value.trim();
+                    if (next && next !== name) {
+                        this.renameFavoriteGroup(name, next);
+                        render();
+                    }
+                    dialog.destroy();
+                };
+                input?.addEventListener("keydown", (e) => {
+                    if (e.isComposing || e.keyCode === 229) return;
+                    if (e.key === "Enter") submit();
+                });
+                btns[0]?.addEventListener("click", () => dialog.destroy());
+                btns[1]?.addEventListener("click", submit);
+            }),
+            button(this.i18n.deleteGroup, () => {
+                if (confirm(this.i18n.deleteGroupConfirm)) {
+                    this.deleteFavoriteGroup(name);
+                    render();
+                }
+            }, true),
+        );
+        return actions;
+
+        function iconButton(icon: string, label: string, callback: () => void): HTMLButtonElement {
+            const button = makeSettingEl("button");
+            button.type = "button";
+            button.className = "b3-button b3-button--text sw-setting__group-icon";
+            button.title = label;
+            button.setAttribute("aria-label", label);
+            button.innerHTML = `<svg><use xlink:href="#${icon}"></use></svg>`;
+            button.addEventListener("click", callback);
+            return button;
+        }
+    }
+
+export function buildSettingsFavItemRow(this: SettingsSectionsHost, favorite: IFavoriteItem, index: number, count: number, groupNames: string[], render: () => void): HTMLElement {
+        const row = makeSettingEl("div");
+        row.className = "sw-setting__fav-row";
+        row.draggable = !this.isMobile;
+        row.dataset.favoriteKey = favorite.key;
+        if (!this.isMobile) {
+            row.addEventListener("dragstart", (event) => event.dataTransfer?.setData("text/plain", favorite.key));
+            row.addEventListener("dragover", (event) => event.preventDefault());
+            row.addEventListener("drop", (event) => {
+                event.preventDefault();
+                const source = event.dataTransfer?.getData("text/plain");
+                if (source && source !== favorite.key) {
+                    this.reorderFavoritesInGroup(favorite.group || "", source, favorite.key);
+                    render();
+                }
+            });
+        }
+        const order = makeSettingEl("span");
+        order.className = "sw-setting__fav-item-order";
+        order.textContent = String(index + 1);
+        const title = makeSettingEl("span");
+        title.className = "sw-setting__fav-name";
+        title.textContent = favorite.title;
+        title.title = favorite.title;
+        const select = makeSettingEl("select");
+        select.className = "b3-select";
+        select.appendChild(new Option(this.i18n.ungrouped, ""));
+        groupNames.forEach((group) => select.appendChild(new Option(group, group)));
+        select.value = favorite.group || "";
+        select.addEventListener("change", () => { this.setFavoriteGroup(favorite.key, select.value); render(); });
+        const controls = makeSettingEl("span");
+        controls.className = "sw-setting__fav-controls";
+        const move = (delta: number) => {
+            if (index + delta < 0 || index + delta >= count) return;
+            const target = this.getFavorites().filter((item) => (item.group || "") === (favorite.group || ""))[index + delta];
+            if (target) { this.reorderFavoritesInGroup(favorite.group || "", favorite.key, target.key); render(); }
+        };
+        const iconButton = (icon: string, label: string, callback: () => void) => {
+            const button = makeSettingEl("button");
+            button.type = "button";
+            button.className = "b3-button b3-button--text sw-setting__fav-control";
+            button.title = label;
+            button.setAttribute("aria-label", label);
+            button.innerHTML = `<svg><use xlink:href="#${icon}"></use></svg>`;
+            button.addEventListener("click", callback);
+            return button;
+        };
+        controls.append(iconButton("iconUp", this.i18n.favMoveUp, () => move(-1)), iconButton("iconDown", this.i18n.favMoveDown, () => move(1)));
+        row.append(order, title, select, controls);
+        return row;
+    }
+
+export function buildSettingsQuickActions(this: SettingsSectionsHost, ): HTMLElement {
+        const box = makeSettingEl("div");
+        box.className = "sw-setting__quick-actions";
+        const render = () => {
+            box.innerHTML = "";
+            const actions = this.getQuickActions();
+            if (actions.length > 0) {
+                const header = makeSettingEl("div");
+                header.className = "sw-setting__quick-header";
+                [this.i18n.quickColumnLabel, this.i18n.quickColumnIcon, this.i18n.quickColumnTargets,
+                    this.i18n.quickColumnActions, this.i18n.quickColumnEnabled].forEach((label) => {
+                    const cell = makeSettingEl("span");
+                    cell.textContent = label;
+                    header.appendChild(cell);
+                });
+                box.appendChild(header);
+            }
+            actions.forEach((action) => {
+                const row = makeSettingEl("div");
+                row.className = "sw-setting__quick-action";
+                row.draggable = !this.isMobile;
+                row.dataset.quickActionId = action.id;
+                // 手机端禁用整行拖拽，避免手势排序与页面上下滑动争抢；保留行内上下移动按钮。
+                if (!this.isMobile) {
+                    row.addEventListener("dragstart", (event) => {
+                        event.dataTransfer?.setData("text/plain", action.id);
+                        row.classList.add("is-dragging");
+                    });
+                    row.addEventListener("dragend", () => row.classList.remove("is-dragging"));
+                    row.addEventListener("dragover", (event) => {
+                        event.preventDefault();
+                        row.classList.add("is-drag-over");
+                    });
+                    row.addEventListener("dragleave", () => row.classList.remove("is-drag-over"));
+                    row.addEventListener("drop", (event) => {
+                        event.preventDefault();
+                        row.classList.remove("is-drag-over");
+                        const sourceId = event.dataTransfer?.getData("text/plain");
+                        if (!sourceId || sourceId === action.id) return;
+                        const next = this.getQuickActions();
+                        const from = next.findIndex((item) => item.id === sourceId);
+                        const to = next.findIndex((item) => item.id === action.id);
+                        if (from < 0 || to < 0) return;
+                        const [moved] = next.splice(from, 1);
+                        next.splice(to, 0, moved);
+                        next.forEach((item, itemIndex) => item.order = (itemIndex + 1) * 10);
+                        this.saveQuickActions(next);
+                        render();
+                    });
+                }
+                const text = makeSettingEl("input");
+                text.className = "b3-text-field";
+                text.value = action.label || action.value;
+                text.setAttribute("aria-label", action.label || action.value);
+                text.addEventListener("change", () => {
+                    const label = text.value.trim();
+                    if (!label) {
+                        text.value = action.label || action.value;
+                        return;
+                    }
+                    const next = this.getQuickActions().map((item) => item.id === action.id
+                        ? {...item, label} : item);
+                    this.saveQuickActions(next);
+                    text.value = this.getQuickActions().find((item) => item.id === action.id)?.label || action.label || action.value;
+                });
+                const iconButton = makeSettingEl("button");
+                iconButton.type = "button";
+                iconButton.className = "b3-button b3-button--text sw-setting__quick-icon";
+                iconButton.setAttribute("aria-label", this.i18n.quickChooseIcon);
+                iconButton.title = this.i18n.quickChooseIcon;
+                this.renderQuickActionIconButton(iconButton, action.icon);
+                iconButton.addEventListener("click", () => {
+                    this.openQuickActionIconPicker(action, (icon) => {
+                        const next = this.getQuickActions().map((item) => item.id === action.id ? {...item, icon} : item);
+                        this.saveQuickActions(next);
+                        render();
+                    });
+                });
+                const toggle = makeSettingEl("label");
+                toggle.className = "sw-switch";
+                const input = makeSettingEl("input");
+                input.type = "checkbox";
+                input.checked = action.enabled;
+                input.addEventListener("change", () => {
+                    const next = this.getQuickActions().map((item) => item.id === action.id
+                        ? {...item, enabled: input.checked} : item);
+                    this.saveQuickActions(next);
+                    render();
+                });
+                toggle.append(input, makeSettingEl("span"));
+                const targets = makeSettingEl("div");
+                targets.className = "sw-setting__quick-targets";
+                [
+                    ["desktop", this.i18n.quickDesktop],
+                    ["sidebar", this.i18n.quickSidebar],
+                    ["mobile", this.i18n.quickMobile],
+                ].forEach(([target, label]) => {
+                    const typedTarget = target as QuickActionTarget;
+                    const support = this.getQuickActionSupport(action, typedTarget);
+                    const targetLabel = makeSettingEl("label");
+                    targetLabel.className = "sw-setting__quick-target";
+                    targetLabel.classList.toggle("is-unsupported", support === "unsupported");
+                    targetLabel.classList.toggle("is-unknown", support === "unknown");
+                    if (support === "unsupported") targetLabel.title = this.i18n.quickSupportUnsupported;
+                    else if (support === "unknown") targetLabel.title = this.i18n.quickSupportUnknown;
+                    const targetInput = makeSettingEl("input");
+                    targetInput.type = "checkbox";
+                    targetInput.checked = support !== "unsupported" && action.targets.includes(typedTarget);
+                    targetInput.disabled = support === "unsupported";
+                    targetInput.addEventListener("change", () => {
+                        const next = this.getQuickActions().map((item) => {
+                            if (item.id !== action.id) return item;
+                            const nextTargets = targetInput.checked
+                                ? Array.from(new Set([...item.targets, typedTarget]))
+                                : item.targets.filter((itemTarget) => itemTarget !== target);
+                            return {...item, targets: nextTargets as QuickActionTarget[]};
+                        });
+                        this.saveQuickActions(next);
+                    });
+                    targetLabel.append(targetInput, document.createTextNode(String(label)));
+                    if (support === "unknown") {
+                        const marker = makeSettingEl("span");
+                        marker.className = "sw-setting__quick-support-marker";
+                        marker.textContent = "?";
+                        marker.setAttribute("aria-label", this.i18n.quickSupportUnknown);
+                        targetLabel.appendChild(marker);
+                    }
+                    targets.appendChild(targetLabel);
+                });
+                const controls = makeSettingEl("div");
+                controls.className = "sw-setting__quick-controls";
+                const move = (delta: number) => {
+                    const next = this.getQuickActions();
+                    const index = next.findIndex((item) => item.id === action.id);
+                    const targetIndex = index + delta;
+                    if (index < 0 || targetIndex < 0 || targetIndex >= next.length) return;
+                    [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+                    next.forEach((item, itemIndex) => item.order = (itemIndex + 1) * 10);
+                    this.saveQuickActions(next);
+                    render();
+                };
+                const button = (iconName: string, label: string, onClick: () => void) => {
+                    const actionButton = makeSettingEl("button");
+                    actionButton.type = "button";
+                    actionButton.className = "b3-button b3-button--text sw-setting__quick-control";
+                    actionButton.setAttribute("aria-label", label);
+                    actionButton.title = label;
+                    actionButton.innerHTML = `<svg><use xlink:href="#${iconName}"></use></svg>`;
+                    actionButton.addEventListener("click", onClick);
+                    return actionButton;
+                };
+                controls.append(
+                    button("iconUp", this.i18n.quickMoveUp, () => move(-1)),
+                    button("iconDown", this.i18n.quickMoveDown, () => move(1)),
+                    button("iconClose", this.i18n.quickRemove, () => {
+                        this.saveQuickActions(this.getQuickActions().filter((item) => item.id !== action.id));
+                        render();
+                    }),
+                );
+                row.append(text, iconButton, targets, controls, toggle);
+                box.appendChild(row);
+            });
+            const candidates = this.getQuickActionPickerCandidates(actions);
+            if (candidates.length > 0 && actions.length < QUICK_ACTIONS_MAX) {
+                const addRow = makeSettingEl("div");
+                addRow.className = "sw-setting__quick-action sw-setting__quick-action--add";
+                const tip = makeSettingEl("span");
+                tip.className = "sw-setting__quick-add-tip";
+                tip.textContent = this.i18n.quickAddTip;
+                const add = makeSettingEl("button");
+                add.type = "button";
+                add.className = "b3-button b3-button--text";
+                add.setAttribute("aria-expanded", "false");
+                add.innerHTML = `<svg><use xlink:href="#iconAdd"></use></svg><span>${this.i18n.addQuickAction}</span>`;
+                add.addEventListener("click", () => {
+                    mountQuickActionPicker({
+                        trigger: add,
+                        host: addRow,
+                        candidates,
+                        searchPlaceholder: this.i18n.quickPickerSearch,
+                        emptyText: this.i18n.quickPickerEmpty,
+                        onSelect: (candidate: IQuickActionPickerCandidate) => {
+                            const result = appendQuickAction(this.getQuickActions(), candidate.action, QUICK_ACTIONS_MAX);
+                            if (!result.added) {
+                                showMessage(result.reason === "full" ? this.i18n.quickActionLimit : this.i18n.quickActionDuplicate);
+                                return;
+                            }
+                            this.saveQuickActions(result.items);
+                            render();
+                        },
+                    });
+                });
+                addRow.append(add, tip);
+                box.appendChild(addRow);
+            }
+            if (actions.length === 0 && candidates.length === 0) box.textContent = this.i18n.noQuickActions;
+        };
+        render();
+        const wrapper = makeSettingEl("div");
+        const displayOptions = [
+            {value: "full", label: this.i18n.quickDisplayFull},
+            {value: "icons", label: this.i18n.quickDisplayIcons},
+            {value: "hidden", label: this.i18n.quickDisplayHidden},
+        ];
+        const settings = this.getSettings();
+        wrapper.append(
+            this.settingItem(this.i18n.quickActions, this.i18n.quickActionsTip, box, true),
+            this.settingItem(this.i18n.quickPosition, this.i18n.quickPositionTip,
+                this.select([{value: "bottom", label: this.i18n.quickPositionBottom}, {value: "right", label: this.i18n.quickPositionRight}],
+                    settings.quickActionsRightRail ? "right" : "bottom", (value) => this.updateSettings({quickActionsRightRail: value === "right"}))),
+            this.settingItem(this.i18n.quickDisplayDesktop, this.i18n.quickDisplayTip,
+                this.select(displayOptions, settings.quickActionsDisplayDesktop, (value) => this.updateSettings({quickActionsDisplayDesktop: value as QuickActionDisplay}))),
+            this.settingItem(this.i18n.quickDisplaySidebar, this.i18n.quickDisplayTip,
+                this.select(displayOptions, settings.quickActionsDisplaySidebar, (value) => this.updateSettings({quickActionsDisplaySidebar: value as QuickActionDisplay}))),
+            this.settingItem(this.i18n.quickDisplayMobile, this.i18n.quickDisplayTip,
+                this.select(displayOptions, settings.quickActionsDisplayMobile, (value) => this.updateSettings({quickActionsDisplayMobile: value as QuickActionDisplay}))),
+            this.settingItem(this.i18n.quickTransfer, this.i18n.quickTransferTip, buildQuickActionsTransferControls.call(this, render), true),
+        );
+        return wrapper;
+    }
+
+export function buildQuickActionsTransferControls(this: SettingsSectionsHost, onImported: () => void, floatingBall = false): HTMLElement {
+        const box = makeSettingEl("div");
+        box.className = "sw-setting__quick-transfer";
+        const exportButton = makeSettingEl("button");
+        exportButton.type = "button";
+        exportButton.className = "b3-button b3-button--text";
+        exportButton.textContent = floatingBall ? this.i18n.floatingBallExport : this.i18n.quickExport;
+        exportButton.addEventListener("click", () => {
+            const payload = floatingBall
+                ? serializeFloatingBallSettings(this.getSettings().floatingBall, this.getQuickActions())
+                : JSON.stringify(this.getQuickActions(), null, 2);
+            const blob = new Blob([payload], {type: "application/json"});
+            const url = URL.createObjectURL(blob);
+            const link = makeSettingEl("a");
+            link.href = url;
+            link.download = floatingBall ? "siyuan-speed-switch-floating-ball.json" : "siyuan-speed-switch-quick-actions.json";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.setTimeout(() => URL.revokeObjectURL(url), 0);
+        });
+        const importButton = makeSettingEl("button");
+        importButton.type = "button";
+        importButton.className = "b3-button b3-button--text";
+        importButton.textContent = floatingBall ? this.i18n.floatingBallImport : this.i18n.quickImport;
+        const fileInput = makeSettingEl("input");
+        fileInput.type = "file";
+        fileInput.accept = "application/json,.json";
+        fileInput.className = "fn__none";
+        let importing = false;
+        importButton.addEventListener("click", () => { if (!importing) fileInput.click(); });
+        fileInput.addEventListener("change", async () => {
+            const file = fileInput.files?.[0];
+            if (!file || importing || this.isUnloading || !box.isConnected) return;
+            importing = true;
+            importButton.disabled = true;
+            importButton.setAttribute("aria-busy", "true");
+            try {
+                if (floatingBall && Number.isFinite(file.size) && file.size > FLOATING_BALL_SETTINGS_MAX_BYTES) {
+                    showMessage(this.i18n.floatingBallImportFailed);
+                    return;
+                }
+                const text = await file.text();
+                if (this.isUnloading || !box.isConnected) return;
+                const parsed = JSON.parse(text);
+                const result = importFloatingBallSettings(parsed, this.getSettings().floatingBall, this.getQuickActions());
+                if (!result.ok) {
+                    showMessage(floatingBall ? this.i18n.floatingBallImportFailed : this.i18n.quickImportFailed);
+                    return;
+                }
+                const hasFloatingBall = Boolean(parsed && typeof parsed === "object" && !Array.isArray(parsed)
+                    && Object.prototype.hasOwnProperty.call(parsed, "floatingBall"));
+                if (result.reason === "legacy-quick-actions") {
+                    this.saveQuickActions(result.quickActions as IQuickAction[]);
+                    onImported();
+                    showMessage(this.i18n.quickImportDone);
+                    return;
+                }
+                if (hasFloatingBall) {
+                    if (!confirm(this.i18n.floatingBallImportConfirm)) return;
+                    this.updateSettings({floatingBall: result.config, fabEnabled: (result.config as any).enabled.mobile});
+                }
+                this.saveQuickActions(result.quickActions as IQuickAction[]);
+                onImported();
+                showMessage(hasFloatingBall ? this.i18n.floatingBallImportDone : this.i18n.quickImportDone);
+            } catch (error) {
+                logger.warn("import action settings fail", error);
+                if (box.isConnected && !this.isUnloading) showMessage(floatingBall ? this.i18n.floatingBallImportFailed : this.i18n.quickImportFailed);
+            } finally {
+                importing = false;
+                fileInput.value = "";
+                importButton.disabled = false;
+                importButton.removeAttribute("aria-busy");
+            }
+        });
+        box.append(exportButton, importButton, fileInput);
+        return box;
+    }
+
+
+export function buildSettingsDocumentSets(this: SettingsSectionsHost, ): HTMLElement {
+        const wrapper = makeSettingEl("div");
+        const guide = makeSettingEl("section");
+        guide.className = "sw-document-set-guide";
+        const guideTitle = makeSettingEl("strong");
+        guideTitle.textContent = this.i18n.documentSetsGuideTitle;
+        const guidePurpose = makeSettingEl("p");
+        guidePurpose.textContent = this.i18n.documentSetsGuidePurpose;
+        const guideSteps = makeSettingEl("ol");
+        [
+            this.i18n.documentSetsGuideStep1,
+            this.i18n.documentSetsGuideStep2,
+            this.i18n.documentSetsGuideStep3,
+        ].forEach((text) => {
+            const item = makeSettingEl("li");
+            item.textContent = text;
+            guideSteps.appendChild(item);
+        });
+        const guideNote = makeSettingEl("p");
+        guideNote.className = "sw-document-set-guide__note";
+        guideNote.textContent = this.i18n.documentSetsGuideNote;
+        guide.append(guideTitle, guidePurpose, guideSteps, guideNote);
+        // T-6810 Essentials 常驻层：跨文档集自动打开的必需文档管理
+        guide.appendChild(this.buildDocumentSetEssentialsManager.call(this));
+        const hint = makeSettingEl("p");
+        hint.className = "sw-settings__hint";
+        hint.textContent = this.i18n.documentSetsTip;
+        const form = makeSettingEl("div");
+        form.className = "sw-setting__document-set-form";
+        const input = makeSettingEl("input");
+        input.type = "text";
+        input.className = "b3-text-field fn__block";
+        input.placeholder = this.i18n.documentSetNamePlaceholder;
+        input.maxLength = 80;
+        const save = makeSettingEl("button");
+        save.type = "button";
+        save.className = "b3-button b3-button--text";
+        save.textContent = this.i18n.documentSetSave;
+        const exportButton = makeSettingEl("button");
+        exportButton.type = "button";
+        exportButton.className = "b3-button b3-button--text";
+        exportButton.textContent = this.i18n.documentSetExport;
+        exportButton.addEventListener("click", () => {
+            const blob = new Blob([JSON.stringify({schemaVersion: 1, sets: this.getDocumentSets()}, null, 2)], {type: "application/json"});
+            const url = URL.createObjectURL(blob);
+            const link = makeSettingEl("a");
+            link.href = url;
+            link.download = "siyuan-speed-switch-document-sets.json";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.setTimeout(() => URL.revokeObjectURL(url), 0);
+        });
+        const importButton = makeSettingEl("button");
+        importButton.type = "button";
+        importButton.className = "b3-button b3-button--text";
+        importButton.textContent = this.i18n.documentSetImport;
+        const importInput = makeSettingEl("input");
+        importInput.type = "file";
+        importInput.accept = "application/json,.json";
+        importInput.className = "fn__none";
+        importButton.addEventListener("click", () => importInput.click());
+        importInput.addEventListener("change", async () => {
+            const file = importInput.files?.[0];
+            if (!file) return;
+            importButton.disabled = true;
+            importButton.setAttribute("aria-busy", "true");
+            try {
+                if (Number.isFinite(file.size) && file.size > DOCUMENT_SET_IMPORT_MAX_BYTES) {
+                    showMessage(this.i18n.documentSetImportFailed);
+                    return;
+                }
+                const parsed = JSON.parse(await file.text());
+                const normalized = normalizeDocumentSets(parsed);
+                if (!normalized.sets.length) {
+                    showMessage(this.i18n.documentSetImportFailed);
+                    return;
+                }
+                const importConfirm = this.i18n.documentSetImportConfirm.replace("{x}", String(normalized.sets.length));
+                if (!confirm(importConfirm)) return;
+                const merged = mergeDocumentSets(this.data[DOCUMENT_SETS_KEY], normalized, {now: Date.now()});
+                this.data[DOCUMENT_SETS_KEY] = merged.state;
+                if (merged.changed) this.saveDataDebounced(DOCUMENT_SETS_KEY);
+                render();
+                showMessage(this.i18n.documentSetImportDone);
+            } catch (error) {
+                logger.warn("import document sets fail", error);
+                showMessage(this.i18n.documentSetImportFailed);
+            } finally {
+                importInput.value = "";
+                importButton.disabled = false;
+                importButton.removeAttribute("aria-busy");
+            }
+        });
+        const list = makeSettingEl("div");
+        list.className = "sw-setting__document-sets";
+        let editingSetId: string | null = null;
+        const focusRenameAction = (setId: string) => {
+            window.setTimeout(() => {
+                const button = Array.from(list.querySelectorAll<HTMLButtonElement>("[data-document-set-rename]"))
+                    .find((candidate) => candidate.dataset.documentSetRename === setId);
+                if (!button || button.disabled) return;
+                try {
+                    button.focus({preventScroll: true});
+                } catch (_) {
+                    button.focus();
+                }
+            }, 0);
+        };
+        const render = () => {
+            list.innerHTML = "";
+            const items = this.getDocumentSets();
+            if (items.length === 0) {
+                list.textContent = this.i18n.documentSetEmpty;
+                return;
+            }
+            items.forEach((item: any) => {
+                const row = makeSettingEl("div");
+                row.className = "sw-setting__document-set";
+                const copy = makeSettingEl("div");
+                copy.className = "sw-setting__document-set-copy";
+                const title = makeSettingEl("strong");
+                title.textContent = item.name;
+                const meta = makeSettingEl("span");
+                meta.textContent = `${item.entries.length} ${this.i18n.documentSetItems}`;
+                if (editingSetId === item.setId) {
+                    const edit = makeSettingEl("input");
+                    edit.type = "text";
+                    edit.className = "b3-text-field fn__block";
+                    edit.value = item.name;
+                    edit.maxLength = 80;
+                    edit.setAttribute("aria-label", this.i18n.documentSetRename);
+                    copy.append(edit, meta);
+                    window.setTimeout(() => edit.focus(), 0);
+                    const editActions = makeSettingEl("div");
+                    editActions.className = "sw-setting__document-set-actions";
+                    const finishRename = (saveChanges: boolean) => {
+                        if (saveChanges) {
+                            const name = edit.value.trim();
+                            if (!name) {
+                                edit.focus();
+                                return;
+                            }
+                            this.saveDocumentSet({...item, name});
+                        }
+                        editingSetId = null;
+                        render();
+                        focusRenameAction(item.setId);
+                    };
+                    const apply = makeSettingEl("button");
+                    apply.type = "button";
+                    apply.className = "b3-button b3-button--text";
+                    apply.textContent = this.i18n.confirm;
+                    apply.addEventListener("click", () => finishRename(true));
+                    const cancel = makeSettingEl("button");
+                    cancel.type = "button";
+                    cancel.className = "b3-button b3-button--text";
+                    cancel.textContent = this.i18n.cancel;
+                    cancel.addEventListener("click", () => finishRename(false));
+                    edit.addEventListener("keydown", (event) => {
+                        /* IME 合成期让路：Enter 确认选字、Escape 取消候选。 */
+                        if (event.isComposing || event.keyCode === 229) return;
+                        if (event.key === "Enter") {
+                            event.preventDefault();
+                            finishRename(true);
+                        } else if (event.key === "Escape") {
+                            event.preventDefault();
+                            finishRename(false);
+                        }
+                    });
+                    editActions.append(apply, cancel);
+                    row.append(copy, editActions);
+                    list.appendChild(row);
+                    return;
+                }
+                copy.append(title, meta);
+                const actions = makeSettingEl("div");
+                actions.className = "sw-setting__document-set-actions";
+                const rename = makeSettingEl("button");
+                rename.type = "button";
+                rename.className = "b3-button b3-button--text";
+                rename.textContent = this.i18n.documentSetRename;
+                rename.dataset.documentSetRename = item.setId;
+                rename.setAttribute("aria-label", `${this.i18n.documentSetRename}: ${item.name}`);
+                rename.addEventListener("click", () => { editingSetId = item.setId; render(); });
+                // 恢复报告只在"确实执行过一次恢复"之后才可导出：按钮默认禁用，
+                // 免得用户对着空报告点导出。报告只活在本次设置页渲染的闭包里，
+                // 关闭设置页即丢弃——不落盘、不进插件数据，避免扩大持久化数据面。
+                let lastRestoreReport: ReturnType<typeof buildDocumentSetRestoreReport> | null = null;
+                const exportReport = makeSettingEl("button");
+                exportReport.type = "button";
+                exportReport.className = "b3-button b3-button--text";
+                exportReport.textContent = this.i18n.documentSetRestoreReport;
+                exportReport.disabled = true;
+                exportReport.addEventListener("click", () => {
+                    if (!lastRestoreReport) {
+                        showMessage(this.i18n.documentSetRestoreReportNone);
+                        return;
+                    }
+                    const blob = new Blob([JSON.stringify(lastRestoreReport, null, 2)], {type: "application/json"});
+                    const url = URL.createObjectURL(blob);
+                    const link = makeSettingEl("a");
+                    link.href = url;
+                    link.download = `siyuan-speed-switch-restore-report-${lastRestoreReport.setId || "set"}.json`;
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+                    showMessage(this.i18n.documentSetRestoreReportExported);
+                });
+                // T-6841：Markdown 导出——人类可读格式，失败项附原因码，便于粘贴到
+                // issue/笔记；与 JSON 导出同源（同一份 lastRestoreReport 渲染）。
+                const exportReportMd = makeSettingEl("button");
+                exportReportMd.type = "button";
+                exportReportMd.className = "b3-button b3-button--text";
+                exportReportMd.textContent = this.i18n.documentSetRestoreReportMd;
+                exportReportMd.disabled = true;
+                exportReportMd.addEventListener("click", () => {
+                    if (!lastRestoreReport) {
+                        showMessage(this.i18n.documentSetRestoreReportNone);
+                        return;
+                    }
+                    const blob = new Blob([documentSetRestoreReportToMarkdown(lastRestoreReport)], {type: "text/markdown"});
+                    const url = URL.createObjectURL(blob);
+                    const link = makeSettingEl("a");
+                    link.href = url;
+                    link.download = `siyuan-speed-switch-restore-report-${lastRestoreReport.setId || "set"}.md`;
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+                    showMessage(this.i18n.documentSetRestoreReportExported);
+                });
+                const restore = makeSettingEl("button");
+                restore.type = "button";
+                restore.className = "b3-button b3-button--text";
+                restore.textContent = this.i18n.documentSetRestore;
+                let restoreController: AbortController | null = null;
+                restore.addEventListener("click", async () => {
+                    if (restoreController) {
+                        restoreController.abort();
+                        return;
+                    }
+                    const opened = new Set(this.currentDocumentSetEntries().map((entry) => entry.rootId));
+                    const plan = planDocumentSetRestore(item, opened, null);
+                    if (!plan.pending.length) {
+                        showMessage(this.i18n.documentSetRestoreNone);
+                        return;
+                    }
+                    restore.setAttribute("aria-busy", "true");
+                    restoreController = typeof AbortController === "function" ? new AbortController() : null;
+                    if (restoreController) this.activeDocumentSetRestoreControllers.add(restoreController);
+                    if (restoreController) restore.textContent = this.i18n.documentSetCancel;
+                    else restore.disabled = true;
+                    const signal = restoreController?.signal;
+                    const probe = await this.probeDocumentSetEntries(plan.pending, signal);
+                    if (this.isUnloading || !restore.isConnected) {
+                        if (restoreController) this.activeDocumentSetRestoreControllers.delete(restoreController);
+                        restoreController = null;
+                        return;
+                    }
+                    const candidates = [...probe.available, ...probe.unknown];
+                    if (!candidates.length) {
+                        if (restoreController) this.activeDocumentSetRestoreControllers.delete(restoreController);
+                        restoreController = null;
+                        restore.textContent = this.i18n.documentSetRestore;
+                        restore.disabled = false;
+                        restore.removeAttribute("aria-busy");
+                        showMessage(signal?.aborted ? this.i18n.documentSetRestoreCancelled : this.i18n.documentSetNoAvailable);
+                        return;
+                    }
+                    const confirmations: string[] = [];
+                    if (probe.missing.length > 0) {
+                        confirmations.push(`${this.i18n.documentSetMissingConfirm} (${probe.missing.length})`);
+                    }
+                    if (probe.unknown.length > 0) {
+                        confirmations.push(`${this.i18n.documentSetUnknownConfirm} (${probe.unknown.length})`);
+                    }
+                    const confirmation = confirmations.length > 0 ? confirmations.join("\n") : this.i18n.documentSetRestoreConfirm;
+                    if (!confirm(confirmation)) {
+                        if (restoreController) this.activeDocumentSetRestoreControllers.delete(restoreController);
+                        restoreController = null;
+                        restore.textContent = this.i18n.documentSetRestore;
+                        restore.disabled = false;
+                        restore.removeAttribute("aria-busy");
+                        return;
+                    }
+                    const execution = await runDocumentSetRestore(orderDocumentSetRestoreEntries(candidates), async (rootId, entry) => {
+                        if (this.isUnloading || !restore.isConnected) return false;
+                        return this.isMobile
+                            ? await this.mobileOpenDoc(rootId)
+                            : (await openTab({app: this.app, doc: {id: rootId}}), true);
+                    }, {signal, shouldContinue: () => !this.isUnloading && restore.isConnected});
+                    execution.results.filter((item) => !item.ok && item.error).forEach((item) => logger.warn("restore document set entry fail", item.error));
+                    const cancelled = execution.cancelled || this.isUnloading || !restore.isConnected;
+                    if (this.isUnloading || !restore.isConnected) {
+                        if (restoreController) this.activeDocumentSetRestoreControllers.delete(restoreController);
+                        restoreController = null;
+                        return;
+                    }
+                    if (restoreController) this.activeDocumentSetRestoreControllers.delete(restoreController);
+                    restoreController = null;
+                    restore.textContent = this.i18n.documentSetRestore;
+                    restore.disabled = false;
+                    restore.removeAttribute("aria-busy");
+                    const counts = summarizeDocumentSetRestore(plan, probe, {succeeded: execution.succeeded, failed: execution.failed, cancelled});
+                    // T-6841：设置页恢复同样执行 Essentials 常驻层（对齐 T-6810
+                    // "每次恢复"语义与切换器路径），回执逐项并入报告。
+                    let essentialsOutcome: Awaited<ReturnType<SettingsSectionsHost["openDocumentSetEssentials"]>> | null = null;
+                    if (!cancelled && execution.attempted > 0) {
+                        try {
+                            essentialsOutcome = await this.openDocumentSetEssentials();
+                        } catch (error) {
+                            logger.warn("restore essentials fail", error);
+                        }
+                    }
+                    // 与 showMessage 同源：计数与逐项明细取自同一次执行结果，不会互相矛盾。
+                    // 取消/中断同样产出报告——那正是最需要复核"哪些没走完"的场景。
+                    lastRestoreReport = buildDocumentSetRestoreReport(plan, probe, {...execution, cancelled}, {now: Date.now(), essentials: essentialsOutcome ?? undefined});
+                    exportReport.disabled = false;
+                    if (exportReportMd) exportReportMd.disabled = false;
+                    const summary = `${this.i18n.documentSetRestoreDone}: ${counts.succeeded}, ${this.i18n.documentSetRestoreFailed}: ${counts.failed}, `
+                        + `${this.i18n.documentSetRestoreSkipped}: ${counts.skipped}, ${this.i18n.documentSetRestoreMissing}: ${counts.missing}`
+                        + (essentialsOutcome && essentialsOutcome.opened + essentialsOutcome.failed > 0
+                            ? ` · ${this.i18n.documentSetEssentialsApplied}: +${essentialsOutcome.opened}`
+                            : "");
+                    showMessage(counts.cancelled ? `${this.i18n.documentSetRestoreCancelled}: ${summary}` : summary);
+                });
+                const preview = makeSettingEl("button");
+                preview.type = "button";
+                preview.className = "b3-button b3-button--text";
+                preview.textContent = this.i18n.documentSetPreview;
+                // T-6922（工作区恢复 2.0 第二批）：预览从 toast 升级为内联三段列表——
+                // 待恢复 / 已打开跳过 / 集合外 visitor（暗色，"保持打开"语义）。
+                const previewList = makeSettingEl("div");
+                previewList.className = "sw-setting__doc-set-preview";
+                previewList.hidden = true;
+                row.append(previewList);
+                preview.addEventListener("click", () => {
+                    previewList.hidden = !previewList.hidden;
+                    if (previewList.hidden) return;
+                    const currentEntries = this.currentDocumentSetEntries();
+                    const opened = new Set(currentEntries.map((entry) => entry.rootId));
+                    const plan = planDocumentSetRestore(item, opened, null);
+                    const setRootIds = new Set((item.entries || []).map((entry: {rootId?: string}) => String(entry?.rootId || "")));
+                    const buildRow = (title: string, tone: "" | "is-muted" | "is-visitor") => {
+                        const entryRow = makeSettingEl("div");
+                        entryRow.className = `sw-setting__doc-set-preview-row${tone ? ` ${tone}` : ""}`;
+                        entryRow.textContent = title;
+                        previewList.appendChild(entryRow);
+                    };
+                    previewList.replaceChildren();
+                    const pendingIds = new Set(plan.pending.map((entry: {rootId: string}) => entry.rootId));
+                    (item.entries || []).forEach((entry: {rootId: string; title?: string}) => {
+                        if (!pendingIds.has(entry.rootId)) return;
+                        buildRow(entry.title || entry.rootId, "");
+                    });
+                    plan.opened.forEach((entry: {rootId: string; title?: string}) => {
+                        buildRow(`${this.i18n.documentSetOpened} · ${entry.title || entry.rootId}`, "is-muted");
+                    });
+                    currentEntries.forEach((entry) => {
+                        if (setRootIds.has(entry.rootId)) return;
+                        buildRow(`${this.i18n.documentSetVisitor} · ${entry.title}`, "is-visitor");
+                    });
+                    if (!previewList.childElementCount) buildRow(this.i18n.documentSetNoTabs, "is-muted");
+                });
+                const remove = makeSettingEl("button");
+                remove.type = "button";
+                remove.className = "b3-button b3-button--text";
+                remove.textContent = this.i18n.documentSetDelete;
+                remove.addEventListener("click", () => {
+                    if (!confirm(this.i18n.documentSetDeleteConfirm)) return;
+                    const result = removeDocumentSet(this.data[DOCUMENT_SETS_KEY], item.setId);
+                    this.data[DOCUMENT_SETS_KEY] = result.state;
+                    if (result.changed) this.saveDataDebounced(DOCUMENT_SETS_KEY);
+                    render();
+                });
+                // T-6829 版本历史：回滚到最近一版（覆盖保存时自动留版，回滚可逆）
+                const versionCount = Array.isArray(item.versions) ? item.versions.length : 0;
+                const rollback = makeSettingEl("button");
+                rollback.type = "button";
+                rollback.className = "b3-button b3-button--text";
+                rollback.textContent = `${this.i18n.documentSetRollback}${versionCount > 0 ? ` (${versionCount})` : ""}`;
+                rollback.disabled = versionCount === 0;
+                const versionList = makeSettingEl("div");
+                versionList.className = "sw-setting__doc-set-versions";
+                versionList.hidden = true;
+                rollback.addEventListener("click", () => {
+                    if (versionCount === 0) return;
+                    // T-6824 版本时间轴：展开版本列表，可任选版本回滚（默认最近一版）
+                    versionList.hidden = !versionList.hidden;
+                });
+                (item.versions || []).forEach((version: {savedAt: number; entries: unknown[]}, vIndex: number) => {
+                    // T-6955：查看差异——只读预览该版本与当前集合的差异，回滚仍需显式确认
+                    const diffButton = makeSettingEl("button");
+                    diffButton.type = "button";
+                    diffButton.className = "b3-button b3-button--text sw-setting__doc-set-diff";
+                    diffButton.textContent = this.i18n.documentSetDiff;
+                    diffButton.addEventListener("click", () => {
+                        openDocumentSetDiffDialog.call(this, item, vIndex, () => render());
+                    });
+                    versionList.appendChild(diffButton);
+                    const versionRow = makeSettingEl("button");
+                    versionRow.type = "button";
+                    versionRow.className = "b3-button b3-button--text sw-setting__doc-set-version";
+                    const savedText = version.savedAt > 0 ? new Date(version.savedAt).toLocaleString() : "";
+                    versionRow.textContent = `↩ ${savedText} (${Array.isArray(version.entries) ? version.entries.length : 0})`;
+                    versionRow.addEventListener("click", () => {
+                        if (!confirm(this.i18n.documentSetRollbackConfirm)) return;
+                        const result = rollbackDocumentSet(this.data[DOCUMENT_SETS_KEY], item.setId, {now: Date.now(), versionIndex: vIndex});
+                        if (!result.changed) {
+                            showMessage(this.i18n.documentSetRollbackNone);
+                            return;
+                        }
+                        this.data[DOCUMENT_SETS_KEY] = result.state;
+                        this.saveDataDebounced(DOCUMENT_SETS_KEY);
+                        showMessage(this.i18n.documentSetRollbackDone.replace("{x}", String(item.name || "")));
+                        render();
+                    });
+                    versionList.appendChild(versionRow);
+                });
+                actions.append(rename, restore, exportReport, exportReportMd, preview, rollback, remove);
+                row.append(copy, actions, versionList);
+                list.appendChild(row);
+            });
+        };
+        save.addEventListener("click", () => {
+            const name = input.value.trim();
+            const entries = this.currentDocumentSetEntries();
+            if (!entries.length) {
+                showMessage(this.i18n.documentSetNoTabs);
+                return;
+            }
+            if (!name) {
+                input.focus();
+                return;
+            }
+            const existing = this.getDocumentSets().find((item: any) => item.name === name);
+            const candidate = createDocumentSet(name, entries, {setId: existing?.setId});
+            if (this.saveDocumentSet(candidate)) {
+                input.value = "";
+                render();
+                showMessage(this.i18n.documentSetSaved);
+            }
+        });
+        form.append(input, save, exportButton, importButton, importInput);
+        // 说明放操作按钮下方：先操作与列表，长说明作为随选随读的辅助内容收尾
+        wrapper.append(hint, form, list, guide);
+        render();
+        return wrapper;
+    }
+
+    // v0.18 路径筛选（T-103）：只读列目录，供搜索筛选选择路径前缀。
+    // 内核辅助函数在守卫失败、超时、非 2xx 时统一返回 null，无法区分"端点不存在"
+    // 与"网络失败"，故一律按 unavailable 降级提示，且不阻塞其他筛选维度。
+    // 取消通过代际标记实现：请求发出前后各比对一次，过期结果直接丢弃。
+    // 真实宿主行为见 docs/path-filter-host-evidence.md（D-365）——包括"不存在的
+    // 路径返回空列表而非错误"，因此无需为已删除的路径前缀设计专门分支。
+
+// ===== T-6463 设置页 · 存储用量：各持久化 key 的近似占用（Tabliss 显式化思路） =====
+// T-7004：登记面扩至全部 15 个持久化 key（原表缺 schema 版本戳/RSS 已读/关联投影），
+// 按语义分五组、标签走 i18n 双语键（原先硬编码中文，英文界面显示中文是既存缺口）。
+const STORAGE_KEY_GROUPS: ReadonlyArray<{labelKey: string, keys: ReadonlyArray<{key: string, labelKey: string}>}> = Object.freeze([
+    {
+        labelKey: "storageGroupWorkspace",
+        keys: [
+            {key: MRU_KEY, labelKey: "storageKeyMru"},
+            {key: HISTORY_KEY, labelKey: "storageKeyOpenHistory"},
+            {key: CLOSED_HISTORY_KEY, labelKey: "storageKeyClosedHistory"},
+            {key: PINNED_KEY, labelKey: "storageKeyPinned"},
+        ],
+    },
+    {
+        labelKey: "storageGroupFavorites",
+        keys: [
+            {key: FAV_KEY, labelKey: "storageKeyFavorites"},
+            {key: FAV_GROUPS_KEY, labelKey: "storageKeyFavGroups"},
+            {key: FAV_COLLAPSED_KEY, labelKey: "storageKeyFavCollapsed"},
+        ],
+    },
+    {
+        labelKey: "storageGroupPanels",
+        keys: [
+            {key: HOME_STATE_KEY, labelKey: "storageKeyHomeState"},
+            {key: THUMB_CACHE_KEY, labelKey: "storageKeyThumbCache"},
+            {key: RELATED_SWR_KEY, labelKey: "storageKeyRelatedSwr"},
+        ],
+    },
+    {
+        labelKey: "storageGroupConfig",
+        keys: [
+            {key: SETTINGS_KEY, labelKey: "storageKeySettings"},
+            {key: QUICK_ACTIONS_KEY, labelKey: "storageKeyQuickActions"},
+            {key: QUICK_ACTIONS_DEFAULTS_KEY, labelKey: "storageKeyQuickActionsDefaults"},
+            {key: DOCUMENT_SETS_KEY, labelKey: "storageKeyDocumentSets"},
+        ],
+    },
+    {
+        labelKey: "storageGroupSystem",
+        keys: [
+            {key: RSS_READ_KEY, labelKey: "storageKeyRssRead"},
+            {key: SNIPPET_RECYCLE_KEY, labelKey: "storageKeySnippetRecycle"},
+            {key: SNIPPET_GROUPS_KEY, labelKey: "storageKeySnippetGroups"},
+            {key: SCHEMA_VERSION_KEY, labelKey: "storageKeySchemaVersion"},
+        ],
+    },
+]);
+
+export function buildSettingsStorage(this: SettingsSectionsHost): HTMLElement {
+    const root = makeSettingEl("div");
+    root.className = "sw-settings__storage";
+    // T-6824 可迁移配置包：导出（版本化 JSON）/ 导入（整体校验→确认→原子应用）
+    const packRow = makeSettingEl("div");
+    packRow.className = "sw-settings__storage-pack";
+    const packExport = makeSettingEl("button");
+    packExport.type = "button";
+    packExport.className = "b3-button b3-button--text";
+    packExport.textContent = this.i18n.configPackExport;
+    packExport.addEventListener("click", () => {
+        const payload = this.exportConfigPack();
+        const blob = new Blob([payload], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        const link = makeSettingEl("a");
+        link.href = url;
+        link.download = "siyuan-speed-switch-config-pack.json";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    });
+    const packImport = makeSettingEl("button");
+    packImport.type = "button";
+    packImport.className = "b3-button b3-button--text";
+    packImport.textContent = this.i18n.configPackImport;
+    const packInput = makeSettingEl("input");
+    packInput.type = "file";
+    packInput.accept = "application/json,.json";
+    packInput.className = "fn__none";
+    packImport.addEventListener("click", () => packInput.click());
+    packInput.addEventListener("change", async () => {
+        const file = packInput.files?.[0];
+        if (!file) return;
+        try {
+            if (Number.isFinite(file.size) && file.size > 512 * 1024) {
+                showMessage(this.i18n.configPackImportFailed, 7000, "error");
+                return;
+            }
+            const parsed = JSON.parse(await file.text());
+            if (this.isUnloading) return;
+            // T-6961：先归一校验，再进入差异预览与分组勾选；取消零写入
+            const normalized = normalizeConfigPackImport(parsed);
+            if (!normalized.ok) {
+                showMessage(this.i18n.configPackImportFailed, 7000, "error");
+                return;
+            }
+            const current = {settings: this.getSettings(), documentSets: this.data[DOCUMENT_SETS_KEY] || null};
+            const groups = diffConfigPackGroups(normalized, current);
+            const signature = configPackBaselineSignature(current);
+            if (groups.length === 0) {
+                showMessage(this.i18n.configPackImportFailed, 7000, "error");
+                return;
+            }
+            openConfigPackDiffDialog.call(this, parsed, groups, signature, (): void => undefined);
+        } catch {
+            showMessage(this.i18n.configPackImportFailed, 7000, "error");
+        } finally {
+            packInput.value = "";
+        }
+    });
+    packRow.append(packExport, packImport, packInput);
+    root.append(packRow);
+    const rows = makeSettingEl("div");
+    rows.className = "sw-settings__storage-rows";
+    const note = makeSettingEl("p");
+    note.className = "sw-settings__storage-note";
+    note.textContent = this.i18n.setStorageMeasuring || "统计中…";
+    root.append(rows, note);
+    void this.measureStorageUsage().then((entries) => {
+        const summary = buildStorageUsageSummary(entries);
+        rows.textContent = "";
+        const totalValue = makeSettingEl("strong");
+        totalValue.textContent = formatStorageBytes(summary.total);
+        rows.appendChild(this.settingItem(
+            this.i18n.setStorageTotal || "合计",
+            this.i18n.setStorageApprox || "近似 UTF-8 字节数",
+            totalValue,
+        ));
+        // T-7004：分组渲染 + 用量进度条——条宽 = 占合计的百分比（合计为 0 时不画），
+        // aria-label 同时给出字节与占比（颜色之外必有文字）。
+        // T-7004：分组渲染 + 用量进度条——条宽 = 占合计的百分比（合计为 0 时不画），
+        // aria-label 同时给出字节与占比（颜色之外必有文字）。
+        const bytesByKey = new Map(summary.rows.map((row) => [row.key, row.bytes]));
+        const knownKeys = new Set<string>();
+        STORAGE_KEY_GROUPS.forEach((group) => group.keys.forEach((item) => knownKeys.add(item.key)));
+        // T-7004：标签静态映射——i18n key 必须静态字面量引用（动态方括号访问被
+        // 门禁禁止，且静态写法让死键扫描可见）；key→label 经映射表转换。
+        const storageLabels: Record<string, string> = {
+            storageGroupWorkspace: this.i18n.storageGroupWorkspace,
+            storageGroupFavorites: this.i18n.storageGroupFavorites,
+            storageGroupPanels: this.i18n.storageGroupPanels,
+            storageGroupConfig: this.i18n.storageGroupConfig,
+            storageGroupSystem: this.i18n.storageGroupSystem,
+            storageGroupOther: this.i18n.storageGroupOther,
+            storageKeyMru: this.i18n.storageKeyMru,
+            storageKeyOpenHistory: this.i18n.storageKeyOpenHistory,
+            storageKeyClosedHistory: this.i18n.storageKeyClosedHistory,
+            storageKeyPinned: this.i18n.storageKeyPinned,
+            storageKeyFavorites: this.i18n.storageKeyFavorites,
+            storageKeyFavGroups: this.i18n.storageKeyFavGroups,
+            storageKeyFavCollapsed: this.i18n.storageKeyFavCollapsed,
+            storageKeyHomeState: this.i18n.storageKeyHomeState,
+            storageKeyThumbCache: this.i18n.storageKeyThumbCache,
+            storageKeyRelatedSwr: this.i18n.storageKeyRelatedSwr,
+            storageKeySettings: this.i18n.storageKeySettings,
+            storageKeyQuickActions: this.i18n.storageKeyQuickActions,
+            storageKeyQuickActionsDefaults: this.i18n.storageKeyQuickActionsDefaults,
+            storageKeyDocumentSets: this.i18n.storageKeyDocumentSets,
+            storageKeyRssRead: this.i18n.storageKeyRssRead,
+            storageKeySnippetRecycle: this.i18n.storageKeySnippetRecycle,
+            storageKeySnippetGroups: this.i18n.storageKeySnippetGroups,
+            storageKeySchemaVersion: this.i18n.storageKeySchemaVersion,
+        };
+        for (const group of STORAGE_KEY_GROUPS) {
+            const heading = makeSettingEl("p");
+            heading.className = "sw-settings__storage-group";
+            heading.textContent = storageLabels[group.labelKey] || group.labelKey;
+            rows.appendChild(heading);
+            for (const item of group.keys) {
+                const bytes = bytesByKey.get(item.key) || 0;
+                const cell = makeSettingEl("span");
+                cell.className = "sw-settings__storage-cell";
+                const value = makeSettingEl("span");
+                value.className = "sw-settings__storage-bytes";
+                value.textContent = formatStorageBytes(bytes);
+                const bar = makeSettingEl("span");
+                bar.className = "sw-settings__usage-bar";
+                bar.setAttribute("aria-hidden", "true");
+                const fill = makeSettingEl("i");
+                if (summary.total > 0 && bytes > 0) {
+                    fill.style.width = `${Math.max(2, Math.min(100, Math.round(bytes / summary.total * 100)))}%`;
+                }
+                bar.appendChild(fill);
+                const percent = summary.total > 0 ? Math.round(bytes / summary.total * 100) : 0;
+                cell.setAttribute("aria-label", `${formatStorageBytes(bytes)}（${this.i18n.setStorageApprox}，${this.i18n.storageUsageShare.replace("{x}", String(percent))}）`);
+                cell.append(value, bar);
+                rows.appendChild(this.settingItem(storageLabels[item.labelKey] || item.labelKey, item.key, cell));
+            }
+        }
+        // 未登记的 key（未来新增漏登记时诚实兜底，不静默丢弃）
+        const unknown = summary.rows.filter((row) => !knownKeys.has(row.key));
+        if (unknown.length > 0) {
+            const heading = makeSettingEl("p");
+            heading.className = "sw-settings__storage-group";
+            heading.textContent = this.i18n.storageGroupOther;
+            rows.appendChild(heading);
+            for (const row of unknown) {
+                const value = makeSettingEl("span");
+                value.textContent = formatStorageBytes(row.bytes);
+                rows.appendChild(this.settingItem(row.key, row.key, value));
+            }
+        }
+        // T-7004：存储结构健康——schema 版本戳（D-401）三态 + 降级证据，纯只读。
+        const health = this.getStorageSchemaHealth();
+        const schemaValue = makeSettingEl("span");
+        schemaValue.className = "sw-settings__storage-schema";
+        schemaValue.dataset.state = health.downgradeFrom || (health.stored !== null && health.stored > health.current)
+            ? "newer"
+            : health.stored === null ? "missing" : "ok";
+        schemaValue.textContent = schemaValue.dataset.state === "newer"
+            ? this.i18n.storageSchemaNewer
+                .replace("{stored}", String(health.downgradeFrom ?? health.stored ?? "?"))
+                .replace("{current}", String(health.current))
+            : schemaValue.dataset.state === "missing"
+                ? this.i18n.storageSchemaMissing.replace("{current}", String(health.current))
+                : this.i18n.storageSchemaOk
+                    .replace("{stored}", String(health.stored ?? health.current))
+                    .replace("{current}", String(health.current));
+        rows.appendChild(this.settingItem(this.i18n.storageSchemaTitle, this.i18n.storageSchemaTip, schemaValue));
+        // T-7004：缓存管理说明 + 缩略图缓存清空（可由回源重建；RSS 已读等用户数据不在范围）。
+        const cacheSection = makeSettingEl("div");
+        cacheSection.className = "sw-settings__storage-cache";
+        const cacheNote = makeSettingEl("p");
+        cacheNote.className = "sw-settings__storage-note";
+        cacheNote.textContent = this.i18n.storageCacheNote;
+        const cacheClear = makeSettingEl("button");
+        cacheClear.type = "button";
+        cacheClear.className = "b3-button b3-button--text";
+        cacheClear.textContent = this.i18n.storageCacheClear;
+        cacheClear.addEventListener("click", () => {
+            if (!confirm(this.i18n.storageCacheClearConfirm)) return;
+            this.clearThumbCache();
+            showMessage(this.i18n.storageCacheCleared);
+            void this.measureStorageUsage().then((nextEntries) => {
+                const nextTotal = nextEntries.reduce((sum, row) => sum + row.bytes, 0);
+                const totalEl = rows.querySelector("strong");
+                if (totalEl) totalEl.textContent = formatStorageBytes(nextTotal);
+            });
+        });
+        cacheSection.append(cacheNote, cacheClear);
+        root.appendChild(cacheSection);
+
+        const ecoSection = makeSettingEl("div");
+        ecoSection.className = "sw-settings__storage-eco-status";
+        const ecoBadge = makeSettingEl("div");
+        ecoBadge.className = "sw-settings__eco-badge";
+        ecoBadge.setAttribute("role", "status");
+        if (typeof lvEcosystem !== "undefined" && typeof lvEcosystem.getStatusBadgeText === "function") {
+            ecoBadge.textContent = lvEcosystem.getStatusBadgeText();
+        }
+        ecoSection.appendChild(ecoBadge);
+        root.appendChild(ecoSection);
+
+        note.textContent = "";
+    }).catch(() => {
+        note.textContent = this.i18n.homeModuleError || "统计失败";
+    });
+    return root;
+}
+
+/**
+ * Floating-ball settings are intentionally kept beside the shared quick-action
+ * editor, but use their own surface/action projection.  The persisted value is
+ * always replaced with the model's normalized config so partially written
+ * settings cannot leak into the runtime controllers.
+ */
+export function buildSettingsFloatingBall(this: SettingsSectionsHost, s: ISwSettings): HTMLElement {
+    const wrapper = makeSettingEl("div");
+    wrapper.className = "sw-floating-ball-settings";
+    const note = makeSettingEl("p");
+    note.className = "sw-settings__hint sw-floating-ball-settings__note";
+    note.textContent = this.i18n.floatingBallSettingsTip;
+    wrapper.appendChild(note);
+    const compatibilityNote = makeSettingEl("p");
+    compatibilityNote.className = "sw-settings__hint sw-floating-ball-settings__compatibility";
+    compatibilityNote.textContent = this.i18n.floatingBallLegacySidebarHint;
+    compatibilityNote.setAttribute("role", "note");
+    wrapper.appendChild(compatibilityNote);
+
+    const getBallCfg = (): any => normalizeFloatingBallConfig(this.getSettings().floatingBall);
+    const persist = (next: unknown) => {
+        const config: any = normalizeFloatingBallConfig(next);
+        if (!checkFloatingBallSettingsBudget(config, this.getQuickActions()).ok) {
+            showMessage(this.i18n.floatingBallImportFailed);
+            return false;
+        }
+        this.updateSettings({
+            floatingBall: config,
+            // Keep the old mobile flag in sync for installations upgraded from
+            // the pre-B0 mobile-only FAB setting.
+            fabEnabled: config.enabled.mobile,
+        });
+        return true;
+    };
+    const initial: any = normalizeFloatingBallConfig(s.floatingBall);
+    const surfaceLabels: Record<string, string> = {
+        desktop: this.i18n.floatingBallDesktop,
+        sidebar: this.i18n.floatingBallSidebar,
+        mobile: this.i18n.floatingBallMobile,
+    };
+    // T-7238：新用户默认关闭全部端侧开关时，设置页必须给出可执行的
+    // 下一步。说明保持轻量且可重复出现，不弹窗、不写入配置，点击端侧按钮
+    // 后由现有 persist/刷新链路完成启用和运行时挂载。
+    const firstUse = makeSettingEl("section");
+    firstUse.className = "sw-floating-ball-settings__first-use";
+    firstUse.setAttribute("aria-label", this.i18n.floatingBallFirstUseTitle);
+    const firstUseTitle = makeSettingEl("strong");
+    firstUseTitle.textContent = this.i18n.floatingBallFirstUseTitle;
+    const firstUseHint = makeSettingEl("p");
+    firstUseHint.className = "sw-settings__hint";
+    firstUseHint.textContent = this.i18n.floatingBallFirstUseTip;
+    const firstUseActions = makeSettingEl("div");
+    firstUseActions.className = "sw-floating-ball-settings__first-use-actions";
+    const enableFirstUseSurface = (surface: "desktop" | "mobile", label: string) => {
+        const button = makeSettingEl("button");
+        button.type = "button";
+        button.className = "b3-button b3-button--outline";
+        button.dataset.surface = surface;
+        button.textContent = label;
+        button.addEventListener("click", () => {
+            const next: any = getBallCfg();
+            next.enabled[surface] = true;
+            if (!persist(next)) return;
+            renderFirstUse();
+            toggles.get(surface)?.focus();
+            renderControls();
+            renderActions();
+        });
+        return button;
+    };
+    firstUseActions.append(
+        enableFirstUseSurface("desktop", this.i18n.floatingBallEnableDesktop),
+        enableFirstUseSurface("mobile", this.i18n.floatingBallEnableMobile),
+    );
+    firstUse.append(firstUseTitle, firstUseHint, firstUseActions);
+    wrapper.appendChild(firstUse);
+    const renderFirstUse = () => {
+        const latest: any = getBallCfg();
+        firstUse.hidden = Boolean(latest.enabled.desktop || latest.enabled.mobile);
+    };
+    renderFirstUse();
+
+    // 【🐴 小驴生态 · 手机端双球分工与入口模式】(Mobile Spec v1)
+    const dualBallCard = makeSettingEl("section");
+    dualBallCard.className = "b3-label sw-settings__item sw-settings__dual-ball-card";
+    const dualBallHead = makeSettingEl("div");
+    dualBallHead.className = "fn__flex-1";
+    const dualBallTitle = makeSettingEl("div");
+    dualBallTitle.className = "b3-label__text";
+    dualBallTitle.textContent = "🐴 小驴全家桶 · 手机端双球分工与入口模式";
+    const dualBallDesc = makeSettingEl("div");
+    dualBallDesc.className = "b3-label__tips";
+    dualBallDesc.innerHTML = "雷切<strong>动作悬浮球</strong>负责当前文档切片采集、原子暂存与面板切换；小驴<strong>罗盘悬浮球</strong>负责全家桶插件极速弹射、全生态穿透检索与跨插件协同。<br><span style=\"color: var(--b3-theme-primary); font-weight: 500;\">罗盘球管全家桶直达，动作球管切片操作，可在罗盘设置中改为单球模式</span>";
+    dualBallHead.append(dualBallTitle, dualBallDesc);
+
+    const modeSelect = makeSettingEl("select") as HTMLSelectElement;
+    modeSelect.className = "b3-select fn__flex-center";
+    modeSelect.append(
+        new Option("双球并行 (顶栏按钮 + 罗盘球，默认)", "both"),
+        new Option("仅罗盘悬浮球 (收纳顶栏)", "ball"),
+        new Option("仅罗盘顶栏按钮 (避免双球重叠)", "topbar"),
+        new Option("单机模式 (不显示罗盘球与顶栏)", "none"),
+    );
+    try {
+        modeSelect.value = lvLaunchpad.getMobileEntryMode();
+    } catch {
+        modeSelect.value = "both";
+    }
+    modeSelect.addEventListener("change", () => {
+        const mode = modeSelect.value as any;
+        lvLaunchpad.setMobileEntryMode(mode);
+        lvLaunchpad.haptic(10);
+        showMessage(`已切换至: ${modeSelect.options[modeSelect.selectedIndex].text}`, 2000, "info");
+    });
+    dualBallCard.append(dualBallHead, modeSelect);
+    wrapper.appendChild(dualBallCard);
+
+    const toggleBox = makeSettingEl("div");
+    toggleBox.className = "sw-floating-ball-settings__toggles";
+    const toggles = new Map<string, HTMLInputElement>();
+    // ADR 0072: the sidebar portal is withdrawn — settings expose desktop and
+    // mobile only; legacy sidebar fields stay tolerated in the stored config.
+    FLOATING_BALL_UI_SURFACES.forEach((surface) => {
+        const label = surfaceLabels[surface] || surface;
+        const toggle = this.switcher(Boolean(initial.enabled[surface]), (checked) => {
+            const next: any = getBallCfg();
+            next.enabled[surface] = checked;
+            persist(next);
+            renderFirstUse();
+            renderActions();
+        });
+        const input = toggle.matches?.("input")
+            ? toggle as HTMLInputElement
+            : toggle.querySelector<HTMLInputElement>("input");
+        if (input) {
+            input.setAttribute("aria-label", label);
+            input.dataset.surface = surface;
+            toggles.set(surface, input);
+        }
+        toggleBox.appendChild(this.settingItem(
+            label,
+            this.i18n.floatingBallSurfaceTip,
+            toggle,
+        ));
+    });
+    wrapper.appendChild(toggleBox);
+
+    const surfaceSelectRow = makeSettingEl("div");
+    surfaceSelectRow.className = "sw-floating-ball-settings__surface";
+    const surfaceLabel = makeSettingEl("span");
+    surfaceLabel.className = "sw-settings__item-title";
+    surfaceLabel.textContent = this.i18n.floatingBallEditSurface;
+    const surfaceSelect = makeSettingEl("select");
+    surfaceSelect.className = "b3-select fn__flex-center";
+    FLOATING_BALL_UI_SURFACES.forEach((surface) => surfaceSelect.appendChild(new Option(surfaceLabels[surface] || surface, surface)));
+    surfaceSelect.value = this.isMobile ? "mobile" : "desktop";
+    surfaceSelect.setAttribute("aria-label", this.i18n.floatingBallEditSurface);
+    surfaceSelectRow.append(surfaceLabel, surfaceSelect);
+    wrapper.appendChild(surfaceSelectRow);
+
+    const clickActionRow = makeSettingEl("div");
+    clickActionRow.className = "sw-floating-ball-settings__click-action";
+    const clickActionTitle = makeSettingEl("span");
+    clickActionTitle.className = "sw-settings__item-title";
+    clickActionTitle.textContent = this.i18n.floatingBallClickAction;
+    const clickActionSelect = makeSettingEl("select");
+    clickActionSelect.className = "b3-select";
+    clickActionSelect.dataset.control = "clickAction";
+    clickActionSelect.setAttribute("aria-label", this.i18n.floatingBallClickAction);
+    const clickActionHint = makeSettingEl("span");
+    clickActionHint.className = "sw-settings__hint";
+    clickActionHint.textContent = this.i18n.floatingBallClickActionTip;
+    clickActionRow.append(clickActionTitle, clickActionSelect, clickActionHint);
+    wrapper.appendChild(clickActionRow);
+
+    // T-6887（T-6858 第二批）：四向快滑动作可视化绑定——手机端快滑上/下/左/右
+    // 分别执行绑定的动作（上=更多面板为默认）；目录复用轻触动作清单。
+    const flickSection = makeSettingEl("section");
+    flickSection.className = "sw-floating-ball-settings__flick-panel";
+    const flickHeading = makeSettingEl("strong");
+    flickHeading.textContent = this.i18n.floatingBallFlickTitle;
+    flickSection.appendChild(flickHeading);
+    const flickHint = makeSettingEl("p");
+    flickHint.className = "sw-settings__hint";
+    flickHint.textContent = this.i18n.floatingBallFlickTip;
+    flickSection.appendChild(flickHint);
+    const flickGrid = makeSettingEl("div");
+    flickGrid.className = "sw-floating-ball-settings__flick-grid";
+    flickSection.appendChild(flickGrid);
+    type FlickDirection = "up" | "down" | "left" | "right";
+    const flickDirections: FlickDirection[] = ["up", "down", "left", "right"];
+    const flickLabels: Record<FlickDirection, string> = {
+        up: this.i18n.floatingBallFlickUp,
+        down: this.i18n.floatingBallFlickDown,
+        left: this.i18n.floatingBallFlickLeft,
+        right: this.i18n.floatingBallFlickRight,
+    };
+    const flickSelects: Array<{direction: FlickDirection; select: HTMLSelectElement}> = [];
+    flickDirections.forEach((direction) => {
+        const row = makeSettingEl("div");
+        row.className = "sw-floating-ball-settings__flick-row";
+        const label = makeSettingEl("span");
+        label.className = "sw-settings__item-title";
+        label.textContent = flickLabels[direction];
+        const select = makeSettingEl("select");
+        select.className = "b3-select";
+        select.dataset.flickDirection = direction;
+        select.setAttribute("aria-label", `${this.i18n.floatingBallFlickTitle} · ${flickLabels[direction]}`);
+        select.addEventListener("change", () => {
+            const next: any = getBallCfg();
+            next.behavior.flickActions[direction] = select.value;
+            persist(next);
+        });
+        flickGrid.append(row);
+        row.append(label, select);
+        flickSelects.push({direction, select});
+    });
+    const renderFlickOptions = () => {
+        const config: any = getBallCfg();
+        const catalog = this.getFloatingBallActions();
+        const surface = surfaceSelect.value as QuickActionTarget;
+        flickSelects.forEach(({direction, select}) => {
+            const current = config.behavior?.flickActions?.[direction] || "";
+            const fixedMore = direction === "up";
+            const options: Array<{value: string; label: string}> = [
+                {value: "more", label: this.i18n.floatingBallFlickMore},
+            ];
+            if (!fixedMore) options.unshift({value: "", label: this.i18n.floatingBallFlickNone});
+            const seen = new Set(options.map((option) => option.value));
+            if (!fixedMore) catalog.forEach((action: any) => {
+                if (!action?.id || seen.has(action.id)) return;
+                if (this.getQuickActionSupport(action, surface) === "unsupported") return;
+                seen.add(action.id);
+                options.push({value: action.id, label: clickActionLabel(action, config, surface)});
+            });
+            if (!fixedMore && current && !seen.has(current)) {
+                options.push({value: current, label: current});
+            }
+            select.innerHTML = "";
+            options.forEach((option) => select.appendChild(new Option(option.label, option.value)));
+            select.disabled = fixedMore;
+            select.setAttribute("aria-disabled", String(fixedMore));
+            select.value = fixedMore ? "more" : current;
+        });
+    };
+    wrapper.appendChild(flickSection);
+    wrapper.addEventListener("sw-floating-ball-refresh", () => renderFlickOptions());
+
+    // T-6920（悬浮球手势纵深第二批）：双击/长按动作可视化绑定——与快滑面板同款
+    // 选项词汇（无操作/更多面板/动作目录）；双击绑定后单击进入 300ms 判别窗
+    //（提示文案说明），未绑定时单击保持零延迟直发。
+    const gestureSection = makeSettingEl("section");
+    gestureSection.className = "sw-floating-ball-settings__gesture-panel";
+    const gestureHeading = makeSettingEl("strong");
+    gestureHeading.textContent = this.i18n.floatingBallGestureTitle;
+    gestureSection.appendChild(gestureHeading);
+    const gestureHint = makeSettingEl("p");
+    gestureHint.className = "sw-settings__hint";
+    gestureHint.textContent = this.i18n.floatingBallGestureTip;
+    gestureSection.appendChild(gestureHint);
+    const gestureGrid = makeSettingEl("div");
+    gestureGrid.className = "sw-floating-ball-settings__gesture-grid";
+    gestureSection.appendChild(gestureGrid);
+    const gestureRows: Array<{key: "doubleTapAction" | "longPressAction"; select: HTMLSelectElement}> = [];
+    ([["doubleTapAction", this.i18n.floatingBallGestureDouble], ["longPressAction", this.i18n.floatingBallGestureLong]] as const).forEach(([key, label]) => {
+        const row = makeSettingEl("div");
+        row.className = "sw-floating-ball-settings__gesture-row";
+        const rowLabel = makeSettingEl("span");
+        rowLabel.className = "sw-settings__item-title";
+        rowLabel.textContent = label;
+        const select = makeSettingEl("select");
+        select.className = "b3-select";
+        select.dataset.gestureBinding = key;
+        select.setAttribute("aria-label", `${this.i18n.floatingBallGestureTitle} · ${label}`);
+        select.addEventListener("change", () => {
+            const next: any = getBallCfg();
+            next.behavior[key] = select.value;
+            persist(next);
+        });
+        gestureGrid.append(row);
+        row.append(rowLabel, select);
+        gestureRows.push({key, select});
+    });
+    const renderGestureOptions = () => {
+        const config: any = getBallCfg();
+        const catalog = this.getFloatingBallActions();
+        gestureRows.forEach(({key, select}) => {
+            const current = config.behavior?.[key] || "";
+            const options: Array<{value: string; label: string}> = [
+                {value: "", label: this.i18n.floatingBallFlickNone},
+                {value: "more", label: this.i18n.floatingBallFlickMore},
+            ];
+            const seen = new Set(options.map((option) => option.value));
+            const surface = surfaceSelect.value as QuickActionTarget;
+            catalog.forEach((action: any) => {
+                if (!action?.id || seen.has(action.id)) return;
+                if (this.getQuickActionSupport(action, surface) === "unsupported") return;
+                seen.add(action.id);
+                options.push({value: action.id, label: clickActionLabel(action, config, surface)});
+            });
+            if (current && !seen.has(current)) options.push({value: current, label: current});
+            select.innerHTML = "";
+            options.forEach((option) => select.appendChild(new Option(option.label, option.value)));
+            select.value = current;
+        });
+    };
+    wrapper.appendChild(gestureSection);
+    wrapper.addEventListener("sw-floating-ball-refresh", () => renderGestureOptions());
+
+    // T-6891（T-6857 余项）：数字 1–9 固定槽位。槽位只保存动作 ID 或
+    // 保存搜索 ID；保存搜索仍是独立对象，不写入快捷动作目录。空槽由悬浮球
+    // 面板按当前可见行继续使用动态回退，因此设置不会改变旧配置的默认行为。
+    const digitSlotSection = makeSettingEl("section");
+    digitSlotSection.className = "sw-floating-ball-settings__digit-slots";
+    const digitSlotHeading = makeSettingEl("strong");
+    digitSlotHeading.textContent = this.i18n.floatingBallDigitSlots;
+    digitSlotSection.appendChild(digitSlotHeading);
+    const digitSlotHint = makeSettingEl("p");
+    digitSlotHint.className = "sw-settings__hint";
+    digitSlotHint.textContent = this.i18n.floatingBallDigitSlotsTip;
+    digitSlotSection.appendChild(digitSlotHint);
+    const digitSlotGrid = makeSettingEl("div");
+    digitSlotGrid.className = "sw-floating-ball-settings__digit-slot-grid";
+    digitSlotSection.appendChild(digitSlotGrid);
+    const savedSearchesOf = () => {
+        const provided = this.getSavedSearches?.();
+        if (Array.isArray(provided)) return provided;
+        const fallback = (this.getSettings() as any).savedSearches;
+        return Array.isArray(fallback) ? fallback : [];
+    };
+    const actionIdOf = (action: any) => typeof action?.id === "string" && action.id.trim()
+        ? action.id.trim()
+        : typeof action?.actionId === "string" && action.actionId.trim()
+            ? action.actionId.trim() : typeof action?.value === "string" ? action.value.trim() : "";
+    const renderDigitSlots = () => {
+        const config: any = getBallCfg();
+        const surface = surfaceSelect.value as "desktop" | "sidebar" | "mobile";
+        const catalog = this.getFloatingBallActions();
+        const savedSearches = savedSearchesOf();
+        const actionOptions = catalog
+            .map((action: any) => ({action, id: actionIdOf(action)}))
+            .filter(({action, id}) => id && this.getQuickActionSupport(action, surface as QuickActionTarget) !== "unsupported");
+        digitSlotGrid.innerHTML = "";
+        for (let index = 0; index < FLOATING_BALL_DIGIT_SLOT_COUNT; index += 1) {
+            const row = makeSettingEl("label");
+            row.className = "sw-floating-ball-settings__digit-slot";
+            const title = makeSettingEl("span");
+            title.className = "sw-settings__item-title";
+            title.textContent = `${this.i18n.floatingBallDigitSlot} ${index + 1}`;
+            const select = makeSettingEl("select");
+            select.className = "b3-select";
+            select.dataset.digitSlot = String(index);
+            select.setAttribute("aria-label", title.textContent);
+            select.appendChild(new Option(this.i18n.floatingBallDigitSlotNone, ""));
+            const actionGroup = makeSettingEl("optgroup");
+            actionGroup.label = this.i18n.floatingBallDigitSlotAction;
+            actionOptions.forEach(({action, id}) => {
+                actionGroup.appendChild(new Option(clickActionLabel(action, config, surface), `action:${id}`));
+            });
+            select.appendChild(actionGroup);
+            const searchGroup = makeSettingEl("optgroup");
+            searchGroup.label = this.i18n.floatingBallDigitSlotSearch;
+            savedSearches.forEach((saved: any) => {
+                const id = typeof saved?.id === "string" ? saved.id.trim() : "";
+                if (!id) return;
+                const name = typeof saved?.name === "string" && saved.name.trim() ? saved.name.trim() : saved.query;
+                const query = typeof saved?.query === "string" ? saved.query.trim() : "";
+                searchGroup.appendChild(new Option(query ? `${name} · ${query}` : name, `saved-search:${id}`));
+            });
+            select.appendChild(searchGroup);
+            const current = config.digitSlots?.[surface]?.[index] || null;
+            let value = "";
+            if (current?.kind === "action" && current.actionId) value = `action:${current.actionId}`;
+            if (current?.kind === "saved-search" && current.searchId) value = `saved-search:${current.searchId}`;
+            if (value && !Array.from(select.options).some((option) => option.value === value)) {
+                const unavailable = current.kind === "saved-search"
+                    ? this.i18n.floatingBallDigitSlotUnavailable
+                    : this.i18n.floatingBallDigitSlotUnavailable;
+                select.appendChild(new Option(`${unavailable}: ${current.kind === "saved-search" ? current.searchId : current.actionId}`, value));
+            }
+            select.value = value;
+            select.addEventListener("change", () => {
+                const next: any = getBallCfg();
+                const raw = select.value;
+                next.digitSlots[surface][index] = raw.startsWith("action:")
+                    ? {kind: "action", actionId: raw.slice("action:".length)}
+                    : raw.startsWith("saved-search:")
+                        ? {kind: "saved-search", searchId: raw.slice("saved-search:".length)} : null;
+                persist(next);
+                renderDigitSlots();
+            });
+            row.append(title, select);
+            digitSlotGrid.appendChild(row);
+        }
+    };
+    wrapper.appendChild(digitSlotSection);
+    wrapper.addEventListener("sw-floating-ball-refresh", () => renderDigitSlots());
+
+    const controlsSection = makeSettingEl("section");
+    controlsSection.className = "sw-floating-ball-settings__controls-panel";
+    const controlsHeading = makeSettingEl("strong");
+    controlsHeading.textContent = this.i18n.floatingBallAppearance;
+    controlsSection.appendChild(controlsHeading);
+    const controlsHint = makeSettingEl("p");
+    controlsHint.className = "sw-settings__hint";
+    controlsHint.textContent = this.i18n.floatingBallAppearanceTip;
+    controlsSection.appendChild(controlsHint);
+    const controlsGrid = makeSettingEl("div");
+    controlsGrid.className = "sw-floating-ball-settings__controls-grid";
+    controlsSection.appendChild(controlsGrid);
+    wrapper.appendChild(controlsSection);
+
+    const controlValues = new Map<HTMLInputElement, {output: HTMLOutputElement; format: (value: number) => string}>();
+    const controlLabel = (text: string, control: HTMLElement, hint?: string, format?: (value: number) => string, host: HTMLElement = controlsGrid) => {
+        const label = makeSettingEl("label");
+        label.className = "sw-floating-ball-settings__control";
+        label.classList.toggle("is-toggle", control.getAttribute("type") === "checkbox");
+        const title = makeSettingEl("span");
+        title.className = "sw-settings__item-title";
+        title.textContent = text;
+        label.appendChild(title);
+        control.setAttribute("aria-label", text);
+        if (hint) {
+            const small = makeSettingEl("span");
+            small.className = "sw-settings__hint";
+            small.textContent = hint;
+            label.appendChild(small);
+        }
+        label.appendChild(control);
+        if (format) {
+            const output = makeSettingEl("output");
+            output.className = "sw-floating-ball-settings__value";
+            output.setAttribute("aria-hidden", "true");
+            label.appendChild(output);
+            controlValues.set(control as HTMLInputElement, {output, format});
+        }
+        host.appendChild(label);
+    };
+    const edgeSelect = makeSettingEl("select");
+    edgeSelect.className = "b3-select";
+    edgeSelect.dataset.control = "edge";
+    edgeSelect.append(new Option(this.i18n.floatingBallEdgeLeft, "left"), new Option(this.i18n.floatingBallEdgeRight, "right"));
+    const vertical = makeSettingEl("input");
+    vertical.type = "range";
+    vertical.min = "0";
+    vertical.max = "100";
+    vertical.step = "1";
+    vertical.dataset.control = "yRatio";
+    const size = makeSettingEl("input");
+    size.type = "range";
+    size.min = "44";
+    size.max = "64";
+    size.step = "1";
+    size.dataset.control = "size";
+    const margin = makeSettingEl("input");
+    margin.type = "range";
+    margin.min = "0";
+    margin.max = "32";
+    margin.step = "1";
+    margin.dataset.control = "marginPx";
+    const opacity = makeSettingEl("input");
+    opacity.type = "range";
+    opacity.min = "0.4";
+    opacity.max = "1";
+    opacity.step = "0.05";
+    opacity.dataset.control = "idleOpacity";
+    const delay = makeSettingEl("input");
+    delay.type = "range";
+    delay.min = "3000";
+    delay.max = "8000";
+    delay.step = "500";
+    delay.dataset.control = "idleDelayMs";
+    const checkbox = (key: string) => {
+        const input = makeSettingEl("input");
+        input.type = "checkbox";
+        input.dataset.control = key;
+        return input;
+    };
+    const halfHide = checkbox("halfHide");
+    const snap = checkbox("snap");
+    const hideOnScroll = checkbox("hideOnScroll");
+    const hideOnFullscreen = checkbox("hideOnFullscreen");
+    const yieldToModals = checkbox("yieldToModals");
+    const touchSlop = makeSettingEl("input");
+    touchSlop.type = "range";
+    touchSlop.min = "8";
+    touchSlop.max = "12";
+    touchSlop.step = "1";
+    touchSlop.dataset.control = "touchSlopPx";
+    const pixels = (value: number) => `${value} ${this.i18n.unitPx}`;
+    controlLabel(this.i18n.floatingBallEdge, edgeSelect);
+    controlLabel(this.i18n.floatingBallVertical, vertical, undefined, (value) => `${value}%`);
+    controlLabel(this.i18n.floatingBallSize, size, this.i18n.floatingBallSizeTip, pixels);
+    controlLabel(this.i18n.floatingBallMargin, margin, this.i18n.floatingBallMarginTip, pixels);
+    controlLabel(this.i18n.floatingBallIdleOpacity, opacity, undefined, (value) => `${Math.round(value * 100)}%`);
+    controlLabel(this.i18n.floatingBallIdleDelay, delay, undefined, (value) => `${value / 1000} ${this.i18n.floatingBallSeconds}`);
+    controlLabel(this.i18n.floatingBallHalfHide, halfHide);
+    controlLabel(this.i18n.floatingBallSnap, snap, this.i18n.floatingBallSnapTip);
+    // T-6784/P6 手机端离边停靠（防侧滑误触）：仅手机端生效
+    const edgeAvoidSwitch = this.switcher(Boolean(s.floatingBall?.behavior?.edgeAvoidMobile), (v) => {
+        const current = this.getSettings().floatingBall;
+        this.updateSettings({floatingBall: {...current, behavior: {...(current.behavior || {}), edgeAvoidMobile: v}}});
+    });
+    // 离边停靠只由手机端宿主侧滑手势使用。桌面端仍保留共享配置值，
+    // 但不能让用户在编辑桌面布局时误改一个不会生效的控制项。
+    const edgeAvoidInput = edgeAvoidSwitch.matches?.("input")
+        ? edgeAvoidSwitch as HTMLInputElement
+        : edgeAvoidSwitch.querySelector<HTMLInputElement>("input");
+    if (edgeAvoidInput) {
+        edgeAvoidInput.dataset.control = "edgeAvoidMobile";
+    }
+    controlLabel(this.i18n.floatingBallEdgeAvoid, edgeAvoidSwitch, this.i18n.floatingBallEdgeAvoidTip);
+    controlLabel(this.i18n.floatingBallHideOnScroll, hideOnScroll);
+    controlLabel(this.i18n.floatingBallHideOnFullscreen, hideOnFullscreen);
+    controlLabel(this.i18n.floatingBallYieldToModals, yieldToModals);
+    const advanced = makeSettingEl("details");
+    advanced.className = "sw-floating-ball-settings__advanced";
+    const advancedSummary = makeSettingEl("summary");
+    advancedSummary.textContent = this.i18n.floatingBallAdvanced;
+    advanced.appendChild(advancedSummary);
+    controlLabel(this.i18n.floatingBallTouchSlop, touchSlop, undefined, pixels, advanced);
+    controlsSection.appendChild(advanced);
+
+    let renderControls: () => void = () => undefined;
+    let renderPreview: (config?: any) => void = () => undefined;
+    const clickActionLabel = (action: any, config: any, surface: string) => {
+        const descriptor = config.actions?.[surface]?.find((entry: any) => entry.actionId === action.id);
+        if (descriptor?.label) return descriptor.label;
+        const builtinLabels: Record<string, string> = {
+            switcher: this.i18n.quickBuiltinSwitcher,
+            search: this.i18n.quickBuiltinSearch,
+            journal: this.i18n.quickBuiltinJournal,
+            settings: this.i18n.quickBuiltinSettings,
+            home: this.i18n.secondPanel,
+            "quick-capture": this.i18n.quickBuiltinQuickCapture,
+            "previous-tab": this.i18n.quickBuiltinPreviousTab,
+            "next-tab": this.i18n.quickBuiltinNextTab,
+            "scroll-top": this.i18n.quickBuiltinScrollTop,
+            "scroll-bottom": this.i18n.quickBuiltinScrollBottom,
+            outline: this.i18n.quickGlobalOutline,
+            bookmark: this.i18n.quickGlobalBookmark,
+            tag: this.i18n.quickGlobalTag,
+            inbox: this.i18n.quickGlobalInbox,
+            backlinks: this.i18n.quickGlobalBacklinks,
+            recentDocs: this.i18n.quickGlobalRecentDocs,
+            recentClosed: this.i18n.quickGlobalRecentClosed,
+            riffCard: this.i18n.quickGlobalRiffCard,
+            editReadonly: this.i18n.quickGlobalEditReadonly,
+            "sync-now": this.i18n.quickBuiltinSyncNow,
+            "insert-template": this.i18n.quickBuiltinInsertTemplate,
+            "cycle-doc-set": this.i18n.quickBuiltinCycleDocSet,
+            "cycle-ball-preset": this.i18n.quickBuiltinCycleBallPreset,
+            "throw-window": this.i18n.quickBuiltinThrowWindow,
+            "hide-keyboard": this.i18n.quickBuiltinHideKeyboard,
+            "jump-back": this.i18n.quickBuiltinJumpBack,
+            "jump-forward": this.i18n.quickBuiltinJumpForward,
+        };
+        return builtinLabels[action.value] || action.label || action.id;
+    };
+    const renderClickActionOptions = (config: any, surface: string) => {
+        const current = config.clickAction?.[surface] || "switcher";
+        const catalog = this.getFloatingBallActions();
+        const options: Array<{value: string; label: string}> = [
+            {value: "switcher", label: this.i18n.floatingBallClickSwitcher},
+            {value: "__floating-ball-more__", label: this.i18n.floatingBallClickMore},
+        ];
+        const seen = new Set(options.map((option) => option.value));
+        catalog.forEach((action: any) => {
+            if (!action?.id || seen.has(action.id)) return;
+            if (this.getQuickActionSupport(action, surface as QuickActionTarget) === "unsupported") return;
+            seen.add(action.id);
+            options.push({value: action.id, label: clickActionLabel(action, config, surface)});
+        });
+        if (!seen.has(current)) {
+            const descriptor = config.actions?.[surface]?.find((entry: any) => entry.actionId === current);
+            options.push({value: current, label: descriptor?.label || current});
+        }
+        clickActionSelect.innerHTML = "";
+        options.forEach((option) => clickActionSelect.appendChild(new Option(option.label, option.value)));
+        clickActionSelect.value = current;
+    };
+    const renderControlValues = () => controlValues.forEach(({output, format}, input) => {
+        const text = format(Number(input.value));
+        output.value = text;
+        input.setAttribute("aria-valuetext", text);
+    });
+    const updateControlConfig = (mutate: (next: any, surface: "desktop" | "sidebar" | "mobile") => void) => {
+        const current: any = getBallCfg();
+        mutate(current, surfaceSelect.value as "desktop" | "sidebar" | "mobile");
+        persist(current);
+        renderControls();
+        renderActions();
+    };
+    edgeSelect.addEventListener("change", () => updateControlConfig((next, surface) => {
+        next.position[surface].edge = edgeSelect.value;
+        delete next.position[surface].xRatio;
+    }));
+    const rangeControl = (input: HTMLInputElement, mutate: (next: any, surface: "desktop" | "sidebar" | "mobile") => void) => {
+        input.addEventListener("input", () => {
+            if (input.disabled) return;
+            const draft: any = getBallCfg();
+            mutate(draft, surfaceSelect.value as "desktop" | "sidebar" | "mobile");
+            renderControlValues();
+            renderPreview(normalizeFloatingBallConfig(draft));
+        });
+        input.addEventListener("change", () => { if (!input.disabled) updateControlConfig(mutate); });
+    };
+    rangeControl(vertical, (next, surface) => { next.position[surface].yRatio = Number(vertical.value) / 100; });
+    rangeControl(size, (next) => { next.appearance.size = Number(size.value); });
+    rangeControl(margin, (next) => { next.appearance.marginPx = Number(margin.value); });
+    rangeControl(opacity, (next) => { next.appearance.idleOpacity = Number(opacity.value); });
+    rangeControl(delay, (next) => { next.appearance.idleDelayMs = Number(delay.value); });
+    rangeControl(touchSlop, (next) => { next.behavior.touchSlopPx = Number(touchSlop.value); });
+    halfHide.addEventListener("change", () => updateControlConfig((next) => { next.appearance.halfHide = halfHide.checked; }));
+    snap.addEventListener("change", () => updateControlConfig((next) => { next.behavior.snap = snap.checked; }));
+    hideOnScroll.addEventListener("change", () => updateControlConfig((next) => { next.behavior.hideOnScroll = hideOnScroll.checked; }));
+    hideOnFullscreen.addEventListener("change", () => updateControlConfig((next) => { next.behavior.hideOnFullscreen = hideOnFullscreen.checked; }));
+    yieldToModals.addEventListener("change", () => updateControlConfig((next) => { next.behavior.yieldToModals = yieldToModals.checked; }));
+    clickActionSelect.addEventListener("change", () => updateControlConfig((next, surface) => {
+        next.clickAction[surface] = clickActionSelect.value;
+    }));
+    const restoreAppearance = makeSettingEl("button");
+    restoreAppearance.type = "button";
+    restoreAppearance.className = "b3-button b3-button--text sw-floating-ball-settings__restore-appearance";
+    restoreAppearance.textContent = this.i18n.floatingBallRestoreAppearance;
+    restoreAppearance.addEventListener("click", () => {
+        if (!confirm(this.i18n.floatingBallRestoreAppearanceConfirm)) return;
+        const defaults = createDefaultFloatingBallConfig();
+        updateControlConfig((next) => {
+            next.appearance = defaults.appearance;
+            next.behavior = defaults.behavior;
+        });
+        restoreAppearance.focus();
+    });
+    controlsSection.appendChild(restoreAppearance);
+
+    const preview = makeSettingEl("section");
+    preview.className = "sw-floating-ball-settings__preview";
+    preview.setAttribute("aria-label", this.i18n.floatingBallPreview);
+    const previewTitle = makeSettingEl("strong");
+    previewTitle.textContent = this.i18n.floatingBallPreview;
+    const previewSurfaceChip = makeSettingEl("span");
+    previewSurfaceChip.className = "sw-floating-ball-settings__surface-chip";
+    previewSurfaceChip.setAttribute("aria-hidden", "true");
+    const previewStage = makeSettingEl("div");
+    previewStage.className = "sw-floating-ball-settings__preview-stage";
+    const previewStatus = makeSettingEl("p");
+    previewStatus.className = "sw-settings__hint";
+    previewStatus.setAttribute("role", "status");
+    previewStatus.setAttribute("aria-live", "polite");
+    previewStatus.textContent = this.i18n.floatingBallPreviewTip;
+    const previewMoreSummary = makeSettingEl("span");
+    previewMoreSummary.className = "sw-settings__hint";
+    preview.append(previewTitle, previewSurfaceChip, previewStage, previewMoreSummary, previewStatus);
+    wrapper.insertBefore(preview, controlsSection);
+
+    const actionSection = makeSettingEl("section");
+    actionSection.className = "sw-floating-ball-settings__actions";
+    const actionHeading = makeSettingEl("div");
+    actionHeading.className = "sw-floating-ball-settings__actions-heading";
+    const heading = makeSettingEl("strong");
+    heading.textContent = this.i18n.floatingBallActions;
+    actionHeading.appendChild(heading);
+    const actionHint = makeSettingEl("span");
+    actionHint.className = "sw-settings__hint";
+    actionHint.textContent = this.i18n.floatingBallActionsTip;
+    actionHeading.appendChild(actionHint);
+    actionSection.appendChild(actionHeading);
+    const actionList = makeSettingEl("div");
+    actionList.className = "sw-floating-ball-settings__list";
+    actionSection.appendChild(actionList);
+    wrapper.appendChild(actionSection);
+
+    // T-6803 场景预设：命名保存当前动作布局与主点击，一键应用/删除/循环
+    const presetSection = makeSettingEl("section");
+    presetSection.className = "sw-floating-ball-settings__presets";
+    const presetHeading = makeSettingEl("strong");
+    presetHeading.textContent = this.i18n.floatingBallPresets;
+    const presetHint = makeSettingEl("p");
+    presetHint.className = "sw-settings__hint";
+    presetHint.textContent = this.i18n.floatingBallPresetsTip;
+    const presetRow = makeSettingEl("div");
+    presetRow.className = "sw-floating-ball-settings__preset-row";
+    const presetName = makeSettingEl("input");
+    presetName.type = "text";
+    presetName.className = "b3-text-field";
+    presetName.maxLength = 24;
+    presetName.placeholder = this.i18n.floatingBallPresetName;
+    presetName.setAttribute("aria-label", this.i18n.floatingBallPresetName);
+    const presetSave = makeSettingEl("button");
+    presetSave.type = "button";
+    presetSave.className = "b3-button b3-button--text";
+    presetSave.textContent = this.i18n.floatingBallPresetSave;
+    presetRow.append(presetName, presetSave);
+    const presetList = makeSettingEl("div");
+    presetList.className = "sw-floating-ball-settings__preset-list";
+    presetSection.append(presetHeading, presetHint, presetRow, presetList);
+    wrapper.appendChild(presetSection);
+
+    const renderPresets = () => {
+        const config: any = getBallCfg();
+        presetList.textContent = "";
+        const presets: any[] = Array.isArray(config.presets) ? config.presets : [];
+        if (!presets.length) {
+            const empty = makeSettingEl("p");
+            empty.className = "sw-settings__hint";
+            empty.textContent = this.i18n.floatingBallPresetEmpty;
+            presetList.appendChild(empty);
+            return;
+        }
+        presets.forEach((preset: any) => {
+            // T-7015（设计审查 F3 收口）：当前场景行不再提供「应用」——对已生效
+            // 配置重复应用是无效动作；以「当前」徽标表达状态，删除出口保留。
+            const isCurrent = preset.id === config.currentPresetId;
+            const row = makeSettingEl("div");
+            row.className = "sw-floating-ball-settings__preset-item" + (isCurrent ? " is-current" : "");
+            const name = makeSettingEl("span");
+            name.className = "sw-floating-ball-settings__preset-name";
+            name.textContent = preset.name;
+            if (isCurrent) {
+                const badge = document.createElement("span");
+                badge.className = "sw-floating-ball-settings__preset-current";
+                badge.textContent = this.i18n.floatingBallPresetCurrent;
+                row.append(name, badge);
+            } else {
+                const apply = makeSettingEl("button");
+                apply.type = "button";
+                apply.className = "b3-button b3-button--text";
+                apply.textContent = this.i18n.floatingBallPresetApply;
+                apply.addEventListener("click", () => {
+                    const result = applyFloatingBallPreset(this.getSettings().floatingBall, preset.id);
+                    if (!result.preset) return;
+                    if (persist(result.config)) {
+                        renderActions();
+                        renderPresets();
+                    }
+                });
+                row.append(name, apply);
+            }
+            const remove = makeSettingEl("button");
+            remove.type = "button";
+            remove.className = "b3-button b3-button--text";
+            remove.textContent = this.i18n.floatingBallPresetDelete;
+            remove.addEventListener("click", () => {
+                const result = removeFloatingBallPreset(this.getSettings().floatingBall, preset.id);
+                if (persist(result.config)) {
+                    renderActions();
+                    renderPresets();
+                }
+            });
+            row.append(remove);
+            presetList.appendChild(row);
+        });
+    };
+    presetSave.addEventListener("click", () => {
+        const result = saveFloatingBallPreset(this.getSettings().floatingBall, presetName.value);
+        if (!result.preset) return;
+        if (persist(result.config)) {
+            presetName.value = "";
+            renderActions();
+            renderPresets();
+        }
+    });
+
+    renderPreview = (draft?: any) => {
+        const surface = surfaceSelect.value as "desktop" | "sidebar" | "mobile";
+        const config: any = draft || getBallCfg();
+        const catalog = this.getFloatingBallActions();
+        const support = {resolveSupport: (action: IQuickAction, target: string) => this.getQuickActionSupport(action, target as QuickActionTarget)};
+        const position = config.position[surface];
+        const sizePx = surface === "sidebar" ? 44 : config.appearance.size;
+        const marginPx = config.appearance.marginPx ?? 8;
+        const xRatio = !config.behavior.snap && typeof position.xRatio === "number" ? position.xRatio : position.edge === "left" ? 0 : 1;
+        const direction = xRatio <= 0.5 ? "right" : "left";
+        // Resolve proportional coordinates without measuring layout on each input.
+        const coordinate = (ratio: number, extra = 0) => `calc(${ratio * 100}% + ${(1 - 2 * ratio) * (marginPx + sizePx / 2) + extra}px)`;
+        previewStage.innerHTML = "";
+        previewSurfaceChip.textContent = surfaceLabels[surface] || surface;
+        previewStage.dataset.surface = surface;
+        previewStage.dataset.edge = position.edge;
+        previewStage.dataset.direction = direction;
+        previewStage.dataset.snap = String(config.behavior.snap);
+        previewStage.dataset.halfHide = String(config.appearance.halfHide && (config.behavior.snap || position.xRatio === undefined));
+        previewStage.classList.toggle("is-disabled", !config.enabled[surface]);
+        const makePreviewButton = (action: {actionId?: string; id?: string; label?: string}, ball = false) => {
+            const button = makeSettingEl("button");
+            button.type = "button";
+            button.className = ball ? "sw-floating-ball-settings__preview-ball" : "b3-button b3-button--outline";
+            button.dataset.actionId = action.actionId || action.id;
+            button.textContent = action.label;
+            button.setAttribute("aria-label", action.label);
+            button.title = action.label;
+            button.addEventListener("click", () => {
+                previewStatus.textContent = this.i18n.floatingBallPreviewResult.replace("{x}", action.label);
+            });
+            return button;
+        };
+        const previewActions = makeSettingEl("div");
+        previewActions.className = "sw-floating-ball-settings__preview-actions";
+        const ball = makePreviewButton({id: "switcher", label: this.i18n.quickBuiltinSwitcher}, true);
+        ball.innerHTML = '<svg width="20" height="20" aria-hidden="true"><use href="#iconLayout"></use></svg>';
+        ball.style.width = `${sizePx}px`;
+        ball.style.height = `${sizePx}px`;
+        ball.style.left = coordinate(xRatio);
+        ball.style.top = coordinate(position.yRatio);
+        ball.style.opacity = String(config.appearance.idleOpacity);
+        const firstLayer = selectFloatingBallFirstLayer(config, surface, catalog, support);
+        // The simulated ball already supplies the switcher path, including the
+        // empty-config fallback. Do not display a second switcher in its targets.
+        const targets = firstLayer.filter((action: any) => action.id !== "switcher");
+        targets.forEach((action: any) => previewActions.appendChild(makePreviewButton({
+            ...action, label: action.kind === "more" ? this.i18n.floatingBallMore : action.label,
+        })));
+        previewActions.style.left = coordinate(xRatio, (sizePx / 2 + 8) * (direction === "right" ? 1 : -1));
+        const targetsHeight = targets.length * 44 + Math.max(0, targets.length - 1) * 6;
+        previewActions.style.top = `clamp(8px, ${coordinate(position.yRatio, -targetsHeight / 2)}, calc(100% - ${targetsHeight + 8}px))`;
+        const more = selectFloatingBallMoreActions(config, surface, catalog, support);
+        previewMoreSummary.textContent = this.i18n.floatingBallMoreCount.replace("{x}", String(more.length));
+        previewStage.append(ball, previewActions);
+    };
+
+    const renderActions = (focusId?: string, focusKind?: string) => {
+        const surface = surfaceSelect.value as "desktop" | "sidebar" | "mobile";
+        const config: any = getBallCfg();
+        const catalog = this.getFloatingBallActions();
+        toggles.forEach((input, target) => { input.checked = config.enabled[target]; });
+        const support = {resolveSupport: (action: IQuickAction, target: string) => this.getQuickActionSupport(action, target as QuickActionTarget)};
+        const rows: any[] = buildFloatingBallSettingsRows(config, surface, catalog, support);
+        renderPreview(config);
+        actionList.innerHTML = "";
+        if (rows.length === 0) {
+            const empty = makeSettingEl("p");
+            empty.className = "sw-settings__hint";
+            empty.textContent = this.i18n.floatingBallNoActions;
+            actionList.appendChild(empty);
+        }
+        const firstLayerCount = rows.filter((row) => row.firstLayer).length;
+        rows.forEach((row, index) => {
+            const item = makeSettingEl("div");
+            item.className = "sw-floating-ball-settings__row";
+            item.dataset.actionId = row.actionId;
+            const order = makeSettingEl("span");
+            order.className = "sw-floating-ball-settings__order";
+            order.textContent = String(index + 1);
+            const title = makeSettingEl("input");
+            title.type = "text";
+            title.className = "b3-text-field sw-floating-ball-settings__label";
+            title.value = row.label;
+            title.maxLength = 80;
+            title.dataset.control = "label";
+            title.setAttribute("aria-label", `${this.i18n.floatingBallCustomLabel}: ${row.actionId}`);
+            title.title = row.actionId;
+            title.addEventListener("change", () => {
+                persist(updateFloatingBallAction(this.getSettings().floatingBall, surface, row.actionId, {label: title.value}));
+                renderActions(row.actionId, "label");
+            });
+            const iconButton = makeSettingEl("button");
+            iconButton.type = "button";
+            iconButton.className = "b3-button b3-button--text sw-floating-ball-settings__icon";
+            iconButton.setAttribute("aria-label", `${this.i18n.floatingBallCustomIcon}: ${row.label}`);
+            iconButton.title = this.i18n.floatingBallCustomIcon;
+            iconButton.dataset.control = "icon";
+            if (typeof (this as any).renderQuickActionIconButton === "function") {
+                this.renderQuickActionIconButton(iconButton, row.icon);
+            } else {
+                iconButton.textContent = row.icon;
+            }
+            iconButton.addEventListener("click", () => {
+                const action = row.action ? {...row.action, label: row.label, icon: row.icon} : {
+                    id: row.actionId,
+                    label: row.label,
+                    icon: row.icon,
+                    kind: row.kind === "unknown" ? "adapter" : row.kind,
+                    value: row.actionId,
+                    targets: [surface],
+                    enabled: row.enabled,
+                    order: row.order,
+                } as IQuickAction;
+                this.openQuickActionIconPicker(action, (icon) => {
+                    persist(updateFloatingBallAction(this.getSettings().floatingBall, surface, row.actionId, {icon}));
+                    renderActions(row.actionId, "icon");
+                });
+            });
+            const status = makeSettingEl("span");
+            status.className = `sw-floating-ball-settings__status is-${row.status}`;
+            status.textContent = row.status === "supported"
+                ? this.i18n.floatingBallStatusReady
+                : row.status === "unknown" ? this.i18n.floatingBallStatusUnknown
+                    : row.status === "unsupported" ? this.i18n.floatingBallStatusUnsupported
+                        : this.i18n.floatingBallStatusUnavailable;
+            status.title = row.status === "supported" ? this.i18n.floatingBallStatusReady
+                : row.status === "unsupported" ? this.i18n.quickSupportUnsupported
+                    : row.status === "unknown" ? this.i18n.quickSupportUnknown
+                        : this.i18n.quickActionUnavailable;
+            const enabledLabel = makeSettingEl("label");
+            enabledLabel.className = "sw-floating-ball-settings__check";
+            const enabled = makeSettingEl("input");
+            enabled.type = "checkbox";
+            enabled.checked = row.enabled;
+            // Configuration remains editable while a provider is absent.
+            enabled.dataset.control = "enabled";
+            enabled.setAttribute("aria-label", `${this.i18n.floatingBallEnableAction}: ${row.label}`);
+            enabled.addEventListener("change", () => {
+                persist(updateFloatingBallAction(this.getSettings().floatingBall, surface, row.actionId, {enabled: enabled.checked}));
+                renderActions(row.actionId, "enabled");
+            });
+            enabledLabel.append(enabled, document.createTextNode(this.i18n.floatingBallEnabled));
+            const firstLabel = makeSettingEl("label");
+            firstLabel.className = "sw-floating-ball-settings__check";
+            const first = makeSettingEl("input");
+            first.type = "checkbox";
+            first.checked = row.firstLayer;
+            // The sixth first-layer slot is reserved for the synthetic More
+            // entry, so at most five configured actions can be promoted.
+            first.disabled = !row.firstLayer && firstLayerCount >= FLOATING_BALL_FIRST_LAYER_LIMIT - 1;
+            first.dataset.control = "first";
+            first.setAttribute("aria-label", `${this.i18n.floatingBallFirstLayer}: ${row.label}`);
+            first.addEventListener("change", () => {
+                persist(updateFloatingBallAction(this.getSettings().floatingBall, surface, row.actionId, {firstLayer: first.checked}));
+                renderActions(row.actionId, "first");
+            });
+            firstLabel.append(first, document.createTextNode(this.i18n.floatingBallFirstLayer));
+            let mobileTryLabel: HTMLLabelElement | null = null;
+            if (surface === "mobile" && row.status === "unknown") {
+                mobileTryLabel = makeSettingEl("label");
+                mobileTryLabel.className = "sw-floating-ball-settings__check is-warning";
+                const mobileTry = makeSettingEl("input");
+                mobileTry.type = "checkbox";
+                mobileTry.checked = row.mobileOverride;
+                mobileTry.dataset.control = "mobileOverride";
+                mobileTry.setAttribute("aria-label", `${this.i18n.floatingBallMobileTry}: ${row.label}`);
+                mobileTry.addEventListener("change", () => {
+                    persist(updateFloatingBallAction(this.getSettings().floatingBall, surface, row.actionId, {mobileOverride: mobileTry.checked}));
+                    renderActions(row.actionId, "mobileOverride");
+                });
+                mobileTryLabel.append(mobileTry, document.createTextNode(this.i18n.floatingBallMobileTry));
+            }
+            const controls = makeSettingEl("span");
+            controls.className = "sw-floating-ball-settings__controls";
+            const moveButton = (icon: string, label: string, delta: number) => {
+                const button = makeSettingEl("button");
+                button.type = "button";
+                button.className = "b3-button b3-button--text";
+                button.title = label;
+                button.setAttribute("aria-label", label);
+                button.dataset.control = delta < 0 ? "up" : "down";
+                button.innerHTML = `<svg><use xlink:href="#${icon}"></use></svg>`;
+                button.disabled = (delta < 0 && index === 0) || (delta > 0 && index === rows.length - 1);
+                button.addEventListener("click", () => {
+                    persist(moveFloatingBallAction(this.getSettings().floatingBall, surface, row.actionId, delta));
+                    renderActions(row.actionId, delta < 0 ? "up" : "down");
+                });
+                return button;
+            };
+            controls.append(moveButton("iconUp", this.i18n.floatingBallMoveUp, -1), moveButton("iconDown", this.i18n.floatingBallMoveDown, 1));
+            const remove = makeSettingEl("button");
+            remove.type = "button";
+            remove.className = "b3-button b3-button--text";
+            remove.textContent = this.i18n.quickRemove;
+            remove.setAttribute("aria-label", `${this.i18n.quickRemove}: ${row.label}`);
+            remove.addEventListener("click", () => {
+                persist(removeFloatingBallAction(this.getSettings().floatingBall, surface, row.actionId));
+                renderActions(rows[index + 1]?.actionId || rows[index - 1]?.actionId, "enabled");
+            });
+            controls.appendChild(remove);
+            item.draggable = !this.isMobile;
+            if (!this.isMobile) {
+                item.addEventListener("dragstart", (event) => event.dataTransfer?.setData("application/x-sw-floating-action", row.actionId));
+                item.addEventListener("dragover", (event) => event.preventDefault());
+                item.addEventListener("drop", (event) => {
+                    event.preventDefault();
+                    const id = event.dataTransfer?.getData("application/x-sw-floating-action");
+                    const from = rows.findIndex((candidate) => candidate.actionId === id);
+                    if (from < 0 || from === index) return;
+                    persist(moveFloatingBallAction(this.getSettings().floatingBall, surface, id, index - from));
+                    renderActions(id, "enabled");
+                });
+            }
+            const metadata = makeSettingEl("div");
+            metadata.className = "sw-floating-ball-settings__metadata";
+            metadata.append(status, enabledLabel, firstLabel, ...(mobileTryLabel ? [mobileTryLabel] : []));
+            item.append(order, title, iconButton, metadata, controls);
+            actionList.appendChild(item);
+        });
+
+        const available = catalog.filter((action) => !rows.some((row) => row.actionId === action.id) && this.getQuickActionSupport(action, surface as QuickActionTarget) !== "unsupported");
+        if (available.length > 0 && rows.length < FLOATING_BALL_ACTION_LIMIT) {
+            const add = makeSettingEl("button");
+            add.type = "button";
+            add.className = "b3-button b3-button--outline sw-floating-ball-settings__add";
+            add.textContent = this.i18n.floatingBallAddAction;
+            add.addEventListener("click", () => mountQuickActionPicker({
+                trigger: add, host: actionList,
+                candidates: available.map((action) => ({...action, label: action.label || action.value, group: action.kind})),
+                searchPlaceholder: this.i18n.quickPickerSearch,
+                emptyText: this.i18n.quickPickerEmpty,
+                onSelect: (selected: IQuickAction) => {
+                    const current: any = getBallCfg();
+                    const entries: any[] = current.actions[surface];
+                    if (entries.some((entry) => entry.actionId === selected.id) || entries.length >= FLOATING_BALL_ACTION_LIMIT) return;
+                    entries.push({actionId: selected.id, enabled: true, firstLayer: false, order: Math.max(0, ...entries.map((entry) => entry.order)) + 10});
+                    persist(current);
+                    renderActions(selected.id, "enabled");
+                },
+            }));
+            actionList.appendChild(add);
+        }
+        if (focusId) {
+            const targetRow = Array.from(actionList.querySelectorAll<HTMLElement>("[data-action-id]")).find((item) => item.dataset.actionId === focusId);
+            const target = targetRow?.querySelector<HTMLInputElement | HTMLButtonElement>(`[data-control="${focusKind}"]`);
+            (target && !target.disabled ? target : targetRow?.querySelector<HTMLInputElement>("[data-control='enabled']"))?.focus();
+        }
+    };
+    renderControls = () => {
+        const config: any = getBallCfg();
+        const surface = surfaceSelect.value as "desktop" | "sidebar" | "mobile";
+        renderClickActionOptions(config, surface);
+        edgeSelect.value = config.position[surface].edge;
+        vertical.value = String(Math.round(config.position[surface].yRatio * 100));
+        size.disabled = surface === "sidebar";
+        size.value = String(surface === "sidebar" ? 44 : config.appearance.size);
+        margin.value = String(config.appearance.marginPx ?? 8);
+        opacity.value = String(config.appearance.idleOpacity);
+        delay.value = String(config.appearance.idleDelayMs);
+        touchSlop.value = String(config.behavior.touchSlopPx);
+        halfHide.checked = config.appearance.halfHide;
+        snap.checked = config.behavior.snap;
+        hideOnScroll.checked = config.behavior.hideOnScroll;
+        hideOnFullscreen.checked = config.behavior.hideOnFullscreen;
+        yieldToModals.checked = config.behavior.yieldToModals;
+        if (edgeAvoidInput) {
+            edgeAvoidInput.checked = config.behavior.edgeAvoidMobile === true;
+            edgeAvoidInput.disabled = surface !== "mobile";
+            edgeAvoidInput.setAttribute("aria-disabled", String(surface !== "mobile"));
+        }
+        renderControlValues();
+    };
+    surfaceSelect.addEventListener("change", () => {
+        renderControls();
+        renderActions();
+        renderDigitSlots();
+        renderFlickOptions();
+        renderGestureOptions();
+    });
+    wrapper.addEventListener("sw-floating-ball-refresh", () => {
+        renderFirstUse(); renderControls(); renderActions(); renderDigitSlots(); renderFlickOptions(); renderGestureOptions();
+    });
+    renderControls();
+    renderActions();
+    renderDigitSlots();
+    renderFlickOptions();
+    renderGestureOptions();
+    renderPresets();
+
+    const footer = makeSettingEl("div");
+    footer.className = "sw-floating-ball-settings__footer";
+    const restore = makeSettingEl("button");
+    restore.type = "button";
+    restore.className = "b3-button b3-button--text";
+    restore.textContent = this.i18n.floatingBallRestoreDefaults;
+    restore.addEventListener("click", () => {
+        if (!confirm(this.i18n.floatingBallRestoreConfirm)) return;
+        persist(restoreFloatingBallDefaults(this.getSettings().floatingBall, surfaceSelect.value));
+        renderActions();
+        restore.focus();
+    });
+    footer.append(restore, buildQuickActionsTransferControls.call(this, () => { renderControls(); renderActions(); }, true));
+    wrapper.appendChild(footer);
+    return wrapper;
+}
+
+// T-6955：文档集历史版本差异预览——只读比较该版本与当前集合（新增/移除/顺序/
+// 标题/活动标记），缺失的历史时间标为「未记录」；确认后才调用既有回滚入口
+//（保持可逆语义），取消零写入。
+function openDocumentSetDiffDialog(this: SettingsSectionsHost, item: any, versionIndex: number, onDone: () => void) {
+    const versions = Array.isArray(item?.versions) ? item.versions : [];
+    const version = versions[versionIndex];
+    if (!version) return;
+    const diff = diffDocumentSetVersion(item.entries || [], version.entries || []);
+    const dialog = new Dialog({
+        title: `${this.i18n.documentSetDiffTitle} · ${String(item.name || "")}`,
+        content: '<div class="sw-doc-set-diff"></div>',
+        width: this.isMobile ? "min(560px, 94vw)" : "520px",
+    });
+    const diffTitle = `${this.i18n.documentSetDiffTitle || "版本差异"} · ${String(item.name || "")}`;
+    mountPlatformDialogTitleWrap(dialog.element, diffTitle, "", "iconHistory");
+    mountPlatformDialogCloseHint(dialog.element, this.i18n.platformCloseHint || "to close");
+    mountPlatformDialogMobileClose(dialog.element, () => dialog.destroy());
+    const root = dialog.element.querySelector<HTMLElement>(".sw-doc-set-diff");
+    if (!root) {
+        dialog.destroy();
+        return;
+    }
+    const meta = makeSettingEl("p");
+    meta.className = "sw-doc-set-diff__meta";
+    meta.textContent = `${this.i18n.documentSetDiffTitle} · ${version.savedAt > 0 ? new Date(version.savedAt).toLocaleString() : this.i18n.documentSetDiffUnrecorded}`;
+    root.appendChild(meta);
+    const buildGroup = (label: string, rows: any[], format: (row: any) => string) => {
+        if (rows.length === 0) return;
+        const title = makeSettingEl("h4");
+        title.className = `sw-doc-set-diff__group sw-doc-set-diff__group--${label === this.i18n.documentSetDiffRestore ? "restore" : "remove"}`;
+        title.textContent = `${label} · ${rows.length}`;
+        root.appendChild(title);
+        rows.forEach((row) => {
+            const line = makeSettingEl("div");
+            line.className = "sw-doc-set-diff__line";
+            line.textContent = format(row);
+            root.appendChild(line);
+        });
+    };
+    buildGroup(this.i18n.documentSetDiffRestore, diff.restore, (entry) => entry.title);
+    buildGroup(this.i18n.documentSetDiffRemove, diff.remove, (entry) => entry.title);
+    if (diff.changed.length > 0) {
+        const title = makeSettingEl("h4");
+        title.className = "sw-doc-set-diff__group sw-doc-set-diff__group--changed";
+        title.textContent = `${this.i18n.documentSetDiffChanged} · ${diff.changed.length}`;
+        root.appendChild(title);
+        diff.changed.forEach((row: any) => {
+            const line = makeSettingEl("div");
+            line.className = "sw-doc-set-diff__line";
+            const bits: string[] = [row.rootId];
+            if (row.titleChanged) bits.push(`${this.i18n.documentSetDiffTitleChange}: ${row.currentTitle} → ${row.versionTitle}`);
+            if (row.orderChanged) bits.push(`${this.i18n.documentSetDiffOrder}: ${row.currentIndex + 1} → ${row.versionIndex + 1}`);
+            if (row.activeChanged) bits.push(this.i18n.documentSetDiffActive);
+            line.textContent = bits.join(" · ");
+            root.appendChild(line);
+        });
+    }
+    if (diff.restore.length === 0 && diff.remove.length === 0 && diff.changed.length === 0) {
+        const empty = makeSettingEl("p");
+        empty.className = "sw-doc-set-diff__meta";
+        empty.textContent = this.i18n.documentSetDiffEmpty;
+        root.appendChild(empty);
+    }
+    if (diff.unchangedCount > 0) {
+        const note = makeSettingEl("p");
+        note.className = "sw-doc-set-diff__meta";
+        note.textContent = this.i18n.documentSetDiffUnchanged.replace("{x}", String(diff.unchangedCount));
+        root.appendChild(note);
+    }
+    const actions = makeSettingEl("div");
+    actions.className = "sw-doc-set-diff__actions";
+    const cancelBtn = makeSettingEl("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "b3-button b3-button--cancel";
+    cancelBtn.textContent = this.i18n.cancel;
+    cancelBtn.addEventListener("click", () => dialog.destroy());
+    const rollbackBtn = makeSettingEl("button");
+    rollbackBtn.type = "button";
+    rollbackBtn.className = "b3-button b3-button--text";
+    rollbackBtn.textContent = this.i18n.documentSetRollbackTo;
+    rollbackBtn.addEventListener("click", () => {
+        const result = rollbackDocumentSet(this.data[DOCUMENT_SETS_KEY], item.setId, {now: Date.now(), versionIndex});
+        if (!result.changed) {
+            showMessage(this.i18n.documentSetRollbackNone);
+            dialog.destroy();
+            return;
+        }
+        this.data[DOCUMENT_SETS_KEY] = result.state;
+        this.saveDataDebounced(DOCUMENT_SETS_KEY);
+        showMessage(this.i18n.documentSetRollbackDone.replace("{x}", String(item.name || "")));
+        dialog.destroy();
+        onDone();
+    });
+    actions.append(cancelBtn, rollbackBtn);
+    root.appendChild(actions);
+    dialog.element.addEventListener("keydown", (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+            dialog.destroy();
+        }
+    });
+    cancelBtn.focus({preventScroll: true});
+}
+
+// T-6961：配置包导入差异预览——版本/包含范围/组级 新增·替换·保持 明细，整组勾选；
+// 确认时重验当前态签名（已变化则刷新差异要求重新确认，不应用旧预览）；应用经
+// 宿主 importConfigPack(groups) 组粒度落盘，写入异常如实回执已应用范围。
+function openConfigPackDiffDialog(this: SettingsSectionsHost, parsed: unknown, groups: Array<{id: string; action: string; rows: Array<any>}>, signature: string, onDone: () => void) {
+    const actionLabels: Record<string, string> = {
+        add: this.i18n.configPackActionAdd,
+        replace: this.i18n.configPackActionReplace,
+        keep: this.i18n.configPackActionKeep,
+    };
+    const groupLabels: Record<string, string> = {
+        settings: this.i18n.configPackGroupSettings,
+        documentSets: this.i18n.configPackGroupDocumentSets,
+    };
+    const dialog = new Dialog({
+        title: this.i18n.configPackDiffTitle,
+        content: '<div class="sw-config-pack-diff"></div>',
+        width: this.isMobile ? "min(560px, 94vw)" : "520px",
+    });
+    mountPlatformDialogTitleWrap(dialog.element, this.i18n.configPackDiffTitle || "配置差异", "", "iconSettings");
+    mountPlatformDialogCloseHint(dialog.element, this.i18n.platformCloseHint || "to close");
+    mountPlatformDialogMobileClose(dialog.element, () => dialog.destroy());
+    const root = dialog.element.querySelector<HTMLElement>(".sw-config-pack-diff");
+    if (!root) {
+        dialog.destroy();
+        return;
+    }
+    const selected = new Set<string>();
+    const rebuild = (currentGroups: Array<{id: string; action: string; rows: Array<any>}>, currentSignature: string) => {
+        root.textContent = "";
+        selected.clear();
+        const meta = makeSettingEl("p");
+        meta.className = "sw-config-pack-diff__meta";
+        meta.textContent = this.i18n.configPackDiffNotice;
+        root.appendChild(meta);
+        currentGroups.forEach((group) => {
+            selected.add(group.id);
+            const card = makeSettingEl("div");
+            card.className = "sw-config-pack-diff__group";
+            const header = makeSettingEl("label");
+            header.className = "sw-config-pack-diff__group-header";
+            const checkbox = makeSettingEl("input");
+            checkbox.type = "checkbox";
+            checkbox.checked = true;
+            checkbox.addEventListener("change", () => {
+                if (checkbox.checked) selected.add(group.id); else selected.delete(group.id);
+                syncApplyButton();
+            });
+            const name = makeSettingEl("span");
+            name.className = "sw-config-pack-diff__group-name";
+            name.textContent = groupLabels[group.id] || group.id;
+            const actionBadge = makeSettingEl("span");
+            actionBadge.className = `sw-config-pack-diff__action is-${group.action}`;
+            actionBadge.textContent = actionLabels[group.action] || group.action;
+            header.append(checkbox, name, actionBadge);
+            card.appendChild(header);
+            group.rows.forEach((row) => {
+                const line = makeSettingEl("div");
+                line.className = `sw-config-pack-diff__row is-${row.kind}`;
+                line.textContent = `${row.key} · ${actionLabels[row.kind] || row.kind}`;
+                card.appendChild(line);
+            });
+            root.appendChild(card);
+        });
+        const stale = makeSettingEl("p");
+        stale.className = "sw-config-pack-diff__stale";
+        stale.hidden = true;
+        stale.setAttribute("role", "alert");
+        stale.textContent = this.i18n.configPackDiffStale;
+        root.appendChild(stale);
+        const actions = makeSettingEl("div");
+        actions.className = "sw-config-pack-diff__actions";
+        const cancelBtn = makeSettingEl("button");
+        cancelBtn.type = "button";
+        cancelBtn.className = "b3-button b3-button--cancel";
+        cancelBtn.textContent = this.i18n.cancel;
+        cancelBtn.addEventListener("click", () => dialog.destroy());
+        const applyBtn = makeSettingEl("button");
+        applyBtn.type = "button";
+        applyBtn.className = "b3-button b3-button--text";
+        applyBtn.textContent = this.i18n.configPackApplySelected;
+        const syncApplyButton = () => {
+            applyBtn.disabled = selected.size === 0;
+        };
+        applyBtn.addEventListener("click", () => {
+            // 并发防护：确认时当前态与预览基线不一致 → 刷新差异，要求重新确认
+            const current = {settings: this.getSettings(), documentSets: this.data[DOCUMENT_SETS_KEY] || null};
+            if (configPackBaselineSignature(current) !== currentSignature) {
+                stale.hidden = false;
+                const nowSignature = configPackBaselineSignature(current);
+                const refreshed = diffConfigPackGroups(normalizeConfigPackImport(parsed), current);
+                rebuild(refreshed, nowSignature);
+                return;
+            }
+            const chosen = Array.from(selected);
+            const result = this.importConfigPack(parsed, {groups: chosen});
+            if (!result.ok) {
+                showMessage(this.i18n.configPackApplyFailed, 7000, "error");
+                dialog.destroy();
+                onDone();
+                return;
+            }
+            showMessage(this.i18n.configPackImportDone, 7000);
+            dialog.destroy();
+            onDone();
+        });
+        actions.append(cancelBtn, applyBtn);
+        root.appendChild(actions);
+        syncApplyButton();
+        dialog.element.addEventListener("keydown", (e: KeyboardEvent) => {
+            if (e.key === "Escape") {
+                e.preventDefault();
+                e.stopPropagation();
+                dialog.destroy();
+            }
+        });
+        cancelBtn.focus({preventScroll: true});
+    };
+    rebuild(groups, signature);
+}

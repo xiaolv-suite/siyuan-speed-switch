@@ -1,0 +1,70 @@
+# Managed SiYuan host tests
+
+This directory is a host-test contract, not a production dependency. The
+runner must start the SiYuan kernel and frontend compiler itself, use a
+dedicated workspace and port, and refuse to stop an occupied target.
+
+## Rules
+
+- Use the `siyuan-testing` lifecycle: prepare workspace, validate target,
+  start host, wait for readiness, run tests, then stop only owned processes.
+- Run shared UI tests with one worker. Parallelism is limited to pure API or
+  log checks that do not mutate shared UI state.
+- Wait for public readiness (plugin loaded, tab state broadcast, search index)
+  instead of relying on fixed sleeps.
+- Track every created document, notebook, setting, and plugin record. Remove
+  passing data; preserve failed IDs and diagnostics for investigation.
+- Desktop browser automation is valid for desktop behavior only. Mobile
+  browser emulation is a structural smoke test, not Android acceptance.
+
+The host compatibility baseline is SiYuan 3.8.3. The suite should cover plugin load/unload, tab refresh after open/close,
+layered search fallback, settings restoration, quick-entry persistence, and
+Agent capability registration. See `config.example.json` for the required
+environment contract.
+
+`tests/search-orchestration.test.cjs` is the host-independent contract for the
+same layered search flow. It uses a mock transport to verify title-hit
+short-circuiting, opened-document ordering, global fallback, cancellation, and
+deduplication/limits. A managed-host suite should mirror these cases against
+the real SiYuan endpoints once the host harness is available.
+
+`tests/recent-history.test.cjs` similarly covers recent-document storage
+normalization and recovery planning without requiring a running host.
+
+`tests/home-adapters.test.cjs` covers the second-panel module contract. It is
+skipped in older checkout snapshots that predate `src/home-model.js`, and runs
+fully once the main integration branch provides that pure model module.
+
+`tests/recent-closed.test.cjs` defines the closed-document recovery contract:
+bounded records, de-duplicated recovery, no fabricated close state, and invalid
+documents isolated from valid entries.
+
+`tests/quick-actions-compat.test.cjs` covers extension-entry compatibility:
+surface support filtering, icon fallback, duplicate rejection, and safe
+inertness after a provider unloads.
+
+The compatibility matrix also covers SVG icon availability and the default icon
+fallback used when a plugin does not expose a renderable symbol.
+
+Release diagnostics use stable bounded categories: `BUILD_FAILED`,
+`RESOURCE_MISSING`, `MANIFEST_MISMATCH`, and `ENVIRONMENT_DRIFT`.
+
+The GitHub CLI (`gh`) is optional; release preflight only performs
+non-destructive checks and never mutates repositories or releases.
+
+Rollback preflight validates a recoverable release reference before any upload.
+
+`tests/host/release-quality.test.cjs` is a fast release gate. It validates the
+isolated host configuration, the Android-versus-browser testing boundary,
+metadata version alignment, and the built JavaScript size budget. It does not
+start or stop SiYuan and is safe to run in CI before managed-host tests.
+
+Before the final manual desktop/Android pass, run `pnpm verify:release` from
+the repository root. This executes the type check, production build, complete
+automated suite, and both UI smoke checks in a fixed order.
+
+`tests/host/package-integrity.test.cjs` validates a generated `package.zip`
+when present. It rejects unexpected files, remote runtime dependencies, and
+missing release metadata. A missing build artifact is intentionally skipped so
+the fast unit gate can run before `pnpm run build`; the release workflow must
+run the build first and then execute this test.

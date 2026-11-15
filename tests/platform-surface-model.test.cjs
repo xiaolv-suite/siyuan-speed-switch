@@ -1,0 +1,239 @@
+// T-6869 统一平台 SurfaceContext（P1-c，ADR 0079）：表面白名单、跨表面上下文
+// 归一化、悬浮球"恢复上次表面"的安全回退与 ContextBar 文案投影的纯函数测试。
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const {
+    PLATFORM_SURFACE_IDS,
+    PLATFORM_SURFACE_ENTRIES,
+    PLATFORM_OBJECT_KINDS,
+    DEFAULT_SURFACE,
+    SURFACE_FOCUS_SOURCE_MAX,
+    normalizeSurfaceId,
+    normalizeSurfaceContext,
+    resolveSurfaceReturnTarget,
+    encodeSurfaceFocusSource,
+    resolveSurfaceFocusRestoreTarget,
+    buildSurfaceContextCaption,
+    projectSnippetObjects,
+    filterSnippetObjects,
+    projectWidgetObject,
+} = require("../src/platform-surface-model.js");
+
+test("surface ids: canonical whitelist is frozen and normalize falls back (T-6869)", () => {
+    assert.deepEqual([...PLATFORM_SURFACE_IDS], ["switcher", "workbench", "studio"]);
+    assert.equal(Object.isFrozen(PLATFORM_SURFACE_IDS), true, "表面清单必须冻结（防运行时篡改）");
+    assert.equal(normalizeSurfaceId("workbench"), "workbench");
+    assert.equal(normalizeSurfaceId("bogus"), "switcher", "非法表面回落切换器");
+    assert.equal(normalizeSurfaceId("", ""), "", "fallback 可传空串用于探测非法值");
+    assert.equal(normalizeSurfaceId(undefined), "switcher");
+});
+
+test("surface context: normalizes entry/objectId/query with bounds", () => {
+    const context = normalizeSurfaceContext({entry: "surface-nav", objectId: " 20260101120000-abc1234 ", query: "  产品路线图  "});
+    assert.deepEqual(context, {entry: "surface-nav", objectId: "20260101120000-abc1234", query: "产品路线图"});
+    assert.equal(normalizeSurfaceContext({entry: "hacked"}), null, "入口非法且无有效字段时返回 null");
+    assert.equal(normalizeSurfaceContext({entry: "hacked", query: "x"}).entry, "unknown", "入口不在白名单归 unknown");
+    assert.equal(normalizeSurfaceContext(null), null, "无上下文返回 null");
+    assert.equal(normalizeSurfaceContext("query"), null, "非对象入参返回 null");
+    assert.equal(normalizeSurfaceContext({}), null, "全空上下文返回 null（调用方不必挂空对象）");
+    assert.equal(normalizeSurfaceContext({entry: "fab", query: "x".repeat(500)}).query.length, 120, "查询词钳制 120");
+    assert.equal(normalizeSurfaceContext({objectId: "id".repeat(200)}).objectId.length, 128, "对象 id 钳制 128");
+    assert.equal(normalizeSurfaceContext({entry: "back", objectKind: "widget", objectId: "card-1"}).objectKind, "widget", "回跳保留对象种类");
+    assert.equal(normalizeSurfaceContext({entry: "back", objectKind: "unknown", objectId: "card-1"}).objectKind, undefined, "未知种类不进入路由");
+    assert.equal(
+        normalizeSurfaceContext({query: "a\u0000b"}).query,
+        "a b",
+        "控制字符清洗为空格",
+    );
+    assert.ok(PLATFORM_SURFACE_ENTRIES.includes("fab") && PLATFORM_SURFACE_ENTRIES.includes("surface-nav"));
+});
+
+// T-7012：入口词表必须覆盖全部实际调用点——在用词缺席会被归 unknown 静默丢弃。
+test("surface entries: whitelist covers every live call site and stays frozen (T-7012)", () => {
+    assert.equal(Object.isFrozen(PLATFORM_SURFACE_ENTRIES), true, "入口词表必须冻结");
+    for (const entry of ["toolbar", "surface-nav", "fab", "back", "unknown"]) {
+        assert.ok(PLATFORM_SURFACE_ENTRIES.includes(entry), `既有入口 ${entry} 必须保留`);
+    }
+    for (const entry of ["topbar-context-menu", "plugin-command", "quick-action", "floating-ball"]) {
+        assert.ok(PLATFORM_SURFACE_ENTRIES.includes(entry), `T-7012 补齐的在用入口 ${entry} 必须在册`);
+    }
+    // 预留位继续在册（R5-A 面包屑按钮、外部入口），防后续实现时误删。
+    for (const entry of ["command", "breadcrumb", "external"]) {
+        assert.ok(PLATFORM_SURFACE_ENTRIES.includes(entry), `预留入口 ${entry} 必须保留`);
+    }
+    assert.equal(normalizeSurfaceContext({entry: "quick-action"}).entry, "quick-action", "补齐的入口不再归 unknown");
+});
+
+// T-7012：focusSource 是关闭/返回后恢复焦点的导航元数据，走同一有界清洗。
+test("surface context: focusSource is bounded and keeps otherwise-empty contexts alive (T-7012)", () => {
+    const context = normalizeSurfaceContext({entry: "surface-nav", focusSource: " object:20260101120000-abc1234 "});
+    assert.deepEqual(context, {entry: "surface-nav", objectId: "", query: "", focusSource: "object:20260101120000-abc1234"});
+    assert.equal(normalizeSurfaceContext({focusSource: "x".repeat(200)}).focusSource.length, SURFACE_FOCUS_SOURCE_MAX, "焦点来源钳制");
+    assert.equal(
+        normalizeSurfaceContext({entry: "unknown", focusSource: "search-input"}).entry,
+        "unknown",
+        "入口非法仍归 unknown，但 focusSource 让上下文保留",
+    );
+    assert.deepEqual(
+        normalizeSurfaceContext({entry: "fab", focusSource: "  "}),
+        {entry: "fab", objectId: "", query: ""},
+        "空白焦点来源不进入上下文（合法 entry 本身保留）",
+    );
+    assert.equal(normalizeSurfaceContext({focusSource: "a\u0007b"}).focusSource, "a b", "控制字符清洗为空格");
+});
+
+// T-7012：焦点来源的编码与恢复是一对纯函数；只识别两类稳定目标，其余诚实返回空。
+test("surface focus source: encode and restore recognize object rows and the search input only (T-7012)", () => {
+    const objectRow = {getAttribute: (name) => (name === "data-sw-object-id" ? " 20260101120000-abc1234 " : null)};
+    const searchInput = {
+        getAttribute: () => null,
+        matches: (selector) => selector === "input.sw__search",
+    };
+    const plainButton = {getAttribute: () => null, matches: () => false};
+    assert.equal(encodeSurfaceFocusSource(objectRow), "object:20260101120000-abc1234", "对象行编码为 object:<id>");
+    assert.equal(encodeSurfaceFocusSource(searchInput), "search-input", "搜索输入编码为 search-input");
+    assert.equal(encodeSurfaceFocusSource(plainButton), "", "无稳定描述符的控件诚实返回空");
+    assert.equal(encodeSurfaceFocusSource(null), "", "非元素入参返回空串");
+
+    const cell = {getAttribute: (name) => (name === "data-sw-object-id" ? "card-2" : null)};
+    const root = {
+        querySelector: (selector) => (selector === "input.sw__search" ? searchInput : null),
+        querySelectorAll: (selector) => (selector === "[data-sw-object-id]" ? [cell, {getAttribute: () => "card-1"}] : []),
+    };
+    assert.equal(resolveSurfaceFocusRestoreTarget(root, "search-input"), searchInput, "search-input 恢复到搜索框");
+    assert.equal(resolveSurfaceFocusRestoreTarget(root, "object:card-2"), cell, "object:<id> 按属性值比对恢复");
+    assert.equal(resolveSurfaceFocusRestoreTarget(root, "object:card-9"), null, "目标消失返回 null（不强制回退）");
+    assert.equal(resolveSurfaceFocusRestoreTarget(root, "bogus"), null, "未知描述符不猜目标");
+    assert.equal(resolveSurfaceFocusRestoreTarget(null, "search-input"), null, "无根节点返回 null");
+    assert.equal(
+        resolveSurfaceFocusRestoreTarget(root, `object:${"id".repeat(200)}`),
+        null,
+        "超长 objectId 经清洗后不匹配任何行",
+    );
+});
+
+test("surface return target: restores last surface only while it stays available", () => {
+    assert.equal(resolveSurfaceReturnTarget("workbench", ["switcher", "workbench"]), "workbench");
+    assert.equal(
+        resolveSurfaceReturnTarget("studio", ["switcher", "workbench"]),
+        "switcher",
+        "桌面专属片段实验室在移动端回退切换器",
+    );
+    assert.equal(resolveSurfaceReturnTarget("bogus", ["switcher", "workbench", "studio"]), "switcher", "非法值回退");
+    assert.equal(resolveSurfaceReturnTarget(undefined, ["switcher"]), "switcher", "无会话记录回退");
+    assert.equal(
+        resolveSurfaceReturnTarget("studio", ["switcher", "workbench", "studio"]),
+        "studio",
+        "桌面端完整恢复",
+    );
+    assert.equal(
+        resolveSurfaceReturnTarget("workbench", []),
+        "switcher",
+        "可用清单缺失时不猜表面",
+    );
+    assert.equal(
+        resolveSurfaceReturnTarget("workbench", ["switcher", "workbench"], "studio"),
+        "workbench",
+        "自定义 fallback 仅在不可恢复时生效",
+    );
+});
+
+test("surface caption: object stays the surface name; hint shows live query when present", () => {
+    const labels = {
+        surfaces: {switcher: "切换器", workbench: "工作台", studio: "片段实验室"},
+        hints: {switcher: "查找、预览和打开内容", workbench: "编排信息组件", studio: "安全编辑"},
+    };
+    const plain = buildSurfaceContextCaption({surface: "switcher", labels});
+    assert.equal(plain.object, "切换器");
+    assert.equal(plain.hint, "查找、预览和打开内容");
+    assert.equal(plain.hasQuery, false);
+    const queried = buildSurfaceContextCaption({surface: "workbench", context: {entry: "fab", query: " 报销 流程 "}, labels});
+    assert.equal(queried.object, "工作台", "对象位不因查询词改变");
+    assert.equal(queried.hint, "报销 流程", "提示位显示查询现场（有界清洗）");
+    assert.equal(queried.hasQuery, true);
+    const missing = buildSurfaceContextCaption({surface: "studio"});
+    assert.equal(missing.object, "studio", "缺 labels 时回落表面 id，不抛错");
+    assert.equal(missing.hint, "");
+});
+
+test("snippet objects: bounded projection from the native getSnippet payload (T-6878)", () => {
+    const payload = {
+        code: 0,
+        data: {snippets: [
+            {id: "20260901120000-aaaaaaa", name: "卡片悬浮阴影", type: "css", enabled: true, content: "a\nb\nc"},
+            {id: "20260901120001-bbbbbbb", name: "快捷导出助手", type: "js", enabled: false, content: "x"},
+            {id: "", name: "无 id", type: "css", enabled: true, content: "z"},
+            {id: "20260901120002-ccccccc", name: "", type: "css", enabled: true, content: "z"},
+            {id: "20260901120003-ddddddd", name: "怪类型", type: "ts", enabled: true, content: "z"},
+            {id: "20260901120000-aaaaaaa", name: "重复 id", type: "css", enabled: false, content: "y"},
+        ]},
+    };
+    const items = projectSnippetObjects(payload, {limit: 6});
+    assert.equal(items.length, 2, "无 id/无名/怪类型/重复 id 一律不投影");
+    assert.deepEqual(items[0], {id: "20260901120000-aaaaaaa", name: "卡片悬浮阴影", type: "css", enabled: true, lines: 3});
+    assert.equal(items[1].enabled, false);
+});
+
+test("snippet objects: query filter, limit clamp and malformed payloads", () => {
+    const snippets = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => ({
+        id: "id-" + n, name: "片段" + n, type: n % 2 ? "css" : "js", enabled: true, content: "",
+    }));
+    const payload = {code: 0, data: {snippets}};
+    assert.equal(projectSnippetObjects(payload).length, 6, "默认上限 6");
+    assert.equal(projectSnippetObjects(payload, {limit: 99}).length, 8, "硬上限 8");
+    const filtered = projectSnippetObjects(payload, {query: "片段1"});
+    assert.equal(filtered.length, 2, "名称子串过滤命中 片段1/片段10");
+    assert.equal(projectSnippetObjects(payload, {query: "js"})[0].type, "js", "类型可作过滤词");
+    assert.deepEqual(projectSnippetObjects({code: 1}, {}), [], "非 0 响应返回空");
+    assert.deepEqual(projectSnippetObjects(null, {}), [], "空载荷返回空");
+    assert.deepEqual(projectSnippetObjects({code: 0, data: {}}, {}), [], "缺 snippets 返回空");
+});
+
+test("snippet objects: kinds whitelist is frozen (T-6878)", () => {
+    assert.deepEqual([...PLATFORM_OBJECT_KINDS], ["content", "action", "workspace", "widget", "snippet"]);
+    assert.equal(Object.isFrozen(PLATFORM_OBJECT_KINDS), true);
+});
+
+test("snippet objects: filterSnippetObjects re-filters projected summaries (T-6881)", () => {
+    const projected = [
+        {id: "a", name: "卡片悬浮阴影", type: "css", enabled: true, lines: 3},
+        {id: "b", name: "快捷导出助手", type: "js", enabled: false, lines: 22},
+        {id: "c", name: "文档树加宽", type: "css", enabled: false, lines: 8},
+    ];
+    assert.equal(filterSnippetObjects(projected, "悬浮").length, 1, "名称子串命中");
+    assert.equal(filterSnippetObjects(projected, "js")[0].id, "b", "类型命中");
+    assert.equal(filterSnippetObjects(projected, "").length, 3, "空查询全保留");
+    assert.equal(filterSnippetObjects(projected, "无", 2).length, 0, "无命中返回空");
+    const many = filterSnippetObjects(projected.concat(projected), "", 2);
+    assert.equal(many.length, 2, "limit 生效且按 id 去重");
+    assert.equal(many[0].lines, 3, "二次过滤保留既有行数（content 缺失不丢 lines）");
+    assert.equal(filterSnippetObjects(projected, "CSS")[0].type, "css", "查询大小写不敏感");
+});
+
+test("widget objects: instance identity, source and health are bounded (T-6890)", () => {
+    const instance = {instanceId: "card-2", moduleId: "favorites"};
+    const definition = {
+        title: "收藏", description: "项目常用文档", category: "siyuan",
+        configSchema: [{key: "group"}], clickCommand: "plugin::open",
+    };
+    const loading = projectWidgetObject(instance, definition);
+    assert.deepEqual(loading, {
+        id: "card-2", kind: "widget", title: "收藏", subtitle: "项目常用文档", source: "siyuan",
+        status: "loading", capabilities: ["refresh", "configure", "open"],
+        sideEffect: "none", surfaces: ["workbench"],
+    });
+    assert.equal(projectWidgetObject(instance, definition, "ok").status, "ready");
+    assert.equal(projectWidgetObject(instance, definition, "failed").status, "error");
+    const provider = projectWidgetObject(
+        {instanceId: "card-3", moduleId: "external-widget"},
+        {title: "", source: {pluginId: "example-provider"}},
+        "ok",
+    );
+    assert.equal(provider.title, "external-widget", "缺标题时保留组件型号");
+    assert.equal(provider.source, "example-provider", "来源名称缺失不隐藏对象");
+    assert.ok(projectWidgetObject({instanceId: "card-3", moduleId: "external-widget"}, {title: "外部组件"}, "ok", true).capabilities.includes("open"),
+        "宿主提供打开回调时声明打开能力");
+    assert.equal(projectWidgetObject({instanceId: "", moduleId: "favorites"}, definition), null);
+    assert.equal(projectWidgetObject({instanceId: "card-1", moduleId: ""}, definition), null);
+    assert.equal(projectWidgetObject({instanceId: "x".repeat(200), moduleId: "m"}, definition).id.length, 128);
+});

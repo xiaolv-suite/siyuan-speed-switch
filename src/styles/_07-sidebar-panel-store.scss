@@ -1,0 +1,506 @@
+@use "00-tokens" as *;
+
+// T-7588 / T-7598：侧栏 Dock 280px 极窄模式响应式断点
+@container (max-width: 280px) {
+    .speed-switch.sw--sidebar {
+        .sw__toolbar {
+            flex-wrap: wrap;
+            padding: var(--sw-space-xs, 4px) var(--sw-space-md, 8px);
+            row-gap: var(--sw-space-xs, 4px);
+
+            .sw__search-wrap {
+                flex: 1 1 100%;
+                width: 100%;
+            }
+
+            .sw__sort-trigger-label {
+                display: none;
+            }
+        }
+
+        .sw__quick-actions {
+            max-height: 38px;
+            overflow-x: auto;
+            flex-wrap: nowrap;
+            scrollbar-width: none;
+
+            &::-webkit-scrollbar {
+                display: none;
+            }
+        }
+
+        .sw__card {
+            min-width: 0;
+            width: 100%;
+
+            .sw__card-title,
+            .sw__card-meta {
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+        }
+    }
+}
+
+.speed-switch.sw--sidebar .sw__toolbar {
+    // T-7207：侧栏 compact 密度档。
+    gap: var(--sw-space-sm, 6px);
+
+    .sw__select-wrap {
+        flex: 1 1 0;
+        min-width: 0;
+
+        .sw__sort-trigger {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+
+    .sw__sort-trigger-label {
+        max-width: 96px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+}
+
+// ==================== 组件面板底部提示：持续完善 + 开发者邀请 ====================
+.sw-home .sw-home__hint {
+    flex: none;
+    margin-top: 14px;
+    padding: 10px 14px;
+    border: 1px dashed var(--b3-border-color);
+    border-radius: var(--sw-radius-card, 14px);
+    color: var(--b3-theme-on-surface-light);
+    font-size: var(--sw-font-sm, 12px);
+    line-height: var(--sw-leading-reading, 1.6);
+
+    .sw-home__hint-link {
+        color: var(--b3-theme-primary);
+        text-decoration: none;
+
+        &:hover,
+        &:focus-visible {
+            text-decoration: underline;
+            outline: none;
+        }
+    }
+}
+
+// ==================== 组件面板：任务条目勾选交互 ====================
+.sw__home-module-list .sw__home-module-item {
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-sm, 6px);
+    min-width: 0;
+
+    .sw__home-module-item-check {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        padding: 0;
+        border: 1.5px solid var(--b3-border-color);
+        border-radius: var(--sw-radius-sm, 6px);
+        background: transparent;
+        color: var(--b3-theme-background);
+        cursor: pointer;
+        // 同上：按真实交互态显式列属性（hover/focus 改 border-color，
+        // is-done 另改 background + color），不用全属性过渡。
+        transition: border-color $sw-dur-fast $sw-ease,
+            background-color $sw-dur-fast $sw-ease,
+            color $sw-dur-fast $sw-ease;
+
+        svg { width: 11px; height: 11px; }
+
+        &:hover,
+        &:focus-visible {
+            border-color: var(--b3-theme-primary);
+            outline: none;
+        }
+
+        &:active {
+            transform: scale(0.92);
+        }
+
+        &.is-done {
+            border-color: var(--b3-theme-primary);
+            background: var(--b3-theme-primary);
+            color: var(--b3-theme-background);
+        }
+    }
+
+    .sw__home-module-item-action.is-done {
+        color: var(--b3-theme-on-surface-light);
+        text-decoration: line-through;
+        opacity: 0.72;
+        transition: opacity $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease;
+    }
+}
+
+// ==================== 组件商店：需安装插件分区 ====================
+.sw-home-store__card--pending {
+    opacity: 0.85;
+}
+
+.sw-home-store__card--unavailable {
+    opacity: 1;
+    border-color: color-mix(in srgb, var(--b3-theme-primary) 34%, var(--b3-border-color));
+}
+
+.sw-home-store__require {
+    margin: 10px 0 0;
+    padding: var(--sw-space-xs, 4px) 10px;
+    border-radius: $sw-radius-md;
+    background: var(--b3-theme-surface-lighter, var(--b3-theme-surface));
+    color: var(--b3-theme-on-surface-light);
+    font-size: var(--sw-font-sm, 12px);
+}
+
+.sw-home-store__remove-unavailable {
+    margin-top: var(--sw-space-md, 8px);
+    padding-inline: 0;
+}
+
+.sw-home-store__filter-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sw-space-md, 8px);
+    margin: 18px 0;
+    padding: 18px;
+    border: 1px dashed var(--b3-border-color);
+    border-radius: 12px;
+    color: var(--b3-theme-on-surface-light);
+    text-align: center;
+
+    .b3-button {
+        padding: var(--sw-space-2xs, 2px) var(--sw-space-md, 8px);
+        font-size: var(--sw-font-sm, 12px);
+    }
+}
+
+// ==================== 组件面板视觉升级：iPad 小组件质感 ====================
+
+// 卡片：强调色 icon chip + 柔和阴影 + 悬停浮起
+.sw-home .sw-home__cell {
+    border-radius: 16px;
+    border: 1px solid color-mix(in srgb, var(--b3-border-color) 70%, transparent);
+    box-shadow: var(--sw-shadow-xs);
+    transition: box-shadow $sw-dur-slow $sw-ease, transform $sw-dur-slow $sw-ease, border-color $sw-dur-slow $sw-ease;
+
+    &:hover {
+        box-shadow: var(--sw-shadow-sm);
+        transform: translateY(-1px);
+        border-color: color-mix(in srgb, var(--b3-border-color) 45%, var(--sw-home-accent, transparent) 20%);
+    }
+}
+
+// 模块头：accent 圆角芯片图标 + 粗体标题 + 计数
+.sw__home-module-header {
+    .sw__home-module-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: $sw-radius-md;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: color-mix(in srgb, var(--sw-home-accent, var(--b3-theme-primary)) 14%, transparent);
+        color: var(--sw-home-accent, var(--b3-theme-primary));
+
+        svg { width: var(--sw-icon-sm, 16px); height: 16px; }
+    }
+
+    .sw__home-module-title { font-size: var(--sw-font-md, 13px); font-weight: var(--sw-weight-semibold, 600); letter-spacing: -0.01em; }
+    .sw__home-module-context {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--b3-theme-on-surface-light);
+        font-size: var(--sw-font-xs, 11px);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .sw__home-module-toggle, .sw__home-module-meta { font-size: var(--sw-font-xs, 11px); }
+}
+
+// 列表条目：圆点标记 + 间距
+.sw__home-module-list .sw__home-module-item-action {
+    position: relative;
+    padding: var(--sw-space-sm, 6px) var(--sw-space-md, 8px) var(--sw-space-sm, 6px) var(--sw-space-xl, 16px);
+    border-radius: $sw-radius-md;
+    line-height: 1.45;
+
+    &::before {
+        content: "";
+        position: absolute;
+        left: 6px;
+        top: 50%;
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: color-mix(in srgb, var(--sw-home-accent, var(--b3-theme-primary)) 45%, transparent);
+        transform: translateY(-50%);
+    }
+
+    &:hover::before { background: var(--sw-home-accent, var(--b3-theme-primary)); }
+}
+
+// T-6980 / T-6971 批次⑧导航列表：plain 信息型行解剖。
+// 只作用于本批九个内建模块，避免改变外部资讯与第三方模块的行高语义。
+.sw-home__cell:is([data-module-id="recent-documents"], [data-module-id="pinned-docs"], [data-module-id="favorites"], [data-module-id="bookmarks"], [data-module-id="document-sets"], [data-module-id="fixed-document"], [data-module-id="current-document-outline"], [data-module-id="document-relations-summary"]) {
+    .sw__home-module-list { gap: 0; }
+    .sw__home-module-item + .sw__home-module-item { border-top: 1px solid color-mix(in srgb, var(--b3-border-color) 62%, transparent); }
+    .sw__home-module-item-action {
+        display: grid;
+        grid-template-columns: 24px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: var(--sw-space-md, 8px);
+        min-height: 30px;
+        padding: var(--sw-space-xs, 4px) var(--sw-space-sm, 6px);
+        border-left: 0;
+        text-align: start;
+    }
+    .sw__home-module-item-action:disabled { cursor: default; opacity: 0.72; }
+    .sw__home-module-item-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sw__home-module-item-icon { display: grid; width: var(--sw-icon-lg, 24px); height: 24px; place-items: center; color: var(--b3-theme-primary); }
+    .sw__home-module-item-secondary { min-width: 0; overflow: hidden; color: var(--b3-theme-on-surface-light); font-size: var(--sw-font-xs, 11px); text-overflow: ellipsis; white-space: nowrap; }
+}
+
+.sw-home__cell[data-module-id="tags"] {
+    .sw__home-module-list { display: flex; flex-wrap: wrap; gap: var(--sw-space-sm, 6px); }
+    .sw__home-module-item { border: 0; }
+    .sw__home-module-item-action { min-height: 28px; padding: var(--sw-space-xs, 4px) 10px; border: 1px solid color-mix(in srgb, var(--b3-theme-primary) 22%, var(--b3-border-color)); border-radius: 999px; background: color-mix(in srgb, var(--b3-theme-primary) 7%, transparent); }
+    .sw__home-module-item-secondary { margin-inline-start: var(--sw-space-xs, 4px); font-size: var(--sw-font-2xs, 10px); }
+}
+
+// 概览数字（stat hero）
+.sw__home-stat {
+    display: flex;
+    align-items: baseline;
+    gap: var(--sw-space-sm, 6px);
+    padding: var(--sw-space-xs, 4px) 0 var(--sw-space-md, 8px);
+
+    &-copy {
+        display: inline-flex;
+        align-items: baseline;
+        gap: var(--sw-space-sm, 6px);
+        min-width: 0;
+    }
+
+    &-arc {
+        flex: 0 0 auto;
+        width: 34px;
+        height: 34px;
+        margin-inline-start: auto;
+        transform: rotate(-90deg);
+        overflow: visible;
+    }
+
+    &-arc-track,
+    &-arc-fill {
+        fill: none;
+        stroke-width: 4;
+    }
+
+    &-arc-track {
+        stroke: color-mix(in srgb, var(--b3-theme-on-surface) 10%, transparent);
+    }
+
+    &-arc-fill {
+        stroke: var(--sw-home-accent, var(--b3-theme-primary));
+        stroke-linecap: round;
+        transition: stroke-dasharray $sw-dur-panel $sw-ease;
+    }
+
+    .sw__home-stat-value {
+        font-size: 28px;
+        font-weight: var(--sw-weight-bold, 700);
+        letter-spacing: -0.02em;
+        color: var(--sw-home-accent, var(--b3-theme-primary));
+        line-height: 1;
+    }
+
+    .sw__home-stat-label {
+        font-size: var(--sw-font-sm, 12px);
+        color: var(--b3-theme-on-surface-light);
+    }
+
+    // T-6457 display 覆盖试点：快照 stat.emphasis（白名单 large/xl，归一层校验）→ 主数值放大
+    &--large .sw__home-stat-value {
+        font-size: 36px;
+    }
+
+    &--xl .sw__home-stat-value {
+        font-size: 46px;
+    }
+}
+
+// 紧凑密度：小号组件
+.sw-home .sw-home__cell[data-size="xs"] .sw__home-module-list .sw__home-module-item-action {
+    padding: var(--sw-space-xs, 4px) var(--sw-space-sm, 6px) var(--sw-space-xs, 4px) 14px;
+    font-size: var(--sw-font-sm, 12px);
+}
+
+// ==================== 概览进度条与条目比例条 ====================
+.sw__home-progress {
+    height: 6px;
+    border-radius: var(--sw-platform-radius-pill, 999px);
+    background: color-mix(in srgb, var(--b3-theme-on-surface) 8%, transparent);
+    overflow: hidden;
+    margin: var(--sw-space-xs, 4px) 0 var(--sw-space-md, 8px);
+
+    .sw__home-progress-fill {
+        height: 100%;
+        border-radius: var(--sw-platform-radius-pill, 999px);
+        background: linear-gradient(90deg, var(--sw-home-accent, var(--b3-theme-primary)), var(--sw-color-data, #10b981));
+        // 这里刻意保留 width 过渡（会触发重排），而非改写成 transform: scaleX：
+        // 宽度只在渲染时一次性设置（home-view.js 设置 style.width），不是逐帧动画，
+        // 且只有单个元素，重排成本可忽略。
+        transition: width $sw-dur-panel $sw-ease;
+        position: relative;
+        overflow: hidden;
+
+        &::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
+            animation: sw-progress-shimmer 2.8s infinite;
+        }
+    }
+}
+
+@keyframes sw-progress-shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sw__home-progress .sw__home-progress-fill::after { animation: none !important; }
+}
+
+.sw__home-item-bar {
+    flex: 1;
+    min-width: 20px;
+    height: 5px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--b3-theme-on-surface) 6%, transparent);
+    overflow: hidden;
+    margin-inline-start: auto;
+
+    .sw__home-item-bar-fill {
+        display: block;
+        height: 100%;
+        border-radius: 3px;
+        background: color-mix(in srgb, var(--sw-home-accent, var(--b3-theme-primary)) 55%, transparent);
+    }
+}
+
+// 卡片强调色微底色
+.sw-home .sw-home__cell {
+    background: color-mix(in srgb, var(--sw-home-accent, var(--b3-theme-primary)) 3%, var(--b3-theme-surface));
+}
+
+// 组件面板配色预设：只使用主题变量和固定混合比例，不接受任意用户颜色。
+.sw-home--palette-soft .sw-home__cell {
+    --sw-home-accent: color-mix(in srgb, var(--b3-theme-primary, var(--sw-accent-fallback)) 72%, var(--b3-theme-on-surface) 28%);
+}
+
+.sw-home--palette-mono .sw-home__cell {
+    --sw-home-accent: var(--b3-theme-primary, var(--sw-accent-fallback));
+}
+
+// ==================== 商店分类全圆角胶囊分段 (Capsule Segmented Tabs) ====================
+.sw-home-store__tabs {
+    display: flex;
+    gap: var(--sw-space-xs, 4px);
+    padding: var(--sw-space-2xs, 2px);
+    margin-bottom: var(--sw-space-lg, 12px);
+    border: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--b3-border-color) 45%, transparent));
+    border-radius: var(--sw-platform-radius-pill, 999px);
+    background: var(--sw-color-surface-muted, var(--b3-theme-surface-lighter));
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar { display: none; }
+
+    .sw-home-store__tab {
+        padding: var(--sw-space-xs, 4px) var(--sw-space-lg, 12px);
+        border: 1px solid transparent;
+        border-radius: var(--sw-platform-radius-pill, 999px);
+        background: transparent;
+        color: var(--sw-color-text-subtle, var(--b3-theme-on-surface-light));
+        font-size: var(--sw-font-xs, 11px);
+        font-weight: var(--sw-weight-medium, 500);
+        cursor: pointer;
+        transition: color $sw-dur-fast, border-color $sw-dur-fast, background-color $sw-dur-fast $sw-ease, transform $sw-dur-fast $sw-ease;
+        min-height: var(--sw-control-h-md, 26px);
+        white-space: nowrap;
+        touch-action: manipulation;
+
+        &:focus-visible {
+            outline: 2px solid var(--b3-theme-primary);
+            outline-offset: 2px;
+        }
+
+        &[data-count="0"] { opacity: .58; }
+        &[aria-selected="true"] { scroll-margin-inline: 12px; }
+        &[aria-current="page"] { font-variant-numeric: tabular-nums; }
+
+        &:hover {
+            color: var(--sw-color-text, var(--b3-theme-on-background));
+            background: color-mix(in srgb, var(--b3-theme-surface) 60%, transparent);
+        }
+
+        &:active {
+            transform: translateY(0.5px) scale(0.97);
+        }
+
+        &:focus-visible {
+            outline: none;
+            box-shadow: var(--sw-focus-glow);
+        }
+
+        &.is-active {
+            color: var(--sw-color-accent, var(--b3-theme-primary));
+            background: var(--sw-card-float-bg, var(--b3-theme-surface));
+            box-shadow: var(--sw-shadow-xs);
+            font-weight: var(--sw-weight-semibold, 600);
+        }
+    }
+}
+
+// 问候头
+
+// 小驴全家桶生态指示器
+.sw__ecosystem-status {
+    padding: var(--sw-space-2xs, 2px) var(--sw-space-md, 8px);
+    margin: var(--sw-space-xs, 4px) var(--sw-space-md, 8px);
+    font-size: var(--sw-font-xs, 11px);
+    border-radius: var(--sw-platform-radius-pill, 999px);
+    background: color-mix(in srgb, var(--b3-theme-primary, #4285f4) 8%, transparent);
+    color: var(--b3-theme-on-surface-light, rgba(0, 0, 0, 0.5));
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border: 1px dashed color-mix(in srgb, var(--b3-theme-primary, #4285f4) 22%, transparent);
+    user-select: none;
+}
+
+.sw-settings__eco-badge {
+    margin-top: var(--sw-space-lg, 12px);
+    padding: var(--sw-space-md, 8px) 14px;
+    font-size: var(--sw-font-sm, 12px);
+    border-radius: $sw-radius-md;
+    background: color-mix(in srgb, var(--b3-theme-primary, #4285f4) 6%, transparent);
+    color: var(--b3-theme-on-surface, #202124);
+    border: 1px solid color-mix(in srgb, var(--b3-theme-primary, #4285f4) 18%, transparent);
+    text-align: center;
+    user-select: none;
+}

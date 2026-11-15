@@ -1,0 +1,287 @@
+// T-6813 runDocSearchFetch 行为锁：签名重排后（keyword, version, …, cacheKey, fetchQuery）
+// ①当前版本必须真正打到内核端点（回归防护：调用方把 keyword 当 version 传入会让远程搜索静默退出）；
+// ②过期版本不请求、不渲染、不落缓存；③全文回退挂起期间出现新输入，旧结果必须整链丢弃；
+// ④缓存命中仍刷新页签层且不发远程请求。
+// 提取方式沿用 floating-ball-host.test.cjs：AST 抽出真实函数体，依赖以参数注入。
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const ts = require("typescript");
+const {readSourceFile} = require("./source-scan.cjs");
+const {createSearchSession, beginSearch, cacheSearchResult} = require("../src/search-session.js");
+// T-7334：runDocSearchFetch 依赖首字母缩写重排，AST 抽取后必须一并注入。
+const {normalizeTitleSearchDocuments, rankDocumentsByPathAcronym, planPenetrationSearchRequest, aggregatePenetrationResults, SEARCH_MODES} = require("../src/search-model.js");
+// T-7343：穿透分支引用的 BLOCK_ID_RE 来自 constants.js（与 doc-search-ui.ts 同源）
+const {BLOCK_ID_RE} = require("../src/constants.js");
+
+const uiSource = readSourceFile("src/doc-search-ui.ts");
+const sourceFile = ts.createSourceFile("doc-search-ui.ts", uiSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+const fnDecl = sourceFile.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "runDocSearchFetch");
+const boundedDecl = sourceFile.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "boundedSearchRequest");
+assert.ok(fnDecl, "runDocSearchFetch must exist in src/doc-search-ui.ts");
+assert.ok(boundedDecl, "boundedSearchRequest must exist in src/doc-search-ui.ts");
+const scopeDecl = sourceFile.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "docSearchRequestScope");
+assert.ok(scopeDecl, "docSearchRequestScope must exist in src/doc-search-ui.ts");
+const fnText = [scopeDecl, boundedDecl, fnDecl].map((node) => node.getText(sourceFile).replace(/^export\s+/, "")).join("\n");
+const compiled = ts.transpileModule(fnText, {
+    // 无 fileName：带 .js 后缀会让 TS 保留泛型标注（new Set<string>() 原样输出），
+    // 产物不是合法 JS。
+    compilerOptions: {target: ts.ScriptTarget.ES2020},
+}).outputText;
+
+function makeRunner(overrides = {}) {
+    const fetchImpl = overrides.fetch || (async () => ({ok: true, status: 200, json: async () => ({data: []})}));
+    const runner = new Function(
+        "docSearchSurfaceRequestIds", "nextDocSearchSurfaceRequestId",
+        "getDocSearchSession", "renderDocResults", "updateDocSearchHealth", "disposeDocSearchSession",
+        "runOpenedDocumentContentSearch", "runFullTextSearchFallback", "filterDocSearchResults", "canUseTitleSearch",
+        "buildSearchCacheKey", "cacheSearchResult", "DOC_SEARCH_FETCH_LIMIT", "logger", "fetch",
+        "normalizeTitleSearchDocuments", "rankDocumentsByPathAcronym",
+        "planPenetrationSearchRequest", "aggregatePenetrationResults", "SEARCH_MODES", "BLOCK_ID_RE",
+        `${compiled}\nreturn runDocSearchFetch;`,
+    )(
+        new WeakMap(), 0,
+        overrides.getDocSearchSession || function (scrollElement) {
+            let session = this.docSearchState.sessions.get(scrollElement);
+            if (!session) {
+                session = createSearchSession(8);
+                this.docSearchState.sessions.set(scrollElement, session);
+            }
+            return session;
+        },
+        overrides.renderDocResults || function (scrollElement, docs, onClose, mode) {
+            this.rendered.push({docs, mode: mode || "results", retry: arguments[5]});
+        },
+        overrides.updateDocSearchHealth || function (scrollElement, options) {
+            this.healthReports.push(options);
+        },
+        overrides.disposeDocSearchSession || function () {
+            this.disposed = (this.disposed || 0) + 1;
+        },
+        overrides.runOpenedDocumentContentSearch || function () {
+            return Promise.resolve(new Set());
+        },
+        overrides.runFullTextSearchFallback || function () {
+            return Promise.resolve([]);
+        },
+        overrides.filterDocSearchResults || function (docs) {
+            return docs;
+        },
+        overrides.canUseTitleSearch || function () {
+            return true;
+        },
+        overrides.buildSearchCacheKey || function (input) {
+            return `key:${input.query}`;
+        },
+        overrides.cacheSearchResult || cacheSearchResult,
+        overrides.DOC_SEARCH_FETCH_LIMIT || 24,
+        overrides.logger || {warn() {}},
+        fetchImpl,
+        overrides.normalizeTitleSearchDocuments || normalizeTitleSearchDocuments,
+        overrides.rankDocumentsByPathAcronym || rankDocumentsByPathAcronym,
+        overrides.planPenetrationSearchRequest || planPenetrationSearchRequest,
+        overrides.aggregatePenetrationResults || aggregatePenetrationResults,
+        overrides.SEARCH_MODES || SEARCH_MODES,
+        overrides.BLOCK_ID_RE || BLOCK_ID_RE,
+    );
+    runner.requestKernelJsonOutcome = async (url, body, options = {}) => {
+        try {
+            const response = await fetchImpl(url, {method: "POST", body: JSON.stringify(body), signal: options.signal});
+            return response?.ok === true ? {ok: true, value: await response.json()} : {ok: false, error: {kind: "http"}};
+        } catch (_) { return {ok: false, error: {kind: "network"}}; }
+    };
+    return runner;
+}
+
+function makeHost(requestKernelJsonOutcome = async () => ({ok: true, value: {data: []}})) {
+    return {
+        docSearchState: {sessions: new WeakMap()},
+        filterCardsCalls: 0,
+        rendered: [],
+        healthReports: [],
+        disposed: 0,
+        retryCalls: 0,
+        applySearch() {
+            this.retryCalls += 1;
+        },
+        filterCards() {
+            this.filterCardsCalls += 1;
+            return 2;
+        },
+        requestKernelJsonOutcome,
+    };
+}
+
+function surface() {
+    return {isConnected: true, dataset: {}};
+}
+
+function input(value) {
+    return {value};
+}
+
+function titleResponse(docs) {
+    return {ok: true, json: async () => ({data: docs})};
+}
+
+test("fetch: current version from the reordered signature reaches the kernel endpoint", async () => {
+    const calls = [];
+    const runner = makeRunner({
+        fetch: async (endpoint) => {
+            calls.push(endpoint);
+            return titleResponse([{path: "/20260901000000-notebook/20260901000000-abcdefab.sy", box: "20260901000000-notebook", name: "b"}]);
+        },
+    });
+    const host = makeHost(runner.requestKernelJsonOutcome);
+    const scrollElement = surface();
+    const version = beginSearch(getDocSession(host, scrollElement));
+    await runner.call(host, scrollElement, input("foo"), "foo", version, () => {}, {}, "key:foo", "foo");
+    assert.deepEqual(calls, ["/api/filetree/searchDocs"], "当前版本必须发起标题搜索请求");
+    assert.equal(host.rendered.length, 1, "结果必须渲染一次");
+    assert.equal(host.rendered[0].docs.length, 1);
+});
+
+test("fetch: stale version neither fetches, renders, nor caches", async () => {
+    const calls = [];
+    const runner = makeRunner({
+        fetch: async (endpoint) => {
+            calls.push(endpoint);
+            return titleResponse([]);
+        },
+    });
+    const host = makeHost(runner.requestKernelJsonOutcome);
+    const scrollElement = surface();
+    beginSearch(getDocSession(host, scrollElement));
+    // 旧调用顺序会把 keyword 当 version 传进来——这里就是当时静默退出的形态。
+    await runner.call(host, scrollElement, input("foo"), "foo", "foo", () => {}, {}, "key:foo", "foo");
+    assert.deepEqual(calls, [], "过期版本不得发起请求");
+    assert.deepEqual(host.rendered, [], "过期版本不得渲染");
+    const offline = surface();
+    offline.isConnected = false;
+    await runner.call(host, offline, input("foo"), "foo", 1, () => {}, {}, "key:foo", "foo");
+    assert.equal(host.disposed, 1, "断连容器必须触发会话清理");
+});
+
+test("fetch: results arriving after a newer input are discarded post fallback", async () => {
+    const scrollElement = surface();
+    let releaseFallback;
+    const runner = makeRunner({
+        canUseTitleSearch: () => false,
+        runFullTextSearchFallback: () => new Promise((resolve) => {
+            releaseFallback = () => resolve([{id: "20260901000000-abcdefab", path: "/slow"}]);
+        }),
+    });
+    const host = makeHost(runner.requestKernelJsonOutcome);
+    const session = getDocSession(host, scrollElement);
+    const version = beginSearch(session);
+    const pending = runner.call(host, scrollElement, input("slow"), "slow", version, () => {}, {}, "key:slow", "slow");
+    await Promise.resolve();
+    beginSearch(session); // 用户继续输入：上一轮整体作废
+    releaseFallback();
+    await pending;
+    assert.deepEqual(host.rendered, [], "回退结果过期后不得渲染");
+    assert.equal(session.cache.size, 0, "回退结果过期后不得写入缓存");
+});
+
+test("fetch: cache hit refreshes open-tab counts without a remote request", async () => {
+    const calls = [];
+    const runner = makeRunner({
+        fetch: async (endpoint) => {
+            calls.push(endpoint);
+            return titleResponse([]);
+        },
+    });
+    const host = makeHost(runner.requestKernelJsonOutcome);
+    const scrollElement = surface();
+    const session = getDocSession(host, scrollElement);
+    const cached = [{id: "20260901000000-cachedca", path: "/c"}];
+    cacheSearchResult(session, "key:foo", cached);
+    const version = beginSearch(session);
+    await runner.call(host, scrollElement, input("foo"), "foo", version, () => {}, {}, "key:foo", "foo");
+    assert.deepEqual(calls, [], "缓存命中不得再发远程请求");
+    // 缓存命中时渲染由 applySearch 负责；本函数只刷新页签层与健康快照。
+    assert.deepEqual(host.rendered, [], "缓存命中路径不得重复渲染");
+    assert.equal(host.filterCardsCalls, 1, "缓存命中仍要刷新页签层");
+    assert.equal(host.healthReports.some((report) => report.cacheHit === true), true, "健康快照必须标注 cacheHit");
+});
+
+test("fetch: global failure preserves opened-tab layer and exposes retry callback", async () => {
+    const runner = makeRunner({
+        canUseTitleSearch: () => false,
+        runOpenedDocumentContentSearch: () => Promise.resolve(new Set(["20260901000000-opened"])),
+        runFullTextSearchFallback: () => Promise.resolve(null),
+    });
+    const host = makeHost(runner.requestKernelJsonOutcome);
+    const scrollElement = surface();
+    const version = beginSearch(getDocSession(host, scrollElement));
+    await runner.call(host, scrollElement, input("offline"), "offline", version, () => {}, {}, "key:offline", "offline");
+    assert.equal(host.rendered.length, 1);
+    assert.deepEqual(host.rendered[0].docs, [], "远程失败必须保留错误态容器，不得移除本地层旁的回执");
+    assert.equal(host.rendered[0].mode, "error");
+    assert.equal(typeof host.rendered[0].retry, "function", "错误态必须提供重试回调");
+    host.rendered[0].retry();
+    assert.equal(host.retryCalls, 1, "重试回调必须重新进入搜索应用入口");
+});
+
+test("fetch: title search error triggers full-text fallback recovery and renders fallback results", async () => {
+    let fallbackCalls = 0;
+    const fallbackResults = [{id: "20260901000000-fb0001", rootId: "20260901000000-fb0001", title: "全文回退结果", path: "/全文回退"}];
+    const runner = makeRunner({
+        fetch: async () => {
+            throw new Error("searchDocs endpoint simulated network failure");
+        },
+        runFullTextSearchFallback: async () => {
+            fallbackCalls += 1;
+            return fallbackResults;
+        },
+    });
+    const host = makeHost(runner.requestKernelJsonOutcome);
+    const scrollElement = surface();
+    const version = beginSearch(getDocSession(host, scrollElement));
+    await runner.call(host, scrollElement, input("fail-title"), "fail-title", version, () => {}, {}, "key:fail-title", "fail-title");
+
+    assert.equal(fallbackCalls, 1, "标题搜索失败必须触发全文回退调用");
+    assert.equal(host.rendered.length, 1, "全文回退结果必须正常渲染");
+    assert.equal(host.rendered[0].mode, "results");
+    assert.deepEqual(host.rendered[0].docs, fallbackResults, "渲染的文档列表必须与全文回退结果一致");
+    assert.ok(host.healthReports.some((r) => r.fallbackReason === "title-unavailable"), "健康快照必须记录 title-unavailable");
+
+    // 负向探针: 若回退结果未被渲染或被篡改为空，必须触发断言失败
+    assert.throws(() => {
+        assert.equal(host.rendered[0].docs.length, 0, "回退丢失探测");
+    }, /ERR_ASSERTION/);
+});
+
+test("fetch: title search empty result triggers full-text fallback recovery and renders fallback results", async () => {
+    let fallbackCalls = 0;
+    const fallbackResults = [{id: "20260901000000-fb0002", rootId: "20260901000000-fb0002", title: "空标题回退", path: "/空标题"}];
+    const runner = makeRunner({
+        fetch: async () => titleResponse([]),
+        runFullTextSearchFallback: async () => {
+            fallbackCalls += 1;
+            return fallbackResults;
+        },
+    });
+    const host = makeHost(runner.requestKernelJsonOutcome);
+    const scrollElement = surface();
+    const version = beginSearch(getDocSession(host, scrollElement));
+    await runner.call(host, scrollElement, input("empty-title"), "empty-title", version, () => {}, {}, "key:empty-title", "empty-title");
+
+    assert.equal(fallbackCalls, 1, "标题搜索为空必须触发全文回退调用");
+    assert.equal(host.rendered.length, 1, "全文回退结果必须正常渲染");
+    assert.deepEqual(host.rendered[0].docs, fallbackResults);
+    assert.ok(host.healthReports.some((r) => r.fallbackUsed === true), "健康快照必须记录 fallbackUsed: true");
+
+    // 负向探针: 若未触发回退调用必须失败
+    assert.throws(() => {
+        assert.equal(fallbackCalls, 0, "回退调用缺失探测");
+    }, /ERR_ASSERTION/);
+});
+
+function getDocSession(host, scrollElement) {
+    let session = host.docSearchState.sessions.get(scrollElement);
+    if (!session) {
+        session = createSearchSession(8);
+        host.docSearchState.sessions.set(scrollElement, session);
+    }
+    return session;
+}
