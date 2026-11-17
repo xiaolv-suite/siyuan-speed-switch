@@ -1,0 +1,47 @@
+node_modules/
+.pnpm-store/
+dist/
+package.zip
+package.zip.sha256
+.history/
+.hotreload
+*.log
+
+# Mimosa 安全钩子内部状态（不入库）
+.mimosa/
+.research/
+
+# 本地实测截图（烟测产物，不入库）
+live-siyuan-*.png
+ui-smoke.png
+
+# 手机端布局门禁的人工复核截图（本地验证产物，不入库）
+ui-fix-verify.png
+
+# 本机环境修复脚本与临时分析脚手架（不入库）
+.dev-env.sh
+.tmp/
+**/profile*/
+
+# 巡检/补丁临时脚本（T-6717 起多误提交事故根因，一律不追踪）
+.tmp-*
+.artifacts/
+acceptance-screenshots/*
+!acceptance-screenshots/manifest.json
+!acceptance-screenshots/switcher-light.png
+!acceptance-screenshots/switcher-dark.png
+!acceptance-screenshots/workbench-light.png
+!acceptance-screenshots/workbench-dark.png
+!acceptance-screenshots/studio-light.png
+!acceptance-screenshots/studio-dark.png
+
+# CI/API 调试临时产物
+joblog.txt
+jobs.json
+runs.json
+
+# IDE 与本地环境临时状态
+.tasks/
+.zcode/
+.jeikcode/codegraph/
+scripts/.last-live-instance.json

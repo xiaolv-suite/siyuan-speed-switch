@@ -1,0 +1,67 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const {readSourceText}=require('./source-scan.cjs');
+const {declaresIn}=require('./css-block-scan.cjs');
+
+const root = path.resolve(__dirname, '..');
+// 2026-09-16（T-6280 / D-396 第二十一批）：CSS 侧 6 条窗口断言迁移为块级；TS 源码读取
+// 改走 readSourceText（源码字面契约，登记理由见债清单）。
+const source = readSourceText('src/index.ts');
+const storeUiSource = readSourceText('src/home-store-ui.ts');
+const css = readSourceText('src/index.scss');
+const base={topLevel: true};
+
+test('store root has region semantics', () => assert.match(storeUiSource, /root\.setAttribute\("role", "region"\)/));
+test('store root exposes a label', () => assert.match(storeUiSource, /root\.setAttribute\("aria-label", this\.i18n\.homeStoreTitle\)/));
+test('store root records device', () => assert.match(storeUiSource, /root\.dataset\.device = device/));
+test('store root records initial active tab', () => assert.match(storeUiSource, /root\.dataset\.activeTab = storeTab/));
+test('store search container has search semantics', () => assert.match(storeUiSource, /searchBar\.setAttribute\("role", "search"\)/));
+test('store search container has a label', () => assert.match(storeUiSource, /searchBar\.setAttribute\("aria-label", this\.i18n\.homeStoreSearch\)/));
+test('store search input uses searchbox semantics', () => assert.match(storeUiSource, /searchInput\.setAttribute\("role", "searchbox"\)/));
+test('store search input disables autocomplete', () => assert.match(storeUiSource, /searchInput\.autocomplete = "off"/));
+test('store search input advertises keyboard intent', () => assert.match(storeUiSource, /searchInput\.setAttribute\("enterkeyhint", "search"\)/));
+test('store clear search records an action', () => assert.match(storeUiSource, /clearSearchButton\.dataset\.action = "clear-search"/));
+test('store sort records an action', () => assert.match(storeUiSource, /sortSelect\.dataset\.action = "sort"/));
+test('store sort records the selected sort', () => assert.match(storeUiSource, /sortSelect\.dataset\.sort = storeSort/));
+test('store sort controls the summary', () => assert.match(storeUiSource, /sortSelect\.setAttribute\("aria-controls", "sw-home-store-result-summary"\)/));
+test('store guide announces its dialog', () => assert.match(storeUiSource, /guideButton\.setAttribute\("aria-haspopup", "dialog"\)/));
+test('store guide records an action', () => assert.match(storeUiSource, /guideButton\.dataset\.action = "open-guide"/));
+test('store root records normalized query', () => assert.match(storeUiSource, /root\.dataset\.query = normalizeHomeStoreQuery\(storeQuery\)/));
+test('store summary is atomic', () => assert.match(storeUiSource, /resultSummary\.setAttribute\("aria-atomic", "true"\)/));
+test('store summary exposes visible count', () => assert.match(storeUiSource, /resultSummary\.dataset\.visible = String\(summary\.visible\)/));
+test('store summary exposes total count', () => assert.match(storeUiSource, /resultSummary\.dataset\.total = String\(summary\.total\)/));
+test('store summary exposes added count', () => assert.match(storeUiSource, /resultSummary\.dataset\.added = String\(summary\.added\)/));
+test('store tabs have a stable tablist id', () => assert.match(storeUiSource, /tabBar\.id = "sw-home-store-tablist"/));
+test('store tabs control the summary', () => assert.match(storeUiSource, /btn\.setAttribute\("aria-controls", "sw-home-store-result-summary"\)/));
+test('store tabs initialize counts', () => assert.match(storeUiSource, /btn\.dataset\.count = "0"/));
+test('store tabs update counts', () => assert.match(storeUiSource, /button\.dataset\.count = String\(count\)/));
+test('store tabs announce counts', () => assert.match(storeUiSource, /button\.setAttribute\("aria-label", `\$\{button\.dataset\.tabLabel/));
+test('store tabs describe the summary', () => assert.match(storeUiSource, /button\.setAttribute\("aria-describedby", resultSummary\?\.id/));
+test('store tab activation records active tab', () => assert.match(storeUiSource, /root\.dataset\.activeTab = storeTab/));
+test('store cards expose aria hidden state', () => assert.match(storeUiSource, /card\.setAttribute\("aria-hidden", String\(!visible\)\)/));
+test('store groups expose aria hidden state', () => assert.match(storeUiSource, /heading\.setAttribute\("aria-hidden", String\(!visible\)\)/));
+test('store grids expose collapsed aria hidden state', () => assert.match(storeUiSource, /grid\.setAttribute\("aria-hidden", String\(!visible \|\| heading\.dataset\.collapsed === "true"\)\)/));
+test('store empty state exposes live semantics', () => assert.match(storeUiSource, /filterEmptyState\.setAttribute\("aria-live", "polite"\)/));
+test('store empty state is atomic', () => assert.match(storeUiSource, /filterEmptyState\.setAttribute\("aria-atomic", "true"\)/));
+test('store clear filters records an action', () => assert.match(storeUiSource, /clearFilters\.dataset\.action = "clear-filters"/));
+test('store pending cards expose stable status', () => assert.match(storeUiSource, /card\.dataset\.status = unavailable \? "unavailable" : "requires-provider"/));
+test('store unavailable removal records an action', () => assert.match(storeUiSource, /removeButton\.dataset\.action = "remove-unavailable"/));
+test('store group headings expose accessible labels', () => assert.match(storeUiSource, /groupHeading\.setAttribute\("aria-label", `\$\{label\}/));
+test('store group labels are scoped', () => assert.match(storeUiSource, /groupLabel\.className = "sw-home-store__group-label"/));
+test('store group toggles retain a group key', () => assert.match(storeUiSource, /groupToggle\.dataset\.group = label/));
+test('store group toggles have tooltips', () => assert.match(storeUiSource, /groupToggle\.title = groupToggle\.getAttribute\("aria-label"\)/));
+test('store guide has a tooltip', () => assert.match(storeUiSource,/guideButton\.title = this\.i18n\.homeStoreGuideTitle/));
+test('store viewport contains overscroll', () => assert.ok(declaresIn(css, '.sw-home-store', /overscroll-behavior: contain/, base)));
+test('store viewport reserves scrollbar space', () => assert.ok(declaresIn(css, '.sw-home-store', /scrollbar-gutter: stable/, base)));
+test('empty tabs are visually de-emphasized', () => assert.ok(declaresIn(css, /(^| )\.sw-home-store__tab\[data-count="0"\]$/, /opacity: \.58/, base)));
+test('store group labels wrap', () => assert.match(css, /\.sw-home-store__group-label \{ min-width: 0; overflow-wrap: anywhere/));
+test('hidden cards are skipped by content visibility', () => assert.ok(declaresIn(css, '.sw-home-store__card[aria-hidden="true"]', /content-visibility: hidden/, base)));
+test('hidden empty state is visually de-emphasized', () => assert.ok(declaresIn(css, '.sw-home-store__filter-empty[aria-hidden="true"]', /opacity: \.72/, base)));
+test('summary remains selectable', () => assert.ok(declaresIn(css, '.sw-home-store__summary', /user-select: text/, base)));
+
+test('store group toggle exposes expanded state', () => assert.ok(storeUiSource.includes('groupToggle.setAttribute("aria-expanded", String(!collapsedGroups.has(label)));')));
+test('store group toggle label follows the collapsed state', () => assert.ok(storeUiSource.includes('groupToggle.setAttribute("aria-label", collapsedGroups.has(label) ? this.i18n.homeStoreExpandGroup : this.i18n.homeStoreCollapseGroup);')));
+test('collapsed group grid hides from assistive tech', () => assert.ok(storeUiSource.includes('grid.setAttribute("aria-hidden", String(!visible || heading.dataset.collapsed === "true"));')));

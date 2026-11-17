@@ -1,0 +1,171 @@
+// T-6871 平台 UI 原语 DOM 构造助手（RZ-1，ADR 0079）：六态徽标 / kbd 芯片 /
+// 分段控件 / 胶囊按钮的行为测试（jsdom，注入 document 的纯 DOM 模块）。
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const {JSDOM} = require("jsdom");
+const {
+    PLATFORM_STATUS_STATES,
+    normalizePlatformStatusState,
+    createPlatformStatus,
+    createPlatformKbd,
+    createPlatformSegmented,
+    createPlatformPillAction,
+    mountPlatformDialogCloseHint,
+} = require("../src/platform-dom.js");
+
+function withDom(fn) {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    fn(dom.window.document, dom.window);
+    dom.window.close();
+}
+
+test("platform status: six-state whitelist, invalid falls back to neutral (T-6871)", () => {
+    assert.deepEqual([...PLATFORM_STATUS_STATES], ["ready", "loading", "stale", "dirty", "blocked", "error"]);
+    assert.equal(normalizePlatformStatusState("stale"), "stale");
+    assert.equal(normalizePlatformStatusState("hacked"), "", "非法状态必须回落中性，不得猜成 ready");
+    withDom((doc) => {
+        const stale = createPlatformStatus(doc, "stale", "缓存 · 3 分钟前");
+        assert.equal(stale.tagName, "SPAN");
+        assert.equal(stale.className, "sw-platform-status");
+        assert.equal(stale.dataset.state, "stale");
+        assert.equal(stale.textContent, "缓存 · 3 分钟前");
+        const broken = createPlatformStatus(doc, "hacked", "?");
+        assert.equal("state" in broken.dataset, false, "非法状态不得写出 data-state（样式按中性呈现）");
+        assert.equal(broken.textContent, "?");
+    });
+});
+
+test("platform kbd: renders bounded text content", () => {
+    withDom((doc) => {
+        const kbd = createPlatformKbd(doc, "1-9");
+        assert.equal(kbd.className, "sw-platform-kbd");
+        assert.equal(kbd.textContent, "1-9");
+        assert.equal(createPlatformKbd(doc).textContent, "", "缺省文本产出空芯片不抛错");
+    });
+});
+
+test("platform segmented: radiogroup semantics, active switching, single onChange", () => {
+    withDom((doc) => {
+        const changes = [];
+        const seg = createPlatformSegmented(doc, {
+            ariaLabel: "视图模式",
+            active: "grid",
+            items: [{value: "grid", label: "网格"}, {value: "", label: "无效项"}, {value: "list", label: "列表"}],
+            onChange: (value) => changes.push(value),
+        });
+        assert.equal(seg.getAttribute("role"), "radiogroup");
+        assert.equal(seg.getAttribute("aria-label"), "视图模式");
+        const radios = seg.querySelectorAll("button");
+        assert.equal(radios.length, 2, "空 value 项必须被剔除");
+        const [grid, list] = radios;
+        assert.equal(grid.dataset.value, "grid");
+        assert.equal(grid.getAttribute("aria-checked"), "true");
+        assert.equal(grid.classList.contains("is-active"), true);
+        assert.equal(list.getAttribute("aria-checked"), "false");
+        list.click();
+        assert.equal(list.classList.contains("is-active"), true);
+        assert.equal(list.getAttribute("aria-checked"), "true");
+        assert.equal(grid.classList.contains("is-active"), false);
+        assert.equal(grid.getAttribute("aria-checked"), "false");
+        assert.deepEqual(changes, ["list"], "点击必须且只回调一次新值");
+        list.click();
+        assert.deepEqual(changes, ["list"], "同值重复点击不得重复回调");
+    });
+});
+
+test("platform segmented: invalid active has no highlighted item (no guessing)", () => {
+    withDom((doc) => {
+        const seg = createPlatformSegmented(doc, {
+            active: "bogus",
+            items: [{value: "a", label: "A"}, {value: "b", label: "B"}],
+        });
+        seg.querySelectorAll("button").forEach((button) => {
+            assert.equal(button.classList.contains("is-active"), false);
+            assert.equal(button.getAttribute("aria-checked"), "false");
+        });
+    });
+});
+
+test("platform pill action: soft modifier, type=button, onClick wiring", () => {
+    withDom((doc) => {
+        let clicks = 0;
+        const primary = createPlatformPillAction(doc, {label: "保存", onClick: () => { clicks += 1; }});
+        assert.equal(primary.tagName, "BUTTON");
+        assert.equal(primary.type, "button");
+        assert.equal(primary.classList.contains("sw-platform-action--pill"), true);
+        assert.equal(primary.classList.contains("sw-platform-action--soft"), false);
+        primary.click();
+        assert.equal(clicks, 1);
+        const soft = createPlatformPillAction(doc, {label: "配置", soft: true});
+        assert.equal(soft.classList.contains("sw-platform-action--soft"), true);
+        const passive = createPlatformPillAction(doc, {label: "稍后"});
+        assert.equal(passive.type, "button", "缺省 onClick 仍产出类型安全的按钮");
+    });
+});
+
+test("native dialog close hint: mounts beside host close button and stays idempotent", () => {
+    withDom((doc) => {
+        const dialog = doc.createElement("div");
+        dialog.innerHTML = '<div class="b3-dialog__header"><span class="b3-dialog__title">商店</span><button class="b3-dialog__close" type="button"></button></div>';
+        const first = mountPlatformDialogCloseHint(dialog, "退出", doc);
+        assert.ok(first);
+        assert.equal(first.className, "sw-platform-dialog__close-hint");
+        assert.equal(first.getAttribute("aria-label"), "Esc 退出");
+        assert.equal(first.querySelector(".sw-platform-kbd").textContent, "Esc");
+        assert.equal(dialog.querySelectorAll(".sw-platform-dialog__close-hint").length, 1);
+        assert.equal(mountPlatformDialogCloseHint(dialog, "退出", doc), first, "重复挂载不得复制提示");
+        assert.equal(dialog.querySelector(".b3-dialog__close").classList.contains("sw-platform-dialog__close-button"), true);
+    });
+});
+
+// T-7175：radiogroup 键盘合同——roving tabindex（单 Tab 停靠）+ 方向键循环选择。
+test("platform segmented keyboard: roving tabindex keeps a single Tab stop (T-7175)", () => {
+    withDom((doc) => {
+        const seg = createPlatformSegmented(doc, {
+            items: [{value: "a", label: "A"}, {value: "b", label: "B"}, {value: "c", label: "C"}],
+            active: "b",
+            onChange: () => {},
+        });
+        const tabs = [...seg.querySelectorAll("button")].map((b) => b.tabIndex);
+        assert.deepEqual(tabs, [-1, 0, -1], "选中项单 Tab 停靠，其余 -1");
+    });
+    withDom((doc) => {
+        const seg = createPlatformSegmented(doc, {
+            items: [{value: "a", label: "A"}, {value: "b", label: "B"}],
+            active: "",
+            onChange: () => {},
+        });
+        const tabs = [...seg.querySelectorAll("button")].map((b) => b.tabIndex);
+        assert.deepEqual(tabs, [0, -1], "无选中时首项保留 Tab 序（不猜默认值）");
+    });
+});
+
+test("platform segmented keyboard: arrows move focus and select with wrap-around (T-7175)", () => {
+    withDom((doc, win) => {
+        const changes = [];
+        const seg = createPlatformSegmented(doc, {
+            items: [{value: "a", label: "A"}, {value: "b", label: "B"}, {value: "c", label: "C"}],
+            active: "a",
+            onChange: (value) => changes.push(value),
+        });
+        const buttons = [...seg.querySelectorAll("button")];
+        doc.body.appendChild(seg); // jsdom focus() 要求元素在文档树中
+        const press = (el, key) => {
+            el.focus();
+            el.dispatchEvent(new win.KeyboardEvent("keydown", {key, bubbles: true, cancelable: true}));
+        };
+        press(buttons[0], "ArrowRight");
+        assert.equal(doc.activeElement, buttons[1], "右移焦点到下一项");
+        assert.equal(buttons[1].getAttribute("aria-checked"), "true", "方向键即选中（radio 语义）");
+        assert.equal(buttons[0].getAttribute("aria-checked"), "false");
+        press(buttons[1], "ArrowRight");
+        press(buttons[2], "ArrowRight");
+        assert.equal(doc.activeElement, buttons[0], "末项右移循环回首项");
+        press(buttons[0], "ArrowLeft");
+        assert.equal(doc.activeElement, buttons[2], "首项左移循环回末项");
+        // 循环回首项也触发选择（radio 语义）：a→右→b→右→c→右(循环)→a→左→c
+        assert.deepEqual(changes, ["b", "c", "a", "c"], "每次方向键移动触发一次 onChange（含循环选择）");
+        press(buttons[1], "x");
+        assert.equal(doc.activeElement, buttons[1], "非方向键不移动焦点");
+    });
+});

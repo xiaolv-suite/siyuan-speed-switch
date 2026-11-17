@@ -1,0 +1,100 @@
+const {readSourceText} = require("./source-scan.cjs");
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const root = path.resolve(__dirname, '..');
+const source = readSourceText(path.join(root, 'src', 'index.ts'));
+const storeUiSource = readSourceText(path.join(root, 'src', 'home-store-ui.ts'));
+const secondPanelSource = readSourceText(path.join(root, 'src', 'second-panel-ui.ts'));
+// R3 重构（D-377）：配置表单方法体在 home-config-form.ts。
+const configFormSource = readSourceText(path.join(root, 'src', 'home-config-form.ts'));
+const css = readSourceText(path.join(root, 'src', 'index.scss'));
+
+test('preview captures its opener', () => assert.match(storeUiSource, /const opener = document\.activeElement instanceof HTMLElement/));
+test('preview exposes module id', () => assert.match(storeUiSource, /container\.dataset\.moduleId = moduleId/));
+test('preview exposes device', () => assert.match(storeUiSource, /container\.dataset\.device = device/));
+test('preview exposes selected size', () => assert.match(storeUiSource, /container\.dataset\.size = sizeKey/));
+test('preview container is a region', () => assert.match(storeUiSource, /container\.setAttribute\("role", "region"\)/));
+test('preview container has an accessible label', () => assert.match(storeUiSource, /container\.setAttribute\("aria-label", `\$\{host\.i18n\.homeStorePreview\}/));
+test('preview starts busy', () => assert.match(storeUiSource, /container\.setAttribute\("aria-busy", "true"\)/));
+test('preview body keeps its scoped class', () => assert.match(storeUiSource, /body\.classList\.add\("sw-store-preview__body"\)/));
+test('preview body is a status region', () => assert.match(storeUiSource, /body\.setAttribute\("role", "status"\)/));
+test('preview body is live', () => assert.match(storeUiSource,/body\.setAttribute\("aria-live", "polite"\)/));
+test('preview creates a home controller', () => assert.match(secondPanelSource, /controller = createHomeModuleController\(\{/));
+test('preview read stays on the selected module', () => assert.match(source, /this\.homeRuntime\.read\(moduleId, device/));
+test('preview read carries the selected size', () => assert.match(storeUiSource, /\{\.\.\.readOptions, size: sizeKey\}/));
+test('preview forces a fresh read', () => assert.match(storeUiSource,/controller\.refresh\(\{\}, \{force: true\}\)/));
+test('preview tracks disposed state', () => assert.match(storeUiSource, /let disposed = false/));
+test('preview exposes one cleanup helper', () => assert.match(storeUiSource, /disposePreview = \(\) => \{/));
+test('preview cleanup disposes controller', () => assert.match(storeUiSource, /controller\?\.dispose\(\)/));
+// T-6479：释放入口从"覆写 destroy + 轮询断连"改为宿主 Dialog 的 destroyCallback。
+test('preview cleanup is declared before construction', () => assert.match(storeUiSource, /let disposePreview: \(\) => void = \(\) => undefined;/));
+test('preview wires the host destroyCallback', () => assert.match(storeUiSource, /destroyCallback: \(\) => disposePreview\(\)/));
+test('preview cleanup restores opener focus', () => assert.match(storeUiSource,/if \(opener\?\.isConnected\) opener\.focus\(\)/));
+test('preview no longer wraps dialog destroy', () => assert.doesNotMatch(storeUiSource, /dialog\.destroy = \(\)/));
+test('preview no longer chains an original destroy', () => assert.doesNotMatch(storeUiSource, /originalDestroy\(\)/));
+test('preview mounts before refreshing', () => assert.match(storeUiSource, /controller\.mount\(\);\s*const markPreviewReady =/));
+test('preview clears busy state after refresh', () => assert.match(storeUiSource, /container\.setAttribute\("aria-busy", "false"\)/));
+test('preview refresh cleanup handles success and failure', () => assert.match(storeUiSource, /controller\.refresh\(\{\}, \{force: true\}\)\.then\(markPreviewReady, markPreviewReady\)/));
+// T-6479：轮询式断连释放已废除——宿主 destroyCallback 覆盖 Escape/遮罩/程序三种关闭路径。
+test('preview no longer polls dialog connectivity', () => assert.doesNotMatch(storeUiSource, /window\.setInterval/));
+test('preview no longer checks dialog connection for disposal', () => assert.doesNotMatch(storeUiSource, /dialog\.element\.isConnected/));
+test('preview no longer keeps a dispose timer', () => assert.doesNotMatch(storeUiSource, /disposeTimer/));
+test('preview has a bounded mobile width', () => assert.match(storeUiSource, /width: this\.isMobile \? "min\(420px, 92vw\)"/));
+test('preview has a bounded mobile height', () => assert.match(storeUiSource,/height: this\.isMobile \? "min\(560px, 80vh\)"/));
+test('preview styles remain scoped', () => assert.match(css, /\.sw-store-preview/));
+
+// T-4971~T-5016: component-store DOM action, accessibility and focus lifecycle contracts.
+test('store search exposes search role', () => assert.match(storeUiSource, /searchBar\.setAttribute\("role", "search"\)/));
+test('store search exposes searchbox role', () => assert.match(storeUiSource, /searchInput\.setAttribute\("role", "searchbox"\)/));
+test('store search uses enter key hint', () => assert.match(storeUiSource, /searchInput\.setAttribute\("enterkeyhint", "search"\)/));
+test('clear search has explicit action metadata', () => assert.match(storeUiSource, /clearSearchButton\.dataset\.action = "clear-search"/));
+test('clear search restores input focus', () => assert.match(storeUiSource, /searchInput\.focus\(\)/));
+test('store sort exposes action metadata', () => assert.match(storeUiSource, /sortSelect\.dataset\.action = "sort"/));
+test('store sort controls result summary', () => assert.match(storeUiSource, /sortSelect\.setAttribute\("aria-controls", "sw-home-store-result-summary"\)/));
+test('guide button exposes dialog semantics', () => assert.match(storeUiSource, /guideButton\.setAttribute\("aria-haspopup", "dialog"\)/));
+test('guide button invokes guide opener', () => assert.match(storeUiSource, /bindRenderListener\(guideButton, "click", \(\) => this\.openHomeWidgetGuide\(\)\)/));
+test('store tabs expose tablist role', () => assert.match(storeUiSource, /tabBar\.setAttribute\("role", "tablist"\)/));
+test('store tab buttons expose tab role', () => assert.match(storeUiSource, /btn\.setAttribute\("role", "tab"\)/));
+test('store tabs expose roving tabindex', () => assert.match(storeUiSource, /btn\.setAttribute\("tabindex", tab\.key === storeTab \? "0" : "-1"\)/));
+test('store tab activation updates selected state', () => assert.match(storeUiSource, /candidate\.setAttribute\("aria-selected", String\(active\)\)/));
+test('store tab activation updates current page state', () => assert.match(storeUiSource, /candidate\.setAttribute\("aria-current", active \? "page" : "false"\)/));
+test('store tab count is persisted in dataset', () => assert.match(storeUiSource, /button\.dataset\.count = String\(count\)/));
+test('store result summary is a status region', () => assert.match(storeUiSource, /resultSummary\.setAttribute\("role", "status"\)/));
+test('store result summary is live', () => assert.match(storeUiSource, /resultSummary\.setAttribute\("aria-live", "polite"\)/));
+test('store result summary is atomic', () => assert.match(storeUiSource, /resultSummary\.setAttribute\("aria-atomic", "true"\)/));
+test('ready section is level two heading', () => assert.match(storeUiSource, /readyHeading\.setAttribute\("aria-level", "2"\)/));
+test('pending section is level two heading', () => assert.match(storeUiSource, /pendingHeading\.setAttribute\("aria-level", "2"\)/));
+test('store cards carry module ids', () => assert.match(storeUiSource, /card\.dataset\.moduleId = moduleId/));
+test('store cards expose labels', () => assert.match(storeUiSource, /card\.setAttribute\("aria-label",/));
+test('size controls are buttons', () => assert.match(storeUiSource, /tile\.type = "button"/));
+test('size controls expose pressed state', () => assert.match(storeUiSource, /tile\.setAttribute\("aria-pressed", String\(tile === selectedTile\)\)/));
+test('size controls point at action button', () => assert.match(storeUiSource, /tile\.setAttribute\("aria-controls", actionId\)/));
+test('store primary button is explicit action', () => assert.match(storeUiSource, /addButton\.dataset\.action = guideOnly \? "guide" : added \? "apply-size" : "add"/));
+test('add button carries module id', () => assert.match(storeUiSource, /addButton\.dataset\.moduleId = moduleId/));
+test('add button tracks selected size via the module preset (T-6969 slice 2)', () => assert.match(storeUiSource, /addButton.dataset.selectedSize = selectedTile?.dataset.size || preferredSize/));
+test('add button describes selected size or external guide prerequisites', () => {
+    assert.match(storeUiSource, /const descriptionIds = guideOnly[\s\S]*?: sizeLabel\.id;/);
+    assert.match(storeUiSource, /if \(descriptionIds\) addButton\.setAttribute\("aria-describedby", descriptionIds\)/);
+});
+test('add action persists home state', () => assert.match(storeUiSource, /this\.saveHomeState\(next\)/));
+test('add action rerenders store', () => assert.match(storeUiSource, /this\.saveHomeState\(next\);\s*if \(!added && def\.availability === "conditional"\)/));
+test('conditional add shows setup hint', () => assert.match(storeUiSource, /homeStoreConditionalHint/));
+test('configure button exposes dialog semantics', () => assert.match(storeUiSource, /configButton\.setAttribute\("aria-haspopup", "dialog"\)/));
+test('configure button opens config form', () => assert.match(storeUiSource, /configButton\.onclick = \(\) => \{\s*openHomeConfigForm\.call\(this/));
+test('remove button carries remove action', () => assert.match(storeUiSource, /removeButton\.dataset\.action = "remove"/));
+test('remove button invokes instance removal', () => assert.match(storeUiSource, /removeButton\.onclick = \(\) => \{ this\.removeHomeInstance\(added\.instanceId\)/));
+test('store detail mounts an inline live preview', () => assert.match(storeUiSource, /const inlinePreview = buildInlinePreview\(storeSelectedModule, detailDef, previewSize\)/));
+test('size changes refresh the inline preview with the selected size', () => assert.match(storeUiSource, /onSizeChange\(sizeKey\);\s*void controller\?\.refresh\(\{\}, \{force: true\}\)/));
+test('store detail no longer adds a duplicate preview dialog button', () => assert.doesNotMatch(storeUiSource, /previewButton\.dataset\.action = "preview"/));
+test('group toggle exposes expanded state', () => assert.match(storeUiSource, /groupToggle\.setAttribute\("aria-expanded", String\(!collapsedGroups\.has\(label\)\)\)/));
+test('group toggle controls group grid', () => assert.match(storeUiSource, /groupToggle\.setAttribute\("aria-controls", groupId\)/));
+test('unavailable pending cards expose explicit removal', () => assert.match(storeUiSource, /removeButton\.dataset\.action = "remove-unavailable"/));
+test('unavailable removal rerenders store', () => assert.match(storeUiSource, /this\.removeHomeInstance\(instance\.instanceId\);\s*renderStore\(\);\s*onChanged\(\)/));
+test('filter updates hidden state accessibly', () => assert.match(storeUiSource, /card\.setAttribute\("aria-hidden", String\(!visible\)\)/));
+test('filter restores focus to visible card', () => assert.match(storeUiSource, /nextCard\.focus\(\{preventScroll: true\}\)/));
+test('filter restores focus to search when no cards', () => assert.match(storeUiSource, /else searchInput\.focus\(\{preventScroll: true\}\)/));
+// T-6967 S2：空目录不再整树清空——保留 chrome 并落 catalogEmpty 会话标记（横幅态）。
+test('empty store exposes dedicated state', () => assert.match(storeUiSource,/root\.dataset\.catalogEmpty = "true"/));

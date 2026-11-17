@@ -1,0 +1,85 @@
+* {
+    box-sizing: border-box;
+}
+
+.b3-button,
+.b3-tooltips {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 4px 8px;
+}
+
+/* 真机来源（本机思源安装目录）：
+ *   <SiYuan>/resources/stage/build/mobile/base.9450c3c32a0f5d8ce01a.css
+ * 原文：.b3-button svg{height:16px;width:16px;margin-right:4px;flex-shrink:0}
+ * 这是"容器带 b3-button 时子 svg 有宿主兜底"的唯一来源，也是 mobile-toolbar-layout.cjs
+ * 宿主兜底对照依赖的前提。故意让它是**载荷**：删掉本块后，对照里的 #hosted-bare 会退回
+ * 300×150 并触发失败——这样该前提被测量，而不是被假设。
+ * margin-right 有意省略：它只影响间距、不影响"尺寸是否被兜底"这一命题，
+ * 保留会让 390px 宽的测量页发生换行、干扰既有断言。 */
+.b3-button svg {
+    height: 16px;
+    width: 16px;
+    flex-shrink: 0;
+}
+
+/* 真机同源：.b3-tooltips svg{margin-right:0}——**不含尺寸**。
+ * 保留它是为了让 fixture 能真实表达"哪些类名不兜底"：.sw__search-filter-btn 只带
+ * b3-tooltips，故在插件样式缺席时无兜底（真机截图中它正是 320×165）。 */
+.b3-tooltips svg {
+    margin-right: 0;
+}
+
+/* 真机同源（app/src/assets/scss/component/_dialog.scss）：对话框容器用
+ * surface 底色——缺失时容器透明，暗色令牌下的文字对比度无从计算（T-6696）。 */
+.b3-dialog__container {
+    background-color: var(--b3-theme-surface);
+}
+
+.b3-switch {
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+}
+
+/* ---------- T-6696 主题令牌集（对照真实 SiYuan appearance/themes 取值） ----------
+ * 此前夹具没有不透明背景与 b3 令牌定义：组件文本有的回落白色、有的回落黑色，
+ * 在透明背景上 WCAG 对比度无从计算（分母不存在）。这里补齐思源官方
+ * daylight（明）/ midnight（暗）两套核心令牌——对比度采样、色阶断言、
+ * 主题一致性检查从此有了可信的渲染基线。取值逐字对照：
+ *   daylight: app/appearance/themes/daylight/theme.css
+ *   midnight: app/appearance/themes/midnight/theme.css
+ */
+:root {
+    --b3-theme-primary: #3575f0;
+    --b3-theme-background: #fff;
+    --b3-theme-surface: #f6f6f6;
+    --b3-theme-surface-lighter: rgba(0, 0, 0, .04);
+    --b3-theme-on-primary: #fff;
+    --b3-theme-on-background: #222;
+    --b3-theme-on-surface: #5f6368;
+    --b3-theme-on-surface-light: rgba(95, 99, 104, .68);
+    --b3-border-color: rgba(0, 0, 0, .1);
+    --b3-list-hover: rgba(0, 0, 0, .075);
+    --b3-theme-warning: #d97917;
+    --b3-theme-error: #d23f31;
+    --b3-theme-success: #3575f0;
+    background-color: var(--b3-theme-background);
+    color: var(--b3-theme-on-background);
+}
+
+:root[data-theme-mode="dark"],
+:root.neo-mode-dark {
+    --b3-theme-primary: #3575f0;
+    --b3-theme-background: #1e1e1e;
+    --b3-theme-surface: #2c2c2c;
+    --b3-theme-surface-lighter: rgba(255, 255, 255, .04);
+    --b3-theme-on-primary: #fff;
+    --b3-theme-on-background: #dadada;
+    --b3-theme-on-surface: #9aa0a6;
+    --b3-theme-on-surface-light: #bababa;
+    --b3-border-color: #484848;
+    --b3-list-hover: rgba(255, 255, 255, .10);
+    background-color: var(--b3-theme-background);
+    color: var(--b3-theme-on-background);
+}

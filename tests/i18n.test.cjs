@@ -1,0 +1,342 @@
+/**
+ * i18n key 完整性防回归测试（P2-3）
+ *
+ * 静态扫描 src/ 下所有 TS/JS 源码中的 `xxx.i18n.KEY` 引用，
+ * 断言每个被引用的 key 都存在于 zh-CN.json 与 en.json，
+ * 且两份语言文件的 key 集合完全一致、无空值。
+ *
+ * 若代码中出现动态下标访问（i18n[expr]），本测试会直接失败——
+ * 动态 key 无法静态扫描，请改用字面量访问或在 SCAN_FILES 中显式登记。
+ */
+const fs = require("node:fs");
+const path = require("node:path");
+const test = require("node:test");
+const assert = require("node:assert/strict");
+
+const ROOT = path.resolve(__dirname, "..");
+const SRC_DIR = path.join(ROOT, "src");
+const I18N_DIR = path.join(SRC_DIR, "i18n");
+const LANG_FILES = ["zh-CN.json", "en.json"].map((f) => path.join(I18N_DIR, f));
+
+function walkSources(dir, out) {
+  for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === "i18n") continue;
+      walkSources(full, out);
+    } else if (/\.(ts|js)$/.test(entry.name)) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+function collectReferencedKeys() {
+  const files = walkSources(SRC_DIR, []);
+  const keys = new Map();
+  const dynamicHits = [];
+  for (const file of files) {
+    const rel = path.relative(SRC_DIR, file).replace(/\\/g, "/");
+    const text = fs.readFileSync(file, "utf8");
+    for (const m of text.matchAll(/\.i18n\.([A-Za-z0-9_]+)/g)) {
+      keys.set(m[1], (keys.get(m[1]) || 0) + 1);
+    }
+    for (const m of text.matchAll(/i18n\s*\[/g)) {
+      dynamicHits.push(`${rel}: ${text.slice(Math.max(0, m.index - 40), m.index + 60).trim()}`);
+    }
+  }
+  return {keys, dynamicHits, fileCount: files.length};
+}
+
+function loadLang(file) {
+  return JSON.parse(fs.readFileSync(file, "utf8"));
+}
+
+test("i18n: 源码中不允许动态 key 访问（i18n[expr]）", () => {
+  const {dynamicHits} = collectReferencedKeys();
+  assert.deepEqual(
+    dynamicHits,
+    [],
+    "检测到动态 i18n 访问，静态扫描无法覆盖；请改为字面量访问或扩展本测试：\n" + dynamicHits.join("\n"),
+  );
+});
+
+test("i18n: 源码中至少引用了 100 个 key（扫描有效性自检）", () => {
+  const {keys, fileCount} = collectReferencedKeys();
+  assert.ok(fileCount >= 1, "未扫描到任何 src 源文件");
+  assert.ok(
+    keys.size >= 100,
+    `仅扫描到 ${keys.size} 个 i18n key 引用（预期 >= 100），扫描正则可能失效`,
+  );
+});
+
+for (const langFile of LANG_FILES) {
+  const langName = path.basename(langFile);
+  test(`i18n: 所有被源码引用的 key 均存在于 ${langName}`, () => {
+    const {keys} = collectReferencedKeys();
+    const lang = loadLang(langFile);
+    const missing = [...keys.keys()].filter((k) => !(k in lang));
+    assert.deepEqual(
+      missing,
+      [],
+      `${langName} 缺少以下被引用的 key（共 ${missing.length} 个）：\n` +
+        missing.map((k) => `  ${k}（引用 ${keys.get(k)} 次）`).join("\n"),
+    );
+  });
+
+  test(`i18n: ${langName} 所有 key 的值均为非空字符串`, () => {
+    const lang = loadLang(langFile);
+    const empty = Object.entries(lang)
+      .filter(([, v]) => typeof v !== "string" || v.trim() === "")
+      .map(([k]) => k);
+    assert.deepEqual(empty, [], `${langName} 中以下 key 的值为空或非字符串：${empty.join(", ")}`);
+  });
+
+  test(`i18n: ${langName} 的 key 均为合法标识符（与静态扫描约定一致）`, () => {
+    const lang = loadLang(langFile);
+    const invalid = Object.keys(lang).filter((k) => !/^[A-Za-z][A-Za-z0-9_]*$/.test(k));
+    assert.deepEqual(
+      invalid,
+      [],
+      `${langName} 中以下 key 不是合法标识符，无法被 xxx.i18n.KEY 形式引用：${invalid.join(", ")}`,
+    );
+  });
+}
+
+test("i18n: zh-CN 与 en 的 key 集合完全一致", () => {
+  const zh = loadLang(LANG_FILES[0]);
+  const en = loadLang(LANG_FILES[1]);
+  const zhKeys = new Set(Object.keys(zh));
+  const enKeys = new Set(Object.keys(en));
+  const onlyZh = [...zhKeys].filter((k) => !enKeys.has(k));
+  const onlyEn = [...enKeys].filter((k) => !zhKeys.has(k));
+  assert.deepEqual(
+    {onlyZh, onlyEn},
+    {onlyZh: [], onlyEn: []},
+    `语言文件 key 不一致：\n  仅在 zh-CN 中：${onlyZh.join(", ") || "（无）"}\n  仅在 en 中：${onlyEn.join(", ") || "（无）"}`,
+  );
+});
+
+// 静态扫描已禁止动态 key 访问，因此"源码未引用"即等价于"死 key"。
+// 若确需保留预留 key，请登记到 ALLOWED_UNUSED 并注明理由，避免
+// 双语文案在无消费的情况下持续膨胀归档体积。
+const ALLOWED_UNUSED = [
+  // 命令面板命令名（T-6327）：思源运行时按 addCommand 的 langKey 动态查
+  // i18n[langKey]，源码中不存在 .i18n.openSettings 字面引用。
+  "openSettings",
+  "openJournal",
+  // 全量命令面板（Ctrl+Alt+P）命令名：经 safeRegisterPluginCommand langKey 动态查，源码无 .i18n.commandPalette 字面引用。
+  "commandPalette",
+  "configureExternalBridge",
+  // T-6821：剪贴板入口命令名，同上经 addCommand langKey 动态查。
+  "clipboardEntry",
+  // T-6820/R3：marks 书签命令名（setSessionMark/jumpToSessionMark），同上。
+  "setSessionMark",
+  "jumpToSessionMark",
+  // T-6845/T-6856：快捷动作目录标签（quick-actions.js 的 langKey 字段）经
+  // resolveQuickActionLabel 动态查表，源码无 .i18n.actionXxx 字面引用。
+  // 覆盖性由 quick-actions.test.cjs 的"目录 langKey 必须双语存在"校验保证。
+  "actionSwitcher",
+  "actionSearch",
+  "actionJournal",
+  "actionSettings",
+  "actionHome",
+  "actionQuickCapture",
+  "actionPreviousTab",
+  "actionNextTab",
+  "actionScrollTop",
+  "actionScrollBottom",
+  "actionSyncNow",
+  "actionInsertTemplate",
+  "actionCycleDocSet",
+  "actionCycleBallPreset",
+  "actionThrowWindow",
+  "actionHideKeyboard",
+  "actionJumpBack",
+  "actionJumpForward",
+  "actionMarkSet",
+  "actionMarkJump",
+  "actionClipboard",
+  "actionCloseTab",
+  "actionOutline",
+  "actionBookmark",
+  "actionTag",
+  "actionInbox",
+  "actionBacklinks",
+  "actionRecentDocs",
+  "actionRecentClosed",
+  "actionRiffCard",
+  "actionEditReadonly",
+  "actionFileTree",
+  "actionMainMenu",
+  "actionGlobalSearch",
+  // T-7300/T-7301：代码片段商店的导入策略仍经动态 t("snippet...") 消费
+  "snippetImportMerge",
+  "snippetImportFork",
+  "snippetImportOverwrite",
+  // T-7341：次级动作画板（Action Palette）i18n 资源键，由 getBuiltinActionDefinitions 动态映射
+  "actionPaletteTitle",
+  "actionPaletteSearch",
+  "actionPaletteEmpty",
+  "actionPaletteHint",
+  "actionPaletteOpenInActive",
+  "actionPaletteOpenInRight",
+  "actionPaletteOpenInBottom",
+  "actionPaletteOpenInPreview",
+  "actionPaletteRestoreDocSet",
+  "actionPaletteCopyBlockLink",
+  "actionPaletteCopyMarkdownLink",
+  "actionPaletteCopyId",
+  "actionPaletteCopyPath",
+  "actionPalettePinTab",
+  "actionPaletteUnpinTab",
+  "actionPaletteFavoriteTab",
+  "actionPaletteUnfavoriteTab",
+  "actionPaletteCloseTab",
+  "actionPaletteOpenInReader",
+  "actionPaletteOpenInMedia",
+  "actionPaletteSaveAsDocSet",
+  "actionPaletteUndoClosedTab",
+  "actionKeepRoaming",
+  "actionPaletteKeepRoaming",
+  "actionPaletteGleanClip",
+  "actionPaletteCommonSnippet",
+  "actionPaletteCardsCreate",
+  "actionPaletteTaskHorizon",
+  "actionPaletteExportTabs",
+  "actionStackCapture",
+  "actionPaletteStackCapture",
+  "snippetBuiltinCalloutName",
+  "snippetBuiltinCalloutDescription",
+  "snippetBuiltinMulticolumnName",
+  "snippetBuiltinMulticolumnDescription",
+  "snippetBuiltinFoldheadingName",
+  "snippetBuiltinFoldheadingDescription",
+  "snippetBuiltinMathblockName",
+  "snippetBuiltinMathblockDescription",
+  "snippetBuiltinQuoteGoldName",
+  "snippetBuiltinQuoteGoldDescription",
+  "snippetBuiltinWavyUnderlineName",
+  "snippetBuiltinWavyUnderlineDescription",
+  "snippetBuiltinDropcapName",
+  "snippetBuiltinDropcapDescription",
+  "snippetBuiltinGradientBarName",
+  "snippetBuiltinGradientBarDescription",
+  "snippetBuiltinNeonglowName",
+  "snippetBuiltinNeonglowDescription",
+  "snippetBuiltinFrostedglassName",
+  "snippetBuiltinFrostedglassDescription",
+  "snippetBuiltinCodemacName",
+  "snippetBuiltinCodemacDescription",
+  "snippetBuiltinTablecellName",
+  "snippetBuiltinTablecellDescription",
+  "snippetBuiltinSelectionglowName",
+  "snippetBuiltinSelectionglowDescription",
+  "snippetBuiltinRainbowbracketsName",
+  "snippetBuiltinRainbowbracketsDescription",
+  "snippetGistRateLimit",
+  "snippetGistRateLimitHint",
+  "snippetGistRetryHint",
+  "snippetBuiltinTaskbounceName",
+  "snippetBuiltinTaskbounceDescription",
+  "snippetBuiltinBoldaccentName",
+  "snippetBuiltinBoldaccentDescription",
+  "snippetBuiltinInlinemathName",
+  "snippetBuiltinInlinemathDescription",
+  "snippetBuiltinPanguspaceName",
+  "snippetBuiltinPanguspaceDescription",
+  "snippetBuiltinCodevibrantName",
+  "snippetBuiltinCodevibrantDescription",
+  "snippetBuiltinBlockrefaccentName",
+  "snippetBuiltinBlockrefaccentDescription",
+  "snippetBuiltinTagpillName",
+  "snippetBuiltinTagpillDescription",
+  "snippetBuiltinExtlinkiconName",
+  "snippetBuiltinExtlinkiconDescription",
+  "snippetBuiltinFoldcalloutName",
+  "snippetBuiltinFoldcalloutDescription",
+  "snippetBuiltinHighlighterName",
+  "snippetBuiltinHighlighterDescription",
+  "snippetBuiltinTaskpendingName",
+  "snippetBuiltinTaskpendingDescription",
+  "snippetBuiltinNumlistaccentName",
+  "snippetBuiltinNumlistaccentDescription",
+  "snippetBuiltinQuoteaccentName",
+  "snippetBuiltinQuoteaccentDescription",
+  "snippetBuiltinDividerpulseName",
+  "snippetBuiltinDividerpulseDescription",
+  "snippetBuiltinInlinecodecardName",
+  "snippetBuiltinInlinecodecardDescription",
+  "snippetBuiltinEmbedglowName",
+  "snippetBuiltinEmbedglowDescription",
+  "snippetBuiltinScriptsaccentName",
+  "snippetBuiltinScriptsaccentDescription",
+  "snippetBuiltinMediaroundedName",
+  "snippetBuiltinMediaroundedDescription",
+  "snippetBuiltinCalloutcoloredName",
+  "snippetBuiltinCalloutcoloredDescription",
+  "snippetBuiltinLinkdashedName",
+  "snippetBuiltinLinkdashedDescription",
+  "snippetBuiltinCalloutgradientName",
+  "snippetBuiltinCalloutgradientDescription",
+  "snippetBuiltinHrdotsName",
+  "snippetBuiltinHrdotsDescription",
+  "snippetBuiltinTaskcheckboxName",
+  "snippetBuiltinTaskcheckboxDescription",
+  "snippetBuiltinTablefirstcolName",
+  "snippetBuiltinTablefirstcolDescription",
+  "snippetBuiltinTaskprogressName",
+  "snippetBuiltinTaskprogressDescription",
+  "snippetBuiltinTaskbadgeName",
+  "snippetBuiltinTaskbadgeDescription",
+  "snippetBuiltinQuotehangingName",
+  "snippetBuiltinQuotehangingDescription",
+  "snippetBuiltinInlineneonName",
+  "snippetBuiltinInlineneonDescription",
+  "snippetBuiltinEmbedshadowName",
+  "snippetBuiltinEmbedshadowDescription",
+  "snippetBuiltinTaggradientName",
+  "snippetBuiltinTaggradientDescription",
+  "snippetBuiltinImgcardName",
+  "snippetBuiltinImgcardDescription",
+  "snippetBuiltinCodelinerightName",
+  "snippetBuiltinCodelinerightDescription",
+  "snippetBuiltinQuotehoverName",
+  "snippetBuiltinQuotehoverDescription",
+  "snippetBuiltinListbulletpulseName",
+  "snippetBuiltinListbulletpulseDescription",
+  "snippetBuiltinCalloutinfoName",
+  "snippetBuiltinCalloutinfoDescription",
+  "snippetBuiltinMarkgradientName",
+  "snippetBuiltinMarkgradientDescription",
+  "snippetExportDone",
+];
+
+test("i18n: 语言文件中不允许存在源码未引用的死 key", (t) => {
+  const {keys} = collectReferencedKeys();
+  const zh = loadLang(LANG_FILES[0]);
+  const en = loadLang(LANG_FILES[1]);
+  const zhOnly = Object.keys(zh).filter((k) => !keys.has(k) && !ALLOWED_UNUSED.includes(k));
+  const enOnly = Object.keys(en).filter((k) => !keys.has(k) && !ALLOWED_UNUSED.includes(k));
+  assert.deepEqual(
+    {zhOnly, enOnly},
+    {zhOnly: [], enOnly: []},
+    "发现死 key（定义了但源码未引用），请从两份语言文件同步删除或登记白名单：\n" +
+      [...new Set([...zhOnly, ...enOnly])].map((k) => `  ${k}`).join("\n"),
+  );
+  if (ALLOWED_UNUSED.length > 0) {
+    t.diagnostic(`allowlisted reserved keys: ${ALLOWED_UNUSED.join(", ")}`);
+  }
+});
+
+test("i18n: home refresh summary stays bounded and preserves stable placeholders", () => {
+  for (const langFile of LANG_FILES) {
+    const lang = loadLang(langFile);
+    const summary = lang.homeRefreshFailed;
+    assert.equal(typeof summary, "string");
+    assert.ok(summary.length <= 128, `${path.basename(langFile)} homeRefreshFailed exceeds 128 characters`);
+    for (const placeholder of ["{count}", "{timeout}", "{failed}", "{other}"]) {
+      assert.ok(summary.includes(placeholder), `${path.basename(langFile)} missing ${placeholder}`);
+    }
+  }
+});

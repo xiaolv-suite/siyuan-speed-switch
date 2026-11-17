@@ -1,0 +1,183 @@
+"use strict";
+
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const {buildSnippetDiff, summarizeDiff, applyDiffHunks, DIFF_MAX_LINES} = require("../src/snippet-diff.js");
+
+const rowsOf = (diff, type) => diff.rows.filter((row) => row.type === type).map((row) => row.text);
+
+test("snippet diff: identical content yields zero hunks", () => {
+    const diff = buildSnippetDiff("p { color: red; }", "p { color: red; }");
+    assert.equal(diff.degraded, false);
+    assert.deepEqual(diff.hunks, []);
+    assert.equal(diff.added, 0);
+    assert.equal(diff.removed, 0);
+});
+
+test("snippet diff: pure insertion appends ins rows with target line numbers", () => {
+    const diff = buildSnippetDiff("a\nb", "a\nb\nc");
+    assert.deepEqual(rowsOf(diff, "ins"), ["c"]);
+    assert.deepEqual(rowsOf(diff, "del"), []);
+    assert.equal(diff.rows.at(-1).bLine, 3);
+    assert.equal(diff.added, 1);
+});
+
+test("snippet diff: pure deletion keeps source line numbers", () => {
+    const diff = buildSnippetDiff("a\nb\nc", "a");
+    assert.deepEqual(rowsOf(diff, "del"), ["b", "c"]);
+    assert.deepEqual(rowsOf(diff, "ins"), []);
+    assert.equal(diff.rows[1].aLine, 2);
+    assert.equal(diff.removed, 2);
+});
+
+test("snippet diff: modified line pairs del and ins", () => {
+    const diff = buildSnippetDiff("color: red;", "color: blue;");
+    assert.deepEqual(rowsOf(diff, "del"), ["color: red;"]);
+    assert.deepEqual(rowsOf(diff, "ins"), ["color: blue;"]);
+});
+
+test("snippet diff: reordered lines become del plus ins, not silent context", () => {
+    const diff = buildSnippetDiff("x\ny", "y\nx");
+    assert.ok(diff.hunks.length >= 1);
+    // LCS 保留一行作 context（确定性 tie-break 删除先行的 x），另一行呈 del+ins。
+    assert.deepEqual(rowsOf(diff, "del"), ["x"]);
+    assert.deepEqual(rowsOf(diff, "ins"), ["x"]);
+    assert.deepEqual(rowsOf(diff, "context"), ["y"]);
+});
+
+test("snippet diff: empty baseline or candidate stays bounded and typed", () => {
+    const insertAll = buildSnippetDiff("", "p {}");
+    assert.deepEqual(rowsOf(insertAll, "ins"), ["p {}"]);
+    const deleteAll = buildSnippetDiff("p {}", "");
+    assert.deepEqual(rowsOf(deleteAll, "del"), ["p {}"]);
+    const bothEmpty = buildSnippetDiff("", "");
+    assert.deepEqual(bothEmpty.hunks, []);
+});
+
+test("snippet diff: distant changes split into separate hunks with context", () => {
+    const before = Array.from({length: 30}, (_, i) => `line-${i}`).join("\n");
+    const after = before
+        .replace("line-2", "line-2 CHANGED")
+        .replace("line-25", "line-25 CHANGED");
+    const diff = buildSnippetDiff(before, after);
+    assert.equal(diff.hunks.length, 2, "changes 23 lines apart must not merge");
+    for (const hunk of diff.hunks) {
+        assert.ok(hunk.rows.length >= 2, "each hunk carries context rows");
+        assert.ok(hunk.rows.some((row) => row.type !== "context"), "each hunk contains its change");
+    }
+});
+
+test("snippet diff: nearby changes merge into one hunk", () => {
+    const before = "a\nb\nc\nd\ne\nf";
+    const after = "a\nB\nc\nD\ne\nf";
+    const diff = buildSnippetDiff(before, after);
+    assert.equal(diff.hunks.length, 1, "changes within context distance must merge");
+});
+
+test("snippet diff: oversized input degrades to a single whole-block hunk without rows", () => {
+    const big = Array.from({length: DIFF_MAX_LINES + 1}, (_, i) => `l${i}`).join("\n");
+    const diff = buildSnippetDiff("small", big);
+    assert.equal(diff.degraded, true);
+    assert.equal(diff.hunks.length, 1);
+    assert.deepEqual(diff.rows, [], "degraded diff must not expand rows");
+    assert.equal(diff.added, DIFF_MAX_LINES + 1);
+    assert.equal(diff.removed, 1);
+});
+
+test("snippet diff: summary reports hunks, line delta and byte delta", () => {
+    const before = "a\nb\nc";
+    const after = "a\nB\nc\nd";
+    const diff = buildSnippetDiff(before, after);
+    const summary = summarizeDiff(before, after, diff);
+    assert.equal(summary.hunks, diff.hunks.length);
+    assert.equal(summary.added, 2);
+    assert.equal(summary.removed, 1);
+    assert.equal(summary.byteDelta, Buffer.byteLength(after) - Buffer.byteLength(before));
+    assert.equal(summarizeDiff(before, before, buildSnippetDiff(before, before)).byteDelta, 0);
+});
+
+test("diff hunks: applying all hunks reproduces the candidate", () => {
+    const before = "a\nb\nc";
+    const after = "a\nB\nc\nd";
+    const diff = buildSnippetDiff(before, after);
+    assert.equal(applyDiffHunks(diff, diff.hunks.map(() => true)), after);
+    assert.equal(applyDiffHunks(diff, diff.hunks.map(() => false)), before, "rejecting everything restores the baseline");
+});
+
+test("diff hunks: rejecting a deletion keeps the original line", () => {
+    const before = "keep\nremove-me\nkeep-too";
+    const after = "keep\nreplacement\nkeep-too";
+    const diff = buildSnippetDiff(before, after);
+    assert.equal(diff.hunks.length, 1);
+    const rejected = applyDiffHunks(diff, [false]);
+    assert.equal(rejected, before, "rejected del rows must survive, rejected ins rows must drop");
+    const accepted = applyDiffHunks(diff, [true]);
+    assert.equal(accepted, after);
+});
+
+test("diff hunks: mixed acceptance applies only the selected hunks", () => {
+    const before = ["one", "two", ...Array.from({length: 9}, (_, i) => `mid-${i}`), "nine", "ten"].join("\n");
+    const after = before.replace("two", "TWO").replace("nine", "NINE");
+    const diff = buildSnippetDiff(before, after);
+    assert.equal(diff.hunks.length, 2, "changes beyond context distance must form two hunks");
+    const merged = applyDiffHunks(diff, [true, false]);
+    assert.ok(merged.includes("TWO"), "accepted hunk applies");
+    assert.ok(merged.includes("nine"), "rejected hunk keeps its original line");
+    assert.ok(!merged.includes("NINE"), "rejected hunk drops its insertion");
+});
+
+test("diff hunks: degraded diffs and arity mismatches refuse partial application", () => {
+    const big = Array.from({length: DIFF_MAX_LINES + 1}, (_, i) => `l${i}`).join("\n");
+    assert.equal(applyDiffHunks(buildSnippetDiff("s", big), [true]), null);
+    const diff = buildSnippetDiff("a\nb", "a\nB");
+    assert.equal(applyDiffHunks(diff, []), null);
+    assert.equal(applyDiffHunks(null, [true]), null);
+});
+
+test("T-7325: snippet diff handles multi-hunk selective merge, line ending normalization and negative probes", () => {
+    // 1. CRLF 与 LF 跨平台换行归一化验证
+    const crlfBefore = "item1\r\nitem2\r\nitem3";
+    const lfAfter = "item1\nitem2-modified\nitem3";
+    const crlfDiff = buildSnippetDiff(crlfBefore, lfAfter);
+    assert.equal(crlfDiff.hunks.length, 1);
+    assert.equal(crlfDiff.added, 1);
+    assert.equal(crlfDiff.removed, 1);
+
+    // 2. 三 Hunk 选择性合并：[true, false, true]
+    const base = [
+        "hunk1-old",
+        ...Array.from({length: 8}, (_, i) => `sep1-${i}`),
+        "hunk2-old",
+        ...Array.from({length: 8}, (_, i) => `sep2-${i}`),
+        "hunk3-old",
+    ].join("\n");
+    const candidate = base
+        .replace("hunk1-old", "hunk1-NEW")
+        .replace("hunk2-old", "hunk2-NEW")
+        .replace("hunk3-old", "hunk3-NEW");
+    const threeHunkDiff = buildSnippetDiff(base, candidate);
+    assert.equal(threeHunkDiff.hunks.length, 3, "三个远距离修改必须拆分成 3 个独立 Hunk");
+
+    const partialMerged = applyDiffHunks(threeHunkDiff, [true, false, true]);
+    assert.ok(partialMerged.includes("hunk1-NEW"), "Hunk 1 采纳生效");
+    assert.ok(partialMerged.includes("hunk2-old"), "Hunk 2 拒绝保持原始基线");
+    assert.ok(!partialMerged.includes("hunk2-NEW"), "Hunk 2 拒绝绝不混入候选");
+    assert.ok(partialMerged.includes("hunk3-NEW"), "Hunk 3 采纳生效");
+
+    // 全量拒绝时 100% 还原基线
+    const fullyRejected = applyDiffHunks(threeHunkDiff, [false, false, false]);
+    assert.equal(fullyRejected, base, "全部拒绝必须毫无残留地 100% 还原原始基线");
+
+    // 3. 负向探针 1: 被拒绝的 Hunk 若泄露了新增行，必须触发断言失败
+    assert.throws(() => {
+        const fakeMergedWithLeak = partialMerged + "\nhunk2-NEW";
+        assert.equal(fakeMergedWithLeak.includes("hunk2-NEW"), false, "拒绝 Hunk 泄露探针");
+    }, /ERR_ASSERTION/);
+
+    // 4. 负向探针 2: 接受标志数组长度与 Hunk 数量不一致时必须拒绝应用返回 null
+    assert.equal(applyDiffHunks(threeHunkDiff, [true, false]), null, "标志数量不足必须拒绝");
+    assert.throws(() => {
+        const invalidArityResult = applyDiffHunks(threeHunkDiff, [true, false]);
+        assert.notEqual(invalidArityResult, null, "参数数量不匹配误放行探针");
+    }, /ERR_ASSERTION/);
+});
