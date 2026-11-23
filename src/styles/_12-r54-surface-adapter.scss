@@ -5,11 +5,11 @@
 // 数据源或事件。三面板仍保留各自的工作方式，只共享材质、间距、边界和响应式节奏。
 
 :is(.speed-switch, .sw-home, .sw-studio, .sw-platform-shell) {
-    --sw-r54-canvas: color-mix(in srgb, var(--b3-theme-background) 90%, var(--b3-theme-primary) 3%);
-    --sw-r54-surface: var(--b3-theme-surface, var(--b3-theme-background));
-    --sw-r54-soft: color-mix(in srgb, var(--b3-theme-surface) 78%, var(--b3-theme-background));
-    --sw-r54-line: color-mix(in srgb, var(--b3-border-color) 78%, transparent);
-    --sw-r54-line-soft: color-mix(in srgb, var(--b3-border-color) 56%, transparent);
+    --sw-r54-canvas: color-mix(in srgb, var(--sw-color-bg) 90%, var(--sw-color-accent) 3%);
+    --sw-r54-surface: var(--sw-color-surface, var(--sw-color-bg));
+    --sw-r54-soft: color-mix(in srgb, var(--sw-color-surface) 78%, var(--sw-color-bg));
+    --sw-r54-line: color-mix(in srgb, var(--sw-color-line) 78%, transparent);
+    --sw-r54-line-soft: color-mix(in srgb, var(--sw-color-line) 56%, transparent);
     --sw-r54-radius-card: 16px;
     --sw-r54-radius-control: 12px;
     // R54 names remain compatibility aliases; the shared spacing scale owns values.
@@ -24,7 +24,7 @@
 
 // R54 的普通卡片主要依靠明度、边框和间距建立层次；阴影只留给真正的工作面。
 :is(.sw-platform-surface, .sw-studio, .sw-home) {
-    color: var(--b3-theme-on-background);
+    color: var(--sw-color-text);
     background: var(--sw-r54-canvas);
 }
 
@@ -71,6 +71,16 @@
         border-radius: var(--sw-r54-radius-control);
     }
 
+    /* DL2 阶段3：桌面空态吉祥物（受 mascot 偏好门控，关闭回退线性 emoji） */
+    .sw__empty-mascot {
+        color: var(--sw-color-accent);
+    }
+
+    .sw__empty-mascot svg {
+        width: 76px;
+        height: 67px;
+    }
+
     .sw__empty {
         min-height: 220px;
         padding: 40px var(--sw-r54-space-4);
@@ -102,7 +112,7 @@
     :is(.sw__tab-preview, .sw__doc-results, .sw__unified-section).sw--with-preview .sw__doc-preview {
         border: 1px solid var(--sw-r54-line);
         border-radius: var(--sw-r54-radius-control);
-        background: var(--sw-card-float-bg, var(--b3-theme-surface));
+        background: var(--sw-card-float-bg, var(--sw-color-surface));
         box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
         display: flex;
         flex-direction: column;
@@ -116,7 +126,7 @@
 
         .sw__doc-preview-header {
             flex-shrink: 0;
-            background: var(--sw-card-float-bg, var(--b3-theme-surface));
+            background: var(--sw-card-float-bg, var(--sw-color-surface));
             padding-block: var(--sw-space-xs, 4px) var(--sw-space-md, 8px);
         }
 
@@ -170,7 +180,7 @@
         transition: border-color $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease, transform $sw-dur-fast $sw-ease;
 
         &:hover {
-            border-color: color-mix(in srgb, var(--b3-theme-primary) 34%, var(--sw-r54-line));
+            border-color: color-mix(in srgb, var(--sw-color-accent) 34%, var(--sw-r54-line));
             box-shadow: 0 8px 24px color-mix(in srgb, #29304c 10%, transparent);
         }
     }
@@ -193,7 +203,7 @@
 
         > h2 {
             margin: 0;
-            color: var(--b3-theme-on-background);
+            color: var(--sw-color-text);
             font-size: 14px;
             font-weight: var(--sw-weight-emphasis, 650);
             line-height: var(--sw-leading-ui, 1.4);
@@ -610,8 +620,8 @@
             opacity: 0.8;
         }
         &[data-state="error"] {
-            border-top-color: color-mix(in srgb, var(--b3-theme-error) 40%, var(--b3-border-color));
-            background: color-mix(in srgb, var(--b3-theme-error) 6%, transparent);
+            border-top-color: color-mix(in srgb, var(--sw-color-error) 40%, var(--sw-color-line));
+            background: color-mix(in srgb, var(--sw-color-error) 6%, transparent);
         }
     }
 
@@ -623,7 +633,7 @@
         font-size: 0;
         line-height: 0;
     }
-    &:not(.sw-home--mobile) .sw__home-source-health.is-fresh { background: var(--sw-platform-success, var(--b3-theme-success, #3b9861)); }
+    &:not(.sw-home--mobile) .sw__home-source-health.is-fresh { background: var(--sw-platform-success, var(--sw-color-success, #3b9861)); }
     &:not(.sw-home--mobile) .sw__home-source-health.is-cached { border-style: dashed; }
 
     // 默认七卡先展示内容；完整更新时间保留在标题提示与可读描述中。
@@ -668,7 +678,7 @@
 
             &:active { transform: scale(0.88); }
             &.is-done {
-                box-shadow: 0 0 6px color-mix(in srgb, var(--b3-theme-primary) 40%, transparent);
+                box-shadow: 0 0 6px color-mix(in srgb, var(--sw-color-accent) 40%, transparent);
             }
         }
         .sw__home-module.is-empty-content[data-module-id="today-tasks"] {
@@ -688,10 +698,10 @@
 
     // 时间铭牌：Bento 现代材质、大数字科技感排版与双层柔影
     &:not(.sw-home--mobile) .sw-home__cell[data-module-id="external-local-time"] {
-        --sw-home-cell-fg: var(--b3-theme-on-surface, var(--b3-theme-on-background));
+        --sw-home-cell-fg: var(--sw-color-text-subtle, var(--sw-color-text));
         color: var(--sw-home-cell-fg);
-        background: var(--sw-card-float-bg, var(--b3-theme-surface));
-        border: 1px solid color-mix(in srgb, var(--sw-platform-accent) 25%, var(--b3-border-color));
+        background: var(--sw-card-float-bg, var(--sw-color-surface));
+        border: 1px solid color-mix(in srgb, var(--sw-platform-accent) 25%, var(--sw-color-line));
         box-shadow: var(--sw-shadow-bento);
 
         .sw__home-stat { min-height: 24px; }
@@ -701,7 +711,7 @@
             font-variant-numeric: tabular-nums;
             letter-spacing: -0.03em;
             font-weight: 750;
-            color: var(--sw-platform-accent, var(--b3-theme-primary));
+            color: var(--sw-platform-accent, var(--sw-color-accent));
         }
         .sw__home-stat-label { display: none; }
         .sw__home-module-list .sw__home-module-item-action {
@@ -717,7 +727,7 @@
         .sw__home-day-progress {
             height: 2px;
             margin: var(--sw-space-2xs, 2px) 0 0;
-            background: color-mix(in srgb, var(--b3-theme-on-background) 8%, transparent);
+            background: color-mix(in srgb, var(--sw-color-text) 8%, transparent);
         }
         .sw__home-day-progress-bar { height: 100%; }
     }
@@ -767,10 +777,10 @@
     // 可选效果组件也遵守 compact 的单值摘要语言；保留配置、折叠和异常入口，
     // 只收紧常规内容的材质、字号与行距，避免天气/倒数把小窗口撑成海报卡。
     &:not(.sw-home--mobile) .sw-home__cell:is([data-module-id="external-weather-open-meteo"], [data-module-id="countdown"]) {
-        color: var(--b3-theme-on-background);
-        background: var(--b3-theme-background);
+        color: var(--sw-color-text);
+        background: var(--sw-color-bg);
         background-image: none;
-        border: 1px solid var(--b3-border-color);
+        border: 1px solid var(--sw-color-line);
         .sw-home__cell-body { padding: var(--sw-space-xs, 4px) var(--sw-space-sm, 6px); }
         .sw__home-module-header { min-height: 24px; padding: 0; margin-bottom: var(--sw-space-xs, 4px); }
         .sw__home-module-header .sw__home-module-title { font-size: var(--sw-font-sm, 12px); }
@@ -799,13 +809,13 @@
 
     // 天气 compact：中性表面 + 温度铭牌 + 四列短预报；城市和来源仍可读但不抢主值。
     &:not(.sw-home--mobile) .sw-home__cell[data-module-id="external-weather-open-meteo"] {
-        --sw-home-accent: var(--b3-theme-primary);
+        --sw-home-accent: var(--sw-color-accent);
 
         :is(.sw__home-module-header, .sw__home-module-title, .sw__home-module-meta, .sw__home-stat-label, .sw__home-stat-value) {
-            color: var(--b3-theme-on-background);
+            color: var(--sw-color-text);
         }
         .sw__home-module-icon {
-            color: var(--b3-theme-primary);
+            color: var(--sw-color-accent);
         }
         .sw__home-module-context {
             display: block;
@@ -814,7 +824,7 @@
             padding: 0;
             overflow: hidden;
             background: transparent;
-            color: var(--b3-theme-on-surface-light);
+            color: var(--sw-color-text-muted);
             font-size: var(--sw-font-xs, 11px);
             line-height: var(--sw-leading-compact, 1.2);
             text-align: end;
@@ -853,14 +863,14 @@
             text-overflow: ellipsis;
         }
         .sw__home-module-item-secondary {
-            color: var(--b3-theme-on-surface-light);
+            color: var(--sw-color-text-muted);
             margin-left: var(--sw-space-2xs, 2px);
         }
         .sw__home-module-item.has-link { grid-column: 1 / -1; }
         .sw__home-module-item.has-link .sw__home-module-item-action {
             min-height: 12px;
             line-height: 1;
-            color: var(--b3-theme-on-surface-light);
+            color: var(--sw-color-text-muted);
             font-size: var(--sw-font-2xs, 10px);
             opacity: 0.82;
         }
@@ -878,7 +888,7 @@
         .sw__home-stat-label {
             min-width: 0;
             overflow: hidden;
-            color: var(--b3-theme-on-surface-light);
+            color: var(--sw-color-text-muted);
             font-size: var(--sw-font-xs, 11px);
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -889,9 +899,9 @@
             align-items: center;
             margin: 0 0 0 auto;
             padding: 1px var(--sw-space-xs, 4px);
-            border: 1px solid color-mix(in srgb, var(--b3-theme-primary) 24%, var(--b3-border-color));
+            border: 1px solid color-mix(in srgb, var(--sw-color-accent) 24%, var(--sw-color-line));
             border-radius: 999px;
-            color: var(--b3-theme-primary);
+            color: var(--sw-color-accent);
             font-size: var(--sw-font-2xs, 10px);
             font-weight: var(--sw-weight-medium, 500);
             line-height: 1.2;
@@ -900,7 +910,7 @@
         .sw__home-module-list .sw__home-module-item-action {
             min-height: var(--sw-control-h-sm, 20px);
             padding: 0;
-            color: var(--b3-theme-on-surface-light);
+            color: var(--sw-color-text-muted);
             font-size: var(--sw-font-xs, 11px);
             line-height: var(--sw-leading-compact, 1.2);
         }
@@ -940,19 +950,19 @@
         min-height: 40px;
         padding: var(--sw-space-xs, 4px) var(--sw-space-md, 8px) !important;
         gap: var(--sw-space-xs, 4px) !important;
-        background: var(--b3-theme-background, #ffffff) !important;
+        background: var(--sw-color-bg, #ffffff) !important;
 
         .sw__search-wrap { flex: 1 1 0; min-width: 120px; }
         .sw__search {
             height: var(--sw-control-h, 34px);
             font-size: 16px !important;
-            background: color-mix(in srgb, var(--b3-theme-background, #ffffff) 96%, #0f172a) !important;
-            border: 1px solid color-mix(in srgb, var(--b3-theme-on-background, #0f172a) 10%, transparent) !important;
+            background: color-mix(in srgb, var(--sw-color-bg, #ffffff) 96%, #0f172a) !important;
+            border: 1px solid color-mix(in srgb, var(--sw-color-text, #0f172a) 10%, transparent) !important;
             border-radius: 10px !important;
         }
         .sw__search:focus {
-            background: var(--b3-theme-background, #ffffff) !important;
-            border-color: var(--b3-theme-primary, #2563eb) !important;
+            background: var(--sw-color-bg, #ffffff) !important;
+            border-color: var(--sw-color-accent, #2563eb) !important;
         }
         .sw__sort-btn { width: 38px; min-width: 38px; height: 38px; }
 
@@ -977,7 +987,7 @@
     .sw__mode-chips-bar {
         min-height: 36px;
         padding: var(--sw-space-2xs, 2px) var(--sw-space-md, 8px);
-        background: var(--b3-theme-background, #ffffff) !important;
+        background: var(--sw-color-bg, #ffffff) !important;
         .sw__mode-chip {
             min-height: 30px;
             height: 30px;
@@ -993,8 +1003,8 @@
         padding: var(--sw-space-md, 8px) var(--sw-space-md, 8px) var(--sw-space-lg, 12px);
 
         .sw__card.sw__mobile-card {
-            background: var(--b3-theme-surface) !important;
-            border: 1px solid var(--b3-border-color, color-mix(in srgb, var(--b3-theme-on-background, #0f172a) 12%, transparent)) !important;
+            background: var(--sw-color-surface) !important;
+            border: 1px solid var(--sw-color-line, color-mix(in srgb, var(--sw-color-text, #0f172a) 12%, transparent)) !important;
             box-shadow: var(--sw-shadow-card, 0 2px 8px -2px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.03)) !important;
             border-radius: 12px !important;
         }
@@ -1017,12 +1027,19 @@
         height: 40px !important;
         padding: 0 var(--sw-space-md, 8px) !important;
         gap: var(--sw-space-sm, 6px) !important;
-        background: var(--b3-theme-background, #ffffff) !important;
+        background: var(--sw-color-bg, #ffffff) !important;
     }
 
     .sw-platform-header__brand-mark { width: 28px; height: 28px; flex: 0 0 28px; font-size: var(--sw-font-sm, 12px); }
 
     .sw-platform-surface-nav {
+        grid-column: auto !important;
+        grid-row: auto !important;
+        grid-area: nav !important;
+        position: static !important;
+        left: auto !important;
+        top: auto !important;
+        transform: none !important;
         justify-self: center !important;
         width: auto !important;
         max-width: 100%;
@@ -1033,7 +1050,8 @@
     }
 
     .sw-platform-surface-nav__item {
-        flex: 0 1 auto;
+        flex: 1 1 0;
+        min-width: 44px;
         min-height: 30px !important;
         height: 30px;
         padding: 0 10px !important;
@@ -1405,12 +1423,12 @@
     overflow-x: hidden;
     box-sizing: border-box;
 
-    &__meta { margin: 0; font-size: var(--sw-font-sm, 12px); color: var(--b3-theme-on-surface-light); }
+    &__meta { margin: 0; font-size: var(--sw-font-sm, 12px); color: var(--sw-color-text-muted); }
     &__line,
     &__row {
         padding: var(--sw-space-xs, 4px) var(--sw-space-md, 8px);
         border-radius: var(--sw-radius-sm, 6px);
-        background: var(--b3-theme-surface);
+        background: var(--sw-color-surface);
         font-size: var(--sw-font-sm, 12px);
         overflow-wrap: anywhere;
     }
@@ -1421,7 +1439,7 @@
         gap: var(--sw-space-md, 8px);
         margin-top: var(--sw-space-sm, 6px);
         padding-top: var(--sw-space-md, 8px);
-        border-top: 1px solid var(--b3-border-color);
+        border-top: 1px solid var(--sw-color-line);
     }
 }
 
@@ -1541,8 +1559,8 @@
             padding: var(--sw-space-xl, 16px) var(--sw-space-lg, 12px) calc(18px + env(safe-area-inset-bottom, 0px)) !important;
             border-radius: var(--sw-sheet-radius, 16px) var(--sw-sheet-radius, 16px) 0 0 !important;
             border: 0 !important;
-            border-top: 1px solid var(--b3-border-color) !important;
-            background: color-mix(in srgb, var(--b3-theme-surface) 97%, var(--b3-theme-background)) !important;
+            border-top: 1px solid var(--sw-color-line) !important;
+            background: color-mix(in srgb, var(--sw-color-surface) 97%, var(--sw-color-bg)) !important;
             box-shadow: var(--sw-sheet-shadow) !important;
         }
         &[data-detail-open="true"] .sw-home-store__detail {
@@ -1595,7 +1613,7 @@
             gap: var(--sw-space-sm, 6px) !important;
             padding: var(--sw-space-sm, 6px) var(--sw-space-md, 8px) !important;
             border-right: 0 !important;
-            border-bottom: 1px solid var(--b3-border-color) !important;
+            border-bottom: 1px solid var(--sw-color-line) !important;
             overflow-x: auto !important;
             overflow-y: hidden !important;
             scrollbar-width: none;
@@ -1613,8 +1631,8 @@
             box-shadow: none !important;
 
             &.is-active {
-                background: var(--b3-theme-primary) !important;
-                color: var(--b3-theme-on-primary, #fff) !important;
+                background: var(--sw-color-accent) !important;
+                color: var(--sw-color-on-accent, #fff) !important;
                 box-shadow: var(--sw-shadow-xs) !important;
             }
         }
@@ -1819,7 +1837,7 @@
             .b3-select,
             .sw__dock-item
         ) {
-            border: 1px solid var(--b3-theme-on-background);
+            border: 1px solid var(--sw-color-text);
         }
 
         :is(
@@ -1829,13 +1847,13 @@
             .sw__list-item--active,
             .sw-studio__library-item.is-active
         ) {
-            outline: 2px solid var(--b3-theme-primary);
+            outline: 2px solid var(--sw-color-accent);
             outline-offset: 1px;
             font-weight: 700;
         }
 
         :where(button, a, input, select, textarea, [tabindex="0"]):focus-visible {
-            outline: 3px solid var(--b3-theme-primary);
+            outline: 3px solid var(--sw-color-accent);
             outline-offset: 2px;
         }
     }

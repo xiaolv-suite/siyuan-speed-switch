@@ -9,19 +9,19 @@
 // ---------------------------------------------------------------------------
 
 :is(.speed-switch, .sw-home, .sw-studio, .sw-settings) {
-    --sw-polish-line: color-mix(in srgb, var(--b3-border-color) 82%, transparent);
-    --sw-polish-line-soft: color-mix(in srgb, var(--b3-border-color) 70%, transparent);
-    --sw-polish-surface-raised: color-mix(in srgb, var(--b3-theme-surface) 92%, var(--b3-theme-primary) 8%);
-    --sw-polish-surface-strong: color-mix(in srgb, var(--b3-theme-surface) 88%, var(--b3-theme-background) 12%);
+    --sw-polish-line: color-mix(in srgb, var(--sw-color-line) 82%, transparent);
+    --sw-polish-line-soft: color-mix(in srgb, var(--sw-color-line) 70%, transparent);
+    --sw-polish-surface-raised: color-mix(in srgb, var(--sw-color-surface) 92%, var(--sw-color-accent) 8%);
+    --sw-polish-surface-strong: color-mix(in srgb, var(--sw-color-surface) 88%, var(--sw-color-bg) 12%);
     --sw-polish-shadow-card: var(--sw-platform-shadow-card, 0 1px 2px rgb(51 58 83 / 5%), 0 8px 24px rgb(75 85 120 / 8%));
     --sw-polish-shadow-floating: var(--sw-platform-shadow-floating, 0 14px 36px rgb(55 65 100 / 15%), 0 3px 10px rgb(55 65 100 / 8%));
 }
 
 // Shared surface shell -------------------------------------------------------
 :is(.sw-platform-shell, .sw-platform-surface) {
-    border: 1px solid var(--sw-platform-line, var(--b3-border-color));
+    border: 1px solid var(--sw-platform-line, var(--sw-color-line));
     border-radius: var(--sw-platform-radius-lg, 16px);
-    background: var(--sw-platform-bg, var(--b3-theme-background));
+    background: var(--sw-platform-bg, var(--sw-color-bg));
     box-shadow: var(--sw-platform-shadow-floating);
 }
 
@@ -43,7 +43,33 @@
 .sw-platform-header__close-hint { opacity: .92; pointer-events: none; }
 .sw-platform-header__close-hint-label { font-size: var(--sw-font-xs, 11px); }
 
-.sw-platform-surface-nav { gap: var(--sw-space-xs, 4px); }
+// 20261122-01 实机反馈 (需求③): 顶栏关闭按钮采用全圆角胶囊形态与醒目红柔和底色/红边框，
+// 与思源笔记窗口右上角的系统方块关闭按钮在轮廓形态与语义色彩上形成强烈对比，杜绝误认。
+.sw-platform-header__close {
+    border-radius: var(--sw-platform-radius-pill, 999px) !important;
+    background: color-mix(in srgb, var(--sw-color-error, #f43f5e) 12%, var(--sw-platform-surface)) !important;
+    color: var(--sw-color-error, #f43f5e) !important;
+    border: 1px solid color-mix(in srgb, var(--sw-color-error, #f43f5e) 38%, var(--sw-polish-line-soft)) !important;
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--sw-color-error, #f43f5e) 16%, transparent);
+
+    &:hover {
+        background: color-mix(in srgb, var(--sw-color-error, #f43f5e) 22%, var(--sw-platform-surface)) !important;
+        border-color: var(--sw-color-error, #f43f5e) !important;
+        color: var(--sw-color-error, #f43f5e) !important;
+        box-shadow: 0 0 12px color-mix(in srgb, var(--sw-color-error, #f43f5e) 40%, transparent);
+    }
+
+    svg {
+        fill: currentColor;
+    }
+}
+
+.sw-platform-surface-nav {
+    gap: var(--sw-space-xs, 4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
 .sw-platform-surface-nav {
     // T-7228：分段控件外壳让三个入口保持同一连续命中区；
     // 默认边界可见，鼠标无需来回挪动才能确认当前指针落点。
@@ -55,6 +81,10 @@
 .sw-platform-surface-nav__item {
     // T-7228：顶栏原型重构为“可见分段入口”。每个表面默认保留弱边界
     // 与轻微底色，使 ①②③ 在未 hover 时也能被识别为可操作控件。
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
     border-color: color-mix(in srgb, var(--sw-platform-line) 64%, transparent);
     border-radius: var(--sw-platform-radius-sm, 8px);
     background: color-mix(in srgb, var(--sw-platform-surface) 88%, var(--sw-platform-bg));
@@ -64,19 +94,29 @@
     transition: none;
 }
 
+.sw-platform-surface-nav__copy {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    width: 100%;
+}
+
 .sw-platform-surface-nav__icon {
-    flex: 0 0 auto;
-    width: 16px;
-    height: 16px;
-    fill: currentColor;
+    display: none !important;
+    flex: 0 0 0;
+    width: 0;
+    height: 0;
     pointer-events: none;
 }
 
 .sw-platform-surface-nav__label {
     min-width: 0;
+    width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    text-align: center;
     pointer-events: none;
 }
 
@@ -115,48 +155,48 @@
 
 // Switcher ------------------------------------------------------------------
 .speed-switch {
-    background: var(--sw-page-bg, var(--b3-theme-background));
+    background: var(--sw-page-bg, var(--sw-color-bg));
 
-    &.sw__body { color: var(--b3-theme-on-background); }
+    &.sw__body { color: var(--sw-color-text); }
 
     .sw__toolbar {
         min-height: 58px;
         gap: var(--sw-space-md, 8px);
         padding: 10px var(--sw-space-xl, 16px);
         border-bottom-color: var(--sw-polish-line);
-        background: color-mix(in srgb, var(--b3-theme-surface) 92%, var(--b3-theme-background));
-        box-shadow: 0 1px 0 color-mix(in srgb, var(--b3-theme-background) 55%, transparent);
+        background: color-mix(in srgb, var(--sw-color-surface) 92%, var(--sw-color-bg));
+        box-shadow: 0 1px 0 color-mix(in srgb, var(--sw-color-bg) 55%, transparent);
     }
 
     .sw__search-wrap .sw__search {
         height: 38px;
         border-color: var(--sw-polish-line);
         border-radius: var(--sw-radius-control, 10px);
-        background: var(--b3-theme-background);
+        background: var(--sw-color-bg);
         font-size: var(--sw-font-md, 13px);
         transition: border-color $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease, background-color $sw-dur-fast $sw-ease;
     }
 
     .sw__search-wrap .sw__search:focus {
         outline: none;
-        border-color: var(--b3-theme-primary);
-        background: var(--b3-theme-surface);
-        box-shadow: 0 0 0 1px var(--b3-theme-background), var(--sw-focus-glow, 0 0 0 3px color-mix(in srgb, var(--b3-theme-primary) 32%, transparent));
+        border-color: var(--sw-color-accent);
+        background: var(--sw-color-surface);
+        box-shadow: 0 0 0 1px var(--sw-color-bg), var(--sw-focus-glow, 0 0 0 3px color-mix(in srgb, var(--sw-color-accent) 32%, transparent));
     }
 
     // R4 没有把 `>` 命令模式画成独立页面；用搜索框的局部状态承接新增模式，
     // 让用户知道当前只会执行动作，不会把命令结果误读成文档搜索。
     .sw__search-wrap .sw__search[data-sw-mode="command"] {
-        border-color: color-mix(in srgb, var(--b3-theme-primary) 56%, var(--sw-polish-line));
-        background: color-mix(in srgb, var(--b3-theme-primary) 6%, var(--b3-theme-background));
-        box-shadow: inset 3px 0 0 var(--b3-theme-primary);
+        border-color: color-mix(in srgb, var(--sw-color-accent) 56%, var(--sw-polish-line));
+        background: color-mix(in srgb, var(--sw-color-accent) 6%, var(--sw-color-bg));
+        box-shadow: inset 3px 0 0 var(--sw-color-accent);
     }
 
     // T-7595: 搜索输入框在途请求轻量呼吸光晕
     .sw__search-wrap .sw__search[aria-busy="true"] {
-        border-color: color-mix(in srgb, var(--b3-theme-primary) 60%, var(--sw-polish-line));
-        background: color-mix(in srgb, var(--b3-theme-primary) 4%, var(--b3-theme-background));
-        box-shadow: 0 0 0 1px var(--b3-theme-background), 0 0 8px color-mix(in srgb, var(--b3-theme-primary) 28%, transparent);
+        border-color: color-mix(in srgb, var(--sw-color-accent) 60%, var(--sw-polish-line));
+        background: color-mix(in srgb, var(--sw-color-accent) 4%, var(--sw-color-bg));
+        box-shadow: 0 0 0 1px var(--sw-color-bg), 0 0 8px color-mix(in srgb, var(--sw-color-accent) 28%, transparent);
     }
 
     &:not(.sw__mobile):not(.sw--sidebar) .sw__content {
@@ -172,8 +212,8 @@
         height: 36px;
         border: 1px solid var(--sw-polish-line);
         border-radius: var(--sw-radius-control, 10px);
-        background: var(--b3-theme-background);
-        color: var(--b3-theme-on-background);
+        background: var(--sw-color-bg);
+        color: var(--sw-color-text);
         cursor: pointer;
         transition: border-color $sw-dur-fast $sw-ease, background-color $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease, transform $sw-dur-fast $sw-ease;
 
@@ -201,9 +241,9 @@
     .sw__history-trigger:hover,
     .sw__fav-trigger[aria-expanded="true"],
     .sw__history-trigger[aria-expanded="true"] {
-        border-color: color-mix(in srgb, var(--b3-theme-primary) 46%, var(--sw-polish-line));
+        border-color: color-mix(in srgb, var(--sw-color-accent) 46%, var(--sw-polish-line));
         background: var(--sw-accent-soft);
-        color: var(--b3-theme-primary);
+        color: var(--sw-color-accent);
     }
 
     .sw__fav-trigger:focus-visible,
@@ -211,9 +251,9 @@
     .sw__sort-trigger:focus-visible,
     .sw__sort-btn:focus-visible {
         outline: none;
-        border-color: color-mix(in srgb, var(--b3-theme-primary) 46%, var(--sw-polish-line));
+        border-color: color-mix(in srgb, var(--sw-color-accent) 46%, var(--sw-polish-line));
         background: var(--sw-accent-soft);
-        color: var(--b3-theme-primary);
+        color: var(--sw-color-accent);
         box-shadow: var(--sw-focus-ring);
     }
 
@@ -231,7 +271,7 @@
 
         &:hover {
             border-color: var(--sw-polish-line-soft);
-            color: var(--b3-theme-primary);
+            color: var(--sw-color-accent);
         }
 
         &:active:not(:disabled) {
@@ -244,16 +284,16 @@
 
         &[aria-pressed="true"],
         &[aria-expanded="true"] {
-            border-color: color-mix(in srgb, var(--b3-theme-primary) 30%, transparent);
+            border-color: color-mix(in srgb, var(--sw-color-accent) 30%, transparent);
             background: var(--sw-accent-soft);
-            color: var(--b3-theme-primary);
+            color: var(--sw-color-accent);
         }
 
         &:focus-visible {
             outline: none;
-            border-color: color-mix(in srgb, var(--b3-theme-primary) 42%, var(--sw-polish-line));
+            border-color: color-mix(in srgb, var(--sw-color-accent) 42%, var(--sw-polish-line));
             background: var(--sw-accent-soft);
-            color: var(--b3-theme-primary);
+            color: var(--sw-color-accent);
             box-shadow: var(--sw-focus-ring);
         }
     }
@@ -264,7 +304,7 @@
         height: 36px;
         border-color: var(--sw-polish-line);
         border-radius: var(--sw-radius-control, 10px);
-        background: var(--b3-theme-background);
+        background: var(--sw-color-bg);
         transition: border-color $sw-dur-fast $sw-ease, background-color $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease;
     }
 
@@ -272,9 +312,9 @@
     .sw__history-trigger:hover,
     .sw__select-wrap .sw__sort:focus-visible {
         outline: none;
-        border-color: color-mix(in srgb, var(--b3-theme-primary) 46%, var(--sw-polish-line));
+        border-color: color-mix(in srgb, var(--sw-color-accent) 46%, var(--sw-polish-line));
         background: var(--sw-accent-soft);
-        color: var(--b3-theme-primary);
+        color: var(--sw-color-accent);
         box-shadow: var(--sw-focus-ring);
     }
 
@@ -282,7 +322,7 @@
         width: 164px;
         padding: 14px 10px;
         border-right: 1px solid var(--sw-polish-line-soft);
-        background: var(--sw-bg-tinted, color-mix(in srgb, var(--b3-theme-surface) 56%, var(--b3-theme-background)));
+        background: var(--sw-bg-tinted, color-mix(in srgb, var(--sw-color-surface) 56%, var(--sw-color-bg)));
     }
 
     .sw__dock-label,
@@ -299,21 +339,21 @@
         padding: var(--sw-space-md, 8px) 10px;
         border: 1px solid transparent;
         border-radius: var(--sw-platform-radius-sm, 8px);
-        color: var(--b3-theme-on-surface);
+        color: var(--sw-color-text-subtle);
         transition: color $sw-dur-fast $sw-ease, background-color $sw-dur-fast $sw-ease, border-color $sw-dur-fast $sw-ease, transform $sw-dur-fast $sw-ease;
     }
 
     .sw__dock-item:hover,
     .sw__dock-item:focus-visible {
-        border-color: color-mix(in srgb, var(--b3-theme-primary) 22%, transparent);
+        border-color: color-mix(in srgb, var(--sw-color-accent) 22%, transparent);
         background: var(--sw-accent-soft);
-        color: var(--b3-theme-primary);
+        color: var(--sw-color-accent);
     }
 
     .sw__dock-item.sw__active {
-        border-color: color-mix(in srgb, var(--b3-theme-primary) 30%, transparent);
+        border-color: color-mix(in srgb, var(--sw-color-accent) 30%, transparent);
         background: var(--sw-card-float-bg, var(--sw-accent-soft));
-        color: var(--sw-color-accent, var(--b3-theme-primary));
+        color: var(--sw-color-accent, var(--sw-color-accent));
         font-weight: var(--sw-weight-semibold, 600);
         box-shadow: var(--sw-shadow-xs);
     }
@@ -328,7 +368,7 @@
 
     .sw__scroll {
         padding: 14px var(--sw-space-xl, 16px) 20px;
-        background: color-mix(in srgb, var(--b3-theme-surface) 92%, var(--b3-theme-background));
+        background: color-mix(in srgb, var(--sw-color-surface) 92%, var(--sw-color-bg));
         scrollbar-width: thin;
         scrollbar-color: var(--b3-scroll-color) transparent;
     }
@@ -347,19 +387,19 @@
     .sw__group-header:hover,
     .sw__group-header:focus-visible {
         border-color: var(--sw-polish-line-soft);
-        background: color-mix(in srgb, var(--b3-theme-surface) 76%, transparent);
+        background: color-mix(in srgb, var(--sw-color-surface) 76%, transparent);
     }
 
     .sw__group-header:focus-visible {
-        outline: 2px solid var(--b3-theme-primary);
+        outline: 2px solid var(--sw-color-accent);
         outline-offset: 2px;
         box-shadow: var(--sw-focus-ring);
     }
 
     .sw__group-count {
         border: 1px solid var(--sw-polish-line);
-        background: color-mix(in srgb, var(--lv-brand, var(--b3-theme-primary)) 8%, var(--b3-theme-surface));
-        color: var(--lv-brand, var(--b3-theme-primary));
+        background: color-mix(in srgb, var(--lv-brand, var(--sw-color-accent)) 8%, var(--sw-color-surface));
+        color: var(--lv-brand, var(--sw-color-accent));
         border-radius: var(--sw-platform-radius-pill, 999px);
         padding: 0 var(--sw-space-xs, 4px);
         font-variant-numeric: tabular-nums;
@@ -369,8 +409,8 @@
     .sw__card[data-sw-digit]::after,
     .sw__doc-item[data-sw-digit]::after {
         border: 1px solid var(--sw-polish-line);
-        border-bottom: 2px solid color-mix(in srgb, var(--b3-theme-on-surface) 24%, var(--b3-border-color));
-        background: var(--b3-theme-surface);
+        border-bottom: 2px solid color-mix(in srgb, var(--sw-color-text-subtle) 24%, var(--sw-color-line));
+        background: var(--sw-color-surface);
         box-shadow: var(--sw-shadow-xs);
         font-variant-numeric: tabular-nums;
     }
@@ -390,8 +430,8 @@
             bottom: 14px;
             width: 3px;
             border-radius: 0 var(--sw-platform-radius-pill, 999px) var(--sw-platform-radius-pill, 999px) 0;
-            background: linear-gradient(180deg, var(--lv-brand, var(--b3-theme-primary)) 0%, var(--lv-accent-gold, #FACC15) 100%);
-            box-shadow: 0 0 8px color-mix(in srgb, var(--lv-brand, var(--b3-theme-primary)) 60%, transparent);
+            background: linear-gradient(180deg, var(--lv-brand, var(--sw-color-accent)) 0%, var(--lv-accent-gold, #FACC15) 100%);
+            box-shadow: 0 0 8px color-mix(in srgb, var(--lv-brand, var(--sw-color-accent)) 60%, transparent);
             opacity: 0;
             transform: scaleY(0.4);
             transition: opacity $sw-dur-fast $sw-ease, transform $sw-dur-fast $sw-ease;
@@ -400,7 +440,7 @@
     }
 
     .sw__card:hover {
-        border-color: color-mix(in srgb, var(--b3-theme-primary) 52%, var(--sw-polish-line));
+        border-color: color-mix(in srgb, var(--sw-color-accent) 52%, var(--sw-polish-line));
         background: var(--sw-polish-surface-raised);
         box-shadow: var(--sw-rim-light, inset 0 1px 0 rgba(255, 255, 255, 0.16)), var(--sw-polish-shadow-card);
         transform: translateY(-2px);
@@ -408,7 +448,7 @@
 
     .sw__card:focus-visible {
         outline: none;
-        border-color: color-mix(in srgb, var(--b3-theme-primary) 58%, var(--sw-polish-line));
+        border-color: color-mix(in srgb, var(--sw-color-accent) 58%, var(--sw-polish-line));
         background: var(--sw-polish-surface-raised);
         box-shadow: var(--sw-focus-ring), var(--sw-polish-shadow-card);
     }
@@ -419,8 +459,8 @@
 
     .sw__card.sw__focused,
     .sw__card.sw__active {
-        border-color: var(--b3-theme-primary);
-        box-shadow: var(--sw-rim-light, none), inset 0 0 0 1px color-mix(in srgb, var(--b3-theme-primary) 68%, transparent), var(--sw-focus-glow, 0 0 12px color-mix(in srgb, var(--b3-theme-primary) 30%, transparent));
+        border-color: var(--sw-color-accent);
+        box-shadow: var(--sw-rim-light, none), inset 0 0 0 1px color-mix(in srgb, var(--sw-color-accent) 68%, transparent), var(--sw-focus-glow, 0 0 12px color-mix(in srgb, var(--sw-color-accent) 30%, transparent));
 
         &::before {
             opacity: 1;
@@ -444,8 +484,8 @@
         padding: 0;
         border: 1px solid var(--sw-polish-line-soft);
         border-radius: var(--sw-platform-radius-sm, 6px);
-        background: color-mix(in srgb, var(--b3-theme-surface) 90%, var(--b3-theme-background));
-        color: var(--b3-theme-on-surface-light);
+        background: color-mix(in srgb, var(--sw-color-surface) 90%, var(--sw-color-bg));
+        color: var(--sw-color-text-muted);
         opacity: 0;
         pointer-events: none;
         transition: opacity $sw-dur-fast $sw-ease, transform $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease, background $sw-dur-fast $sw-ease;
@@ -456,9 +496,9 @@
         }
 
         &:hover {
-            color: var(--b3-theme-primary);
-            background: color-mix(in srgb, var(--b3-theme-primary) 12%, var(--b3-theme-surface));
-            border-color: color-mix(in srgb, var(--b3-theme-primary) 40%, var(--sw-polish-line));
+            color: var(--sw-color-accent);
+            background: color-mix(in srgb, var(--sw-color-accent) 12%, var(--sw-color-surface));
+            border-color: color-mix(in srgb, var(--sw-color-accent) 40%, var(--sw-polish-line));
             transform: scale(1.08);
         }
     }
@@ -521,9 +561,9 @@
         position: relative;
         min-height: 76px;
         padding: 10px var(--sw-space-lg, 12px);
-        border: 1px solid color-mix(in srgb, var(--sw-color-accent, var(--b3-theme-primary)) 16%, var(--sw-polish-line));
+        border: 1px solid color-mix(in srgb, var(--sw-color-accent, var(--sw-color-accent)) 16%, var(--sw-polish-line));
         border-radius: var(--sw-radius-card, 14px);
-        background: var(--sw-card-float-bg, var(--b3-theme-surface));
+        background: var(--sw-card-float-bg, var(--sw-color-surface));
         box-shadow: var(--sw-shadow-bento);
         transition: border-color $sw-dur-fast $sw-ease, background-color $sw-dur-fast $sw-ease, transform $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease;
 
@@ -535,8 +575,8 @@
             bottom: 12px;
             width: 3px;
             border-radius: 0 var(--sw-platform-radius-pill, 999px) var(--sw-platform-radius-pill, 999px) 0;
-            background: linear-gradient(180deg, var(--lv-brand, var(--b3-theme-primary)) 0%, var(--lv-accent-gold, #FACC15) 100%);
-            box-shadow: 0 0 8px color-mix(in srgb, var(--lv-brand, var(--b3-theme-primary)) 60%, transparent);
+            background: linear-gradient(180deg, var(--lv-brand, var(--sw-color-accent)) 0%, var(--lv-accent-gold, #FACC15) 100%);
+            box-shadow: 0 0 8px color-mix(in srgb, var(--lv-brand, var(--sw-color-accent)) 60%, transparent);
             opacity: 0;
             transform: scaleY(0.4);
             transition: opacity $sw-dur-fast $sw-ease, transform $sw-dur-fast $sw-ease;
@@ -550,8 +590,8 @@
 
     .sw__doc-item:hover,
     .sw__doc-item:focus-visible {
-        border-color: color-mix(in srgb, var(--b3-theme-primary) 48%, var(--sw-polish-line));
-        box-shadow: var(--sw-shadow-bento), 0 8px 24px color-mix(in srgb, var(--b3-theme-primary) 12%, transparent);
+        border-color: color-mix(in srgb, var(--sw-color-accent) 48%, var(--sw-polish-line));
+        box-shadow: var(--sw-shadow-bento), 0 8px 24px color-mix(in srgb, var(--sw-color-accent) 12%, transparent);
         transform: translateY(-2px);
 
         &::before {
@@ -565,7 +605,7 @@
     .sw__doc-preview {
         border-color: var(--sw-color-line-soft, var(--sw-polish-line));
         border-radius: var(--sw-radius-card, 14px);
-        background: var(--sw-card-float-bg, var(--b3-theme-surface));
+        background: var(--sw-card-float-bg, var(--sw-color-surface));
         box-shadow: var(--sw-shadow-bento);
 
         .table,
@@ -596,7 +636,7 @@
             }
 
             th {
-                background: color-mix(in srgb, var(--b3-theme-on-surface) 4%, var(--b3-theme-surface));
+                background: color-mix(in srgb, var(--sw-color-text-subtle) 4%, var(--sw-color-surface));
                 font-weight: 600;
                 white-space: nowrap;
             }
@@ -617,7 +657,7 @@
         min-height: 50px;
         padding: var(--sw-space-md, 8px) 14px;
         border-color: var(--sw-polish-line);
-        background: color-mix(in srgb, var(--b3-theme-surface) 94%, var(--b3-theme-background));
+        background: color-mix(in srgb, var(--sw-color-surface) 94%, var(--sw-color-bg));
         box-shadow: inset 0 1px 0 var(--sw-polish-line-soft);
     }
 
@@ -626,8 +666,8 @@
         height: var(--sw-control-h);
         border: 1px solid var(--sw-polish-line-soft);
         border-radius: var(--sw-platform-radius-sm, 8px);
-        background: var(--b3-theme-background);
-        color: var(--b3-theme-on-surface);
+        background: var(--sw-color-bg);
+        color: var(--sw-color-text-subtle);
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
         transition: border-color $sw-dur-fast $sw-ease, background $sw-dur-fast $sw-ease, transform $sw-dur-fast $sw-ease;
     }
@@ -635,22 +675,22 @@
     .sw__quick-action:hover,
     .sw__quick-action:focus-visible,
     .sw__quick-action[aria-pressed="true"] {
-        border-color: color-mix(in srgb, var(--b3-theme-primary) 38%, var(--sw-polish-line));
+        border-color: color-mix(in srgb, var(--sw-color-accent) 38%, var(--sw-polish-line));
         background: var(--sw-accent-soft);
-        color: var(--b3-theme-primary);
+        color: var(--sw-color-accent);
         transform: translateY(-1px);
     }
 
     .sw__quick-action--add {
-        border: 1px solid color-mix(in srgb, var(--b3-theme-primary) 24%, transparent);
+        border: 1px solid color-mix(in srgb, var(--sw-color-accent) 24%, transparent);
         background: var(--sw-accent-soft);
-        color: var(--b3-theme-primary);
+        color: var(--sw-color-accent);
     }
 
     .sw__quick-action--add:hover,
     .sw__quick-action--add:focus-visible {
-        border-color: color-mix(in srgb, var(--b3-theme-primary) 42%, var(--sw-polish-line));
-        background: color-mix(in srgb, var(--b3-theme-primary) 16%, transparent);
+        border-color: color-mix(in srgb, var(--sw-color-accent) 42%, var(--sw-polish-line));
+        background: color-mix(in srgb, var(--sw-color-accent) 16%, transparent);
     }
 
     .sw__quick-action:focus-visible,
@@ -662,9 +702,9 @@
     .sw__search-chip:focus-visible,
     .sw__command-item:focus-visible {
         outline: none;
-        border-color: color-mix(in srgb, var(--b3-theme-primary) 46%, var(--sw-polish-line));
+        border-color: color-mix(in srgb, var(--sw-color-accent) 46%, var(--sw-polish-line));
         background: var(--sw-accent-soft);
-        color: var(--b3-theme-primary);
+        color: var(--sw-color-accent);
         box-shadow: var(--sw-focus-ring);
     }
 
@@ -688,9 +728,9 @@
             min-height: 52px;
             padding: var(--sw-space-sm, 6px) var(--sw-space-md, 8px);
             padding-bottom: calc(var(--sw-space-sm, 6px) + env(safe-area-inset-bottom, 0px));
-            border-top: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--b3-border-color) 45%, transparent));
+            border-top: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--sw-color-line) 45%, transparent));
             border-radius: var(--sw-radius-panel, 18px) var(--sw-radius-panel, 18px) 0 0;
-            background: var(--sw-card-float-bg, var(--b3-theme-surface));
+            background: var(--sw-card-float-bg, var(--sw-color-surface));
             box-shadow: var(--sw-rim-light, inset 0 1px 0 0 rgba(255, 255, 255, 0.08)), var(--sw-shadow-bento);
             backdrop-filter: var(--sw-blur-md);
             -webkit-backdrop-filter: var(--sw-blur-md);
@@ -706,10 +746,10 @@
             min-height: 44px;
             height: auto;
             padding: var(--sw-space-xs, 4px) var(--sw-space-md, 8px);
-            border: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--b3-border-color) 45%, transparent));
+            border: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--sw-color-line) 45%, transparent));
             border-radius: var(--sw-radius-md, 8px);
-            background: var(--sw-card-float-bg, var(--b3-theme-surface));
-            color: var(--b3-theme-on-surface);
+            background: var(--sw-card-float-bg, var(--sw-color-surface));
+            color: var(--sw-color-text-subtle);
             box-shadow: var(--sw-shadow-xs);
             touch-action: manipulation;
             -webkit-tap-highlight-color: transparent;
@@ -731,12 +771,12 @@
 
             &:hover {
                 background: var(--sw-color-accent-soft, var(--sw-accent-soft));
-                border-color: color-mix(in srgb, var(--sw-color-accent, var(--b3-theme-primary)) 40%, transparent);
-                color: var(--sw-color-accent, var(--b3-theme-primary));
+                border-color: color-mix(in srgb, var(--sw-color-accent, var(--sw-color-accent)) 40%, transparent);
+                color: var(--sw-color-accent, var(--sw-color-accent));
                 box-shadow: var(--sw-shadow-sm);
 
                 .sw__quick-action-icon svg {
-                    color: var(--sw-color-accent, var(--b3-theme-primary));
+                    color: var(--sw-color-accent, var(--sw-color-accent));
                     transform: scale(1.08);
                 }
             }
@@ -752,8 +792,8 @@
 
             &[aria-pressed="true"] {
                 background: var(--sw-color-accent-soft, var(--sw-accent-soft));
-                border-color: var(--sw-color-accent, var(--b3-theme-primary));
-                color: var(--sw-color-accent, var(--b3-theme-primary));
+                border-color: var(--sw-color-accent, var(--sw-color-accent));
+                color: var(--sw-color-accent, var(--sw-color-accent));
                 box-shadow: var(--sw-focus-glow);
             }
 
@@ -763,8 +803,8 @@
             }
 
             &--add {
-                border-color: color-mix(in srgb, var(--sw-color-accent, var(--b3-theme-primary)) 28%, transparent);
-                color: var(--sw-color-accent, var(--b3-theme-primary));
+                border-color: color-mix(in srgb, var(--sw-color-accent, var(--sw-color-accent)) 28%, transparent);
+                color: var(--sw-color-accent, var(--sw-color-accent));
             }
         }
 
@@ -779,9 +819,9 @@
                 padding: 0 var(--sw-space-md, 8px);
                 box-sizing: border-box;
                 border-radius: var(--sw-platform-radius-pill, 999px);
-                border: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--b3-border-color) 45%, transparent));
-                background: var(--sw-card-float-bg, var(--b3-theme-surface));
-                color: var(--b3-theme-on-surface);
+                border: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--sw-color-line) 45%, transparent));
+                background: var(--sw-card-float-bg, var(--sw-color-surface));
+                color: var(--sw-color-text-subtle);
                 box-shadow: var(--sw-shadow-xs);
                 touch-action: manipulation;
                 -webkit-tap-highlight-color: transparent;
@@ -796,12 +836,12 @@
 
                 &:hover {
                     background: var(--sw-color-accent-soft, var(--sw-accent-soft));
-                    border-color: color-mix(in srgb, var(--sw-color-accent, var(--b3-theme-primary)) 40%, transparent);
-                    color: var(--sw-color-accent, var(--b3-theme-primary));
+                    border-color: color-mix(in srgb, var(--sw-color-accent, var(--sw-color-accent)) 40%, transparent);
+                    color: var(--sw-color-accent, var(--sw-color-accent));
                     box-shadow: var(--sw-shadow-sm);
 
                     > svg {
-                        color: var(--sw-color-accent, var(--b3-theme-primary));
+                        color: var(--sw-color-accent, var(--sw-color-accent));
                         transform: scale(1.08);
                     }
                 }
@@ -813,8 +853,8 @@
                 &.is-active,
                 &[aria-pressed="true"] {
                     background: var(--sw-color-accent-soft, var(--sw-accent-soft));
-                    border-color: var(--sw-color-accent, var(--b3-theme-primary));
-                    color: var(--sw-color-accent, var(--b3-theme-primary));
+                    border-color: var(--sw-color-accent, var(--sw-color-accent));
+                    color: var(--sw-color-accent, var(--sw-color-accent));
                     box-shadow: var(--sw-focus-glow);
                 }
 
@@ -826,15 +866,15 @@
 
             .sw__sort-btn {
                 border-radius: var(--sw-radius-control, 10px);
-                background: var(--sw-card-float-bg, var(--b3-theme-surface));
-                border: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--b3-border-color) 45%, transparent));
+                background: var(--sw-card-float-bg, var(--sw-color-surface));
+                border: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--sw-color-line) 45%, transparent));
                 box-shadow: var(--sw-shadow-xs);
                 transition: transform $sw-dur-fast $sw-ease, background-color $sw-dur-fast $sw-ease, border-color $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease;
 
                 &:hover {
                     background: var(--sw-color-accent-soft, var(--sw-accent-soft));
-                    border-color: color-mix(in srgb, var(--sw-color-accent, var(--b3-theme-primary)) 40%, transparent);
-                    color: var(--sw-color-accent, var(--b3-theme-primary));
+                    border-color: color-mix(in srgb, var(--sw-color-accent, var(--sw-color-accent)) 40%, transparent);
+                    color: var(--sw-color-accent, var(--sw-color-accent));
                     box-shadow: var(--sw-shadow-sm);
                 }
 
@@ -859,11 +899,11 @@
         radial-gradient(circle at 50% 50%, color-mix(in srgb, #0ea5e9 18%, transparent) 0%, transparent 48%),
         radial-gradient(circle at 18% 88%, color-mix(in srgb, #a855f7 20%, transparent) 0%, transparent 44%),
         radial-gradient(circle at 82% 86%, color-mix(in srgb, #10b981 18%, transparent) 0%, transparent 42%),
-        var(--sw-page-bg, var(--b3-theme-background)) !important;
+        var(--sw-page-bg, var(--sw-color-bg)) !important;
 
     .sw-platform-chrome {
         background: transparent !important;
-        border-bottom: 1px solid color-mix(in srgb, var(--b3-border-color) 35%, transparent);
+        border-bottom: 1px solid color-mix(in srgb, var(--sw-color-line) 35%, transparent);
 
         .sw-platform-header {
             min-height: 48px !important;
@@ -876,10 +916,10 @@
 
         // Apple Segmented Control 导航胶囊
         .sw-platform-surface-nav {
-            background: color-mix(in srgb, var(--b3-theme-on-surface) 6%, transparent);
+            background: color-mix(in srgb, var(--sw-color-text-subtle) 6%, transparent);
             padding: var(--sw-space-xs, 4px);
             border-radius: 999px;
-            border: 1px solid color-mix(in srgb, var(--b3-border-color) 30%, transparent);
+            border: 1px solid color-mix(in srgb, var(--sw-color-line) 30%, transparent);
             gap: var(--sw-space-2xs, 2px);
         }
 
@@ -892,18 +932,18 @@
             transition: transform $sw-dur-fast $sw-ease, background $sw-dur-fast $sw-ease, border-color $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease, opacity $sw-dur-fast $sw-ease !important;
 
             @media (max-width: 640px) {
-                min-height: 40px !important;
+                min-height: 48px !important;
                 padding: var(--sw-space-sm, 6px) var(--sw-space-xl, 16px) !important;
             }
 
             &.is-active {
-                background: var(--b3-theme-surface) !important;
-                color: var(--b3-theme-on-background) !important;
+                background: var(--sw-color-surface) !important;
+                color: var(--sw-color-text) !important;
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 0 1px rgba(0, 0, 0, 0.06) !important;
             }
 
             &:not(.is-active):hover {
-                background: color-mix(in srgb, var(--b3-theme-on-surface) 8%, transparent) !important;
+                background: color-mix(in srgb, var(--sw-color-text-subtle) 8%, transparent) !important;
             }
         }
     }
@@ -915,8 +955,8 @@
 
         > button {
             border-radius: var(--sw-platform-radius-pill, 999px);
-            background: var(--sw-card-float-bg, var(--b3-theme-surface));
-            border: 1px solid color-mix(in srgb, var(--b3-border-color) 45%, transparent);
+            background: var(--sw-card-float-bg, var(--sw-color-surface));
+            border: 1px solid color-mix(in srgb, var(--sw-color-line) 45%, transparent);
             box-shadow: var(--sw-shadow-xs);
             font-size: var(--sw-font-xs, 11px);
             font-weight: 600;
@@ -925,8 +965,8 @@
 
             &:hover {
                 transform: translateY(-1px);
-                border-color: var(--sw-platform-accent, var(--b3-theme-primary));
-                background: color-mix(in srgb, var(--sw-platform-accent) 10%, var(--b3-theme-surface));
+                border-color: var(--sw-platform-accent, var(--sw-color-accent));
+                background: color-mix(in srgb, var(--sw-platform-accent) 10%, var(--sw-color-surface));
             }
         }
     }
@@ -948,8 +988,8 @@
     }
 
     .sw-home__cell:not([data-module-id="external-weather-open-meteo"]):not([data-module-id="external-anime-bangumi"]):not([data-module-id="external-hot-news-dailyhot"]):not([data-module-id="external-news-newsnow"]):not(.mat-accent):not(.mat-dark):not(.mat-vibrant):not(.sw-home__cell--midnight) {
-        background: var(--sw-r54-surface, var(--b3-theme-surface, #ffffff)) !important;
-        border: 1px solid color-mix(in srgb, var(--b3-theme-on-background, #0f172a) 9%, transparent) !important;
+        background: var(--sw-r54-surface, var(--sw-color-surface, #ffffff)) !important;
+        border: 1px solid color-mix(in srgb, var(--sw-color-text, #0f172a) 9%, transparent) !important;
     }
 
     .sw-home__cell {
@@ -970,7 +1010,7 @@
     }
 
     .sw-home__cell:hover {
-        border-color: color-mix(in srgb, var(--b3-theme-primary, #2563eb) 32%, transparent) !important;
+        border-color: color-mix(in srgb, var(--sw-color-accent, #2563eb) 32%, transparent) !important;
         box-shadow:
             var(--sw-rim-light, inset 0 1px 0 0 rgba(255, 255, 255, 0.2)),
             0 16px 36px -6px rgba(15, 23, 42, 0.11),
@@ -1036,8 +1076,8 @@
         [data-module-id="tags"],
         [data-module-id="on-this-day"]
     ):not(.mat-accent):not(.mat-dark):not(.mat-vibrant):not(.sw-home__cell--midnight) {
-        background: var(--sw-r54-surface, var(--b3-theme-surface, #ffffff)) !important;
-        border: 1px solid color-mix(in srgb, var(--b3-theme-on-background, #0f172a) 9%, transparent) !important;
+        background: var(--sw-r54-surface, var(--sw-color-surface, #ffffff)) !important;
+        border: 1px solid color-mix(in srgb, var(--sw-color-text, #0f172a) 9%, transparent) !important;
     }
     .sw-home__cell[data-module-id="external-weather-open-meteo"] {
         background:
@@ -1119,12 +1159,12 @@
             min-height: var(--sw-control-h-md, 26px) !important;
             justify-content: center !important;
             border-radius: 999px !important;
-            background: color-mix(in srgb, var(--sw-platform-accent) 14%, var(--b3-theme-surface)) !important;
+            background: color-mix(in srgb, var(--sw-platform-accent) 14%, var(--sw-color-surface)) !important;
             border: 1px solid color-mix(in srgb, var(--sw-platform-accent) 30%, transparent) !important;
             font-size: 11px !important;
             font-weight: 650 !important;
-            color: var(--b3-theme-on-surface) !important;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), inset 0 1px 1px color-mix(in srgb, var(--b3-theme-on-surface) 10%, transparent) !important;
+            color: var(--sw-color-text-subtle) !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), inset 0 1px 1px color-mix(in srgb, var(--sw-color-text-subtle) 10%, transparent) !important;
 
             &::before {
                 content: "🗓️ ";
@@ -1203,7 +1243,7 @@
             flex: 1 1 0 !important;
 
             &:first-child .sw__home-module-item-action {
-                background: linear-gradient(135deg, color-mix(in srgb, #10b981 18%, var(--b3-theme-surface)), color-mix(in srgb, #10b981 8%, var(--b3-theme-surface))) !important;
+                background: linear-gradient(135deg, color-mix(in srgb, #10b981 18%, var(--sw-color-surface)), color-mix(in srgb, #10b981 8%, var(--sw-color-surface))) !important;
                 border-color: color-mix(in srgb, #10b981 35%, transparent) !important;
                 box-shadow: 0 2px 8px color-mix(in srgb, #10b981 14%, transparent), var(--sw-rim-light, inset 0 1px 1px rgba(255, 255, 255, 0.14)) !important;
                 font-weight: 680 !important;
@@ -1211,7 +1251,7 @@
             }
 
             &:last-child .sw__home-module-item-action {
-                background: linear-gradient(135deg, color-mix(in srgb, #06b6d4 18%, var(--b3-theme-surface)), color-mix(in srgb, #06b6d4 8%, var(--b3-theme-surface))) !important;
+                background: linear-gradient(135deg, color-mix(in srgb, #06b6d4 18%, var(--sw-color-surface)), color-mix(in srgb, #06b6d4 8%, var(--sw-color-surface))) !important;
                 border-color: color-mix(in srgb, #06b6d4 35%, transparent) !important;
                 box-shadow: 0 2px 8px color-mix(in srgb, #06b6d4 14%, transparent), var(--sw-rim-light, inset 0 1px 1px rgba(255, 255, 255, 0.14)) !important;
                 font-weight: 680 !important;
@@ -1228,7 +1268,7 @@
             padding: var(--sw-space-2xs, 2px) var(--sw-space-md, 8px) !important;
             border-radius: 999px !important;
             border: 1px solid transparent;
-            color: var(--b3-theme-on-surface) !important;
+            color: var(--sw-color-text-subtle) !important;
 
             &:hover {
                 transform: translateY(-1px) !important;
@@ -1237,7 +1277,7 @@
     }
 
     .sw-home__cell:is([data-module-id="today-tasks"], [data-module-id="recent-documents"], [data-module-id="recent-daily-notes"], [data-module-id="journal-calendar"], [data-module-id="journal-monthly"]) {
-        --sw-stat-accent: var(--b3-theme-primary);
+        --sw-stat-accent: var(--sw-color-accent);
 
         .sw__home-module-body {
             display: flex !important;
@@ -1253,15 +1293,15 @@
             gap: var(--sw-space-md, 8px) !important;
             padding: var(--sw-space-sm, 6px) var(--sw-space-lg, 12px) !important;
             min-height: auto !important;
-            background: color-mix(in srgb, var(--b3-theme-on-background, #0f172a) 3.5%, var(--b3-theme-background, #ffffff)) !important;
-            border: 1px solid color-mix(in srgb, var(--b3-theme-on-background, #0f172a) 7%, transparent) !important;
+            background: color-mix(in srgb, var(--sw-color-text, #0f172a) 3.5%, var(--sw-color-bg, #ffffff)) !important;
+            border: 1px solid color-mix(in srgb, var(--sw-color-text, #0f172a) 7%, transparent) !important;
             border-radius: 10px !important;
 
             .sw__home-stat-value {
                 font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", var(--sw-font-mono, monospace) !important;
                 font-size: 22px !important;
                 font-weight: 800 !important;
-                color: var(--b3-theme-on-background, #0f172a) !important;
+                color: var(--sw-color-text, #0f172a) !important;
                 line-height: 1 !important;
                 letter-spacing: -0.03em !important;
                 font-variant-numeric: tabular-nums !important;
@@ -1294,11 +1334,11 @@
             align-items: center !important;
             text-align: center !important;
             gap: var(--sw-space-sm, 6px) !important;
-            background: color-mix(in srgb, var(--sw-stat-accent) 6%, var(--b3-theme-surface)) !important;
+            background: color-mix(in srgb, var(--sw-stat-accent) 6%, var(--sw-color-surface)) !important;
             border: 1px dashed color-mix(in srgb, var(--sw-stat-accent) 26%, transparent) !important;
             border-radius: 14px !important;
             padding: 14px 20px !important;
-            color: var(--b3-theme-on-surface) !important;
+            color: var(--sw-color-text-subtle) !important;
             font-size: 13px !important;
             font-weight: 650 !important;
 
@@ -1311,7 +1351,7 @@
             &::after {
                 font-size: 11px !important;
                 font-weight: 500 !important;
-                color: color-mix(in srgb, var(--b3-theme-on-surface) 60%, transparent) !important;
+                color: color-mix(in srgb, var(--sw-color-text-subtle) 60%, transparent) !important;
             }
         }
     }
@@ -1322,12 +1362,12 @@
         .sw__home-calendar-nav {
             padding: var(--sw-space-sm, 6px) var(--sw-space-md, 8px);
             border-radius: 10px;
-            background: color-mix(in srgb, var(--b3-theme-on-background, #0f172a) 3.5%, var(--b3-theme-background, #ffffff));
-            border: 1px solid color-mix(in srgb, var(--b3-theme-on-background, #0f172a) 7%, transparent);
+            background: color-mix(in srgb, var(--sw-color-text, #0f172a) 3.5%, var(--sw-color-bg, #ffffff));
+            border: 1px solid color-mix(in srgb, var(--sw-color-text, #0f172a) 7%, transparent);
         }
 
         .sw__home-calendar-cell:hover {
-            background: color-mix(in srgb, var(--b3-theme-primary) 8%, transparent);
+            background: color-mix(in srgb, var(--sw-color-accent) 8%, transparent);
             border-radius: $sw-radius-md;
         }
     }
@@ -1377,8 +1417,8 @@
 
             &:hover {
                 transform: translateY(-1.5px) !important;
-                background: var(--b3-theme-surface-lighter, var(--b3-theme-surface, #ffffff)) !important;
-                box-shadow: 0 8px 22px rgba(37, 99, 235, 0.12), inset 0 1px 0 var(--b3-theme-surface-lighter, #ffffff) !important;
+                background: var(--sw-color-surface-muted, var(--sw-color-surface, #ffffff)) !important;
+                box-shadow: 0 8px 22px rgba(37, 99, 235, 0.12), inset 0 1px 0 var(--sw-color-surface-muted, #ffffff) !important;
                 border-style: solid !important;
                 border-color: rgba(37, 99, 235, 0.55) !important;
             }
@@ -1386,16 +1426,16 @@
             /* 暗色模式 hover：基础白底 hover 被暗色覆盖压制，需单独给出提亮反馈 */
             :is(html[data-theme-mode="dark"], [data-theme-mode="dark"], [data-appearance="dark"], body.body--dark, body.theme--dark, html.dark, .b3-theme-dark) & {
                 &:hover {
-                    background: color-mix(in srgb, var(--b3-theme-primary, #60a5fa) 12%, var(--b3-theme-surface)) !important;
+                    background: color-mix(in srgb, var(--sw-color-accent, #60a5fa) 12%, var(--sw-color-surface)) !important;
                     box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
-                    border-color: var(--b3-theme-primary, rgba(96, 165, 250, 0.55)) !important;
+                    border-color: var(--sw-color-accent, rgba(96, 165, 250, 0.55)) !important;
                 }
             }
 
             .sw__home-module-item-label {
                 font-size: 14px !important;
                 font-weight: 750 !important;
-                color: var(--b3-theme-on-surface) !important;
+                color: var(--sw-color-text-subtle) !important;
                 display: flex !important;
                 align-items: center !important;
                 gap: var(--sw-space-sm, 6px) !important;
@@ -1405,7 +1445,7 @@
             &::after {
                 font-size: 11px !important;
                 font-weight: 550 !important;
-                color: color-mix(in srgb, var(--b3-theme-on-surface) 65%, transparent) !important;
+                color: color-mix(in srgb, var(--sw-color-text-subtle) 65%, transparent) !important;
             }
         }
     }
@@ -1428,11 +1468,11 @@
             justify-content: center !important;
             align-items: center !important;
             gap: var(--sw-space-xs, 4px) !important;
-            background: color-mix(in srgb, var(--sw-empty-color) 8%, var(--b3-theme-surface)) !important;
+            background: color-mix(in srgb, var(--sw-empty-color) 8%, var(--sw-color-surface)) !important;
             border: 1px solid color-mix(in srgb, var(--sw-empty-color) 24%, transparent) !important;
             border-radius: 14px !important;
             padding: 10px var(--sw-space-xl, 16px) !important;
-            color: var(--b3-theme-on-surface) !important;
+            color: var(--sw-color-text-subtle) !important;
 
             &::before {
                 font-size: 13px !important;
@@ -1443,7 +1483,7 @@
             &::after {
                 font-size: 11px !important;
                 font-weight: 500 !important;
-                color: color-mix(in srgb, var(--b3-theme-on-surface) 60%, transparent) !important;
+                color: color-mix(in srgb, var(--sw-color-text-subtle) 60%, transparent) !important;
             }
         }
     }
@@ -1565,12 +1605,12 @@
             gap: var(--sw-space-sm, 6px) !important;
             padding: var(--sw-space-md, 8px) var(--sw-space-lg, 12px) !important;
             border-radius: 14px !important;
-            background: color-mix(in srgb, var(--b3-theme-surface) 60%, rgba(255, 255, 255, 0.5)) !important;
+            background: color-mix(in srgb, var(--sw-color-surface) 60%, rgba(255, 255, 255, 0.5)) !important;
             border: 1px solid rgba(255, 255, 255, 0.6) !important;
             box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.8) !important;
 
             :is(html[data-theme-mode="dark"], [data-theme-mode="dark"], [data-appearance="dark"], body.body--dark, body.theme--dark, html.dark, .b3-theme-dark) & {
-                background: color-mix(in srgb, var(--b3-theme-surface) 78%, rgba(255, 255, 255, 0.06)) !important;
+                background: color-mix(in srgb, var(--sw-color-surface) 78%, rgba(255, 255, 255, 0.06)) !important;
                 border-color: rgba(255, 255, 255, 0.14) !important;
                 box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.15) !important;
             }
@@ -1645,11 +1685,11 @@
             min-height: var(--sw-control-h-md, 26px) !important;
             padding: var(--sw-space-xs, 4px) var(--sw-space-lg, 12px) !important;
             border-radius: 999px !important;
-            background: color-mix(in srgb, #8b5cf6 12%, var(--b3-theme-surface)) !important;
+            background: color-mix(in srgb, #8b5cf6 12%, var(--sw-color-surface)) !important;
             border: 1px solid color-mix(in srgb, #8b5cf6 28%, transparent) !important;
             font-size: 11px !important;
             font-weight: 600 !important;
-            color: var(--b3-theme-on-surface) !important;
+            color: var(--sw-color-text-subtle) !important;
 
             &::before {
                 content: "# ";
@@ -1674,8 +1714,8 @@
         min-height: var(--sw-control-h, 34px);
         padding: var(--sw-space-sm, 6px) var(--sw-space-lg, 12px);
         border-radius: 10px;
-        background: color-mix(in srgb, var(--b3-theme-on-background, #0f172a) 3.5%, var(--b3-theme-background, #ffffff));
-        border: 1px solid color-mix(in srgb, var(--b3-theme-on-background, #0f172a) 7%, transparent);
+        background: color-mix(in srgb, var(--sw-color-text, #0f172a) 3.5%, var(--sw-color-bg, #ffffff));
+        border: 1px solid color-mix(in srgb, var(--sw-color-text, #0f172a) 7%, transparent);
         box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
         backdrop-filter: none;
         -webkit-backdrop-filter: none;
@@ -1683,7 +1723,7 @@
 
         &:hover {
             transform: translateX(2px);
-            background: color-mix(in srgb, var(--sw-platform-accent, #2563eb) 6%, var(--b3-theme-background, #ffffff));
+            background: color-mix(in srgb, var(--sw-platform-accent, #2563eb) 6%, var(--sw-color-bg, #ffffff));
             border-color: color-mix(in srgb, var(--sw-platform-accent, #2563eb) 38%, transparent);
             box-shadow: 0 4px 12px color-mix(in srgb, var(--sw-platform-accent, #2563eb) 10%, transparent);
         }
@@ -1697,7 +1737,7 @@
     .sw__home-module-item-label {
         font-size: var(--sw-font-sm, 12px);
         font-weight: 600;
-        color: var(--b3-theme-on-background, #0f172a);
+        color: var(--sw-color-text, #0f172a);
         letter-spacing: -0.01em;
     }
 
@@ -1705,9 +1745,9 @@
         font-family: var(--sw-font-mono, monospace);
         font-size: 10px;
         font-weight: 550;
-        color: var(--b3-theme-on-surface-light, #475569);
-        background: var(--b3-theme-background, #ffffff);
-        border: 1px solid color-mix(in srgb, var(--b3-theme-on-background, #0f172a) 8%, transparent);
+        color: var(--sw-color-text-muted, #475569);
+        background: var(--sw-color-bg, #ffffff);
+        border: 1px solid color-mix(in srgb, var(--sw-color-text, #0f172a) 8%, transparent);
         padding: var(--sw-space-2xs, 2px) var(--sw-space-md, 8px);
         border-radius: var(--sw-platform-radius-pill, 999px);
     }
@@ -1741,7 +1781,7 @@
             font-size: 13px;
             font-weight: 750;
             letter-spacing: -0.015em;
-            color: var(--b3-theme-on-background);
+            color: var(--sw-color-text);
         }
 
         .sw__home-module-meta:not(.is-stale),
@@ -1781,8 +1821,8 @@
 
     // Bento 3.0: 底部微质感状态回执条（半透毛玻璃与极细顶边）
     .sw-home__receipt {
-        border-top: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--b3-border-color) 40%, transparent));
-        background: color-mix(in srgb, var(--b3-theme-surface) 60%, transparent);
+        border-top: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--sw-color-line) 40%, transparent));
+        background: color-mix(in srgb, var(--sw-color-surface) 60%, transparent);
         backdrop-filter: var(--sw-blur-md);
         -webkit-backdrop-filter: var(--sw-blur-md);
     }
@@ -1819,11 +1859,11 @@
         margin: var(--sw-space-sm, 6px) 0;
         padding: var(--sw-space-sm, 6px) var(--sw-space-lg, 12px);
         border-radius: 12px;
-        color: var(--b3-theme-on-surface-light);
+        color: var(--sw-color-text-muted);
         font-size: 12px;
         font-weight: 550;
-        background: color-mix(in srgb, var(--b3-theme-surface) 60%, transparent);
-        border: 1px solid color-mix(in srgb, var(--b3-border-color) 30%, transparent);
+        background: color-mix(in srgb, var(--sw-color-surface) 60%, transparent);
+        border: 1px solid color-mix(in srgb, var(--sw-color-line) 30%, transparent);
         backdrop-filter: var(--sw-blur-md);
 
         &::before {
@@ -1836,7 +1876,7 @@
         box-sizing: border-box;
         margin-top: 14px;
         border-top: 1px solid var(--sw-color-line-soft);
-        background: color-mix(in srgb, var(--b3-theme-surface) 82%, var(--b3-theme-background));
+        background: color-mix(in srgb, var(--sw-color-surface) 82%, var(--sw-color-bg));
         box-shadow: none;
     }
 
@@ -1867,11 +1907,11 @@
         width: 22px;
         height: 22px;
         border-radius: $sw-radius-sm;
-        background: color-mix(in srgb, var(--b3-theme-primary) 8%, transparent);
-        color: var(--b3-theme-primary);
+        background: color-mix(in srgb, var(--sw-color-accent) 8%, transparent);
+        color: var(--sw-color-accent);
     }
     .sw-home__grid .sw-home__cell .sw__home-module-header .sw__home-module-title {
-        color: color-mix(in srgb, var(--b3-theme-on-surface) 84%, var(--b3-theme-on-surface-light));
+        color: color-mix(in srgb, var(--sw-color-text-subtle) 84%, var(--sw-color-text-muted));
         font-size: var(--sw-font-md, 13px);
         font-weight: var(--sw-weight-emphasis, 650);
         letter-spacing: -0.01em;
@@ -1890,7 +1930,7 @@
         transition: background-color $sw-dur-fast $sw-ease;
 
         &:hover {
-            background: color-mix(in srgb, var(--b3-theme-primary) 6%, var(--b3-theme-surface));
+            background: color-mix(in srgb, var(--sw-color-accent) 6%, var(--sw-color-surface));
         }
     }
     .sw-home__cell .sw__home-module-item-action {
@@ -1902,7 +1942,7 @@
         // 基础层的 hover/focus 共用规则会关闭 outline；最终视觉层恢复
         // 键盘焦点环，避免 compact/窄屏卡片里焦点只剩颜色变化。
         &:focus-visible {
-            outline: 2px solid var(--sw-platform-accent, var(--b3-theme-primary));
+            outline: 2px solid var(--sw-platform-accent, var(--sw-color-accent));
             outline-offset: -2px;
         }
 
@@ -1927,7 +1967,7 @@
 
 // Snippet studio ------------------------------------------------------------
 .sw-studio {
-    background: var(--sw-page-bg, var(--b3-theme-background));
+    background: var(--sw-page-bg, var(--sw-color-bg));
 
     .sw-studio__header,
     .sw-studio__section-bar,
@@ -1946,17 +1986,17 @@
         border-color: var(--sw-polish-line);
         border-radius: var(--sw-platform-radius-md, 12px);
         box-shadow: none;
-        background: var(--b3-theme-surface);
+        background: var(--sw-color-surface);
     }
 
     .sw-studio__preview-section,
     .sw-studio__editor-section { background: var(--sw-polish-surface-strong); }
     .sw-studio__preview,
-    .sw-studio__editor-frame { background: var(--b3-theme-background); }
-    .sw-studio__details { background: var(--b3-theme-surface); }
+    .sw-studio__editor-frame { background: var(--sw-color-bg); }
+    .sw-studio__details { background: var(--sw-color-surface); }
     .sw-studio__ai {
         border-left: 1px solid var(--sw-color-line-soft, var(--sw-polish-line));
-        background: var(--sw-bg-tinted, var(--b3-theme-surface));
+        background: var(--sw-bg-tinted, var(--sw-color-surface));
         border-radius: 0;
         box-shadow: none;
     }
@@ -1965,8 +2005,8 @@
         margin-bottom: var(--sw-space-md, 8px);
         border-style: solid;
         border-color: var(--sw-polish-line-soft);
-        background: color-mix(in srgb, var(--b3-theme-surface) 84%, var(--b3-theme-background));
-        color: var(--b3-theme-on-surface-light);
+        background: color-mix(in srgb, var(--sw-color-surface) 84%, var(--sw-color-bg));
+        color: var(--sw-color-text-muted);
     }
 
     .sw-studio__preview {
@@ -1976,7 +2016,7 @@
     .sw-studio__preview-pane-head {
         flex: 0 0 auto;
         border-bottom: 1px solid var(--sw-polish-line-soft);
-        background: color-mix(in srgb, var(--b3-theme-surface) 88%, var(--b3-theme-background));
+        background: color-mix(in srgb, var(--sw-color-surface) 88%, var(--sw-color-bg));
     }
 
     .sw-studio__editor-frame {
@@ -1989,14 +2029,14 @@
         overflow: hidden;
         border: 1px solid var(--sw-polish-line-soft);
         border-radius: var(--sw-platform-radius-sm, 8px);
-        background: var(--b3-theme-background);
+        background: var(--sw-color-bg);
         box-shadow: var(--sw-rim-light, inset 0 1px 0 0 rgba(255, 255, 255, 0.08)), var(--sw-shadow-xs, 0 1px 2px rgb(15 23 42 / 4%));
         transition: border-color $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease;
 
         &:focus,
         &:focus-within {
-            border-color: var(--b3-theme-primary);
-            box-shadow: 0 0 0 2px color-mix(in srgb, var(--b3-theme-primary) 35%, transparent);
+            border-color: var(--sw-color-accent);
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--sw-color-accent) 35%, transparent);
             outline: none;
         }
     }
@@ -2011,8 +2051,8 @@
         padding: 10px var(--sw-space-2xs, 2px) 10px 0 !important;
         border: 0 !important;
         border-right: 1px solid var(--sw-polish-line-soft) !important;
-        background: color-mix(in srgb, var(--b3-theme-surface) 82%, var(--b3-theme-background));
-        color: var(--b3-theme-on-surface-light);
+        background: color-mix(in srgb, var(--sw-color-surface) 82%, var(--sw-color-bg));
+        color: var(--sw-color-text-muted);
         text-align: right;
         white-space: pre !important;
         overflow: hidden !important;
@@ -2063,7 +2103,7 @@
         border: 2px solid transparent;
         border-radius: var(--sw-platform-radius-pill);
         background-clip: padding-box;
-        background-color: color-mix(in srgb, var(--b3-theme-on-surface-light) 38%, transparent);
+        background-color: color-mix(in srgb, var(--sw-color-text-muted) 38%, transparent);
     }
 
     .sw-studio__button,
@@ -2075,20 +2115,20 @@
 
     .sw-studio__prompt {
         border-radius: var(--sw-radius-control, 10px);
-        background: var(--sw-card-float-bg, var(--b3-theme-background));
+        background: var(--sw-card-float-bg, var(--sw-color-bg));
         border: 1px solid var(--sw-color-line-soft, var(--sw-polish-line-soft));
         box-shadow: var(--sw-shadow-xs);
         transition: border-color $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease;
 
         &:focus {
             outline: none;
-            border-color: var(--b3-theme-primary);
+            border-color: var(--sw-color-accent);
             box-shadow: var(--sw-focus-glow);
         }
     }
 
     .sw-studio__button.primary,
-    .sw-studio__button.is-primary { box-shadow: 0 1px 2px color-mix(in srgb, var(--b3-theme-primary) 18%, transparent); }
+    .sw-studio__button.is-primary { box-shadow: 0 1px 2px color-mix(in srgb, var(--sw-color-accent) 18%, transparent); }
 
     .sw-studio__header-copy { min-width: 0; overflow: hidden; }
     .sw-studio__header-actions { min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
@@ -2097,7 +2137,7 @@
         overflow: hidden;
         text-overflow: ellipsis;
         border-radius: var(--sw-platform-radius-pill, 999px);
-        background: var(--sw-card-float-bg, var(--b3-theme-surface));
+        background: var(--sw-card-float-bg, var(--sw-color-surface));
         border: 1px solid var(--sw-color-line-soft, var(--sw-polish-line));
         box-shadow: var(--sw-shadow-xs);
         transition: transform $sw-dur-fast $sw-ease, background-color $sw-dur-fast $sw-ease, border-color $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease;
@@ -2130,8 +2170,8 @@
         overflow: hidden;
         border: 1px solid var(--sw-polish-line-soft);
         border-radius: var(--sw-platform-radius-sm, 8px);
-        background: color-mix(in srgb, var(--b3-theme-surface) 76%, transparent);
-        color: var(--b3-theme-on-surface-light);
+        background: color-mix(in srgb, var(--sw-color-surface) 76%, transparent);
+        color: var(--sw-color-text-muted);
         cursor: pointer;
         font-size: var(--sw-font-xs, 11px);
         list-style: none;
@@ -2145,14 +2185,14 @@
 
     .sw-studio__data-menu[open] .sw-studio__data-menu-summary,
     .sw-studio__data-menu-summary:hover {
-        border-color: color-mix(in srgb, var(--b3-theme-primary) 38%, var(--sw-polish-line));
+        border-color: color-mix(in srgb, var(--sw-color-accent) 38%, var(--sw-polish-line));
         background: var(--sw-accent-soft);
-        color: var(--b3-theme-primary);
+        color: var(--sw-color-accent);
     }
 
     .sw-studio__data-menu-summary:focus-visible {
         outline: none;
-        border-color: var(--b3-theme-primary);
+        border-color: var(--sw-color-accent);
         box-shadow: var(--sw-focus-ring);
     }
 
@@ -2167,7 +2207,7 @@
         padding: var(--sw-space-sm, 6px);
         border: 1px solid var(--sw-color-line-soft, var(--sw-polish-line));
         border-radius: var(--sw-radius-card, 14px);
-        background: var(--sw-card-float-bg, var(--b3-theme-surface));
+        background: var(--sw-card-float-bg, var(--sw-color-surface));
         box-shadow: var(--sw-shadow-bento);
     }
 
@@ -2181,7 +2221,7 @@
 
         &:hover {
             background: var(--sw-color-accent-soft, var(--sw-accent-soft));
-            color: var(--sw-color-accent, var(--b3-theme-primary));
+            color: var(--sw-color-accent, var(--sw-color-accent));
             transform: translateX(1.5px);
         }
 
@@ -2199,14 +2239,14 @@
     .sw-studio__gist > summary {
         min-height: 32px;
         padding: var(--sw-space-xs, 4px) var(--sw-space-2xs, 2px);
-        color: var(--b3-theme-on-surface);
+        color: var(--sw-color-text-subtle);
         font-size: var(--sw-font-xs, 11px);
         font-weight: var(--sw-weight-emphasis, 650);
         cursor: pointer;
     }
 
     .sw-studio__metadata[open] > summary,
-    .sw-studio__gist[open] > summary { color: var(--b3-theme-primary); }
+    .sw-studio__gist[open] > summary { color: var(--sw-color-accent); }
 
     .sw-studio__metadata > summary:focus-visible,
     .sw-studio__gist > summary:focus-visible {
@@ -2233,14 +2273,14 @@
     // contrast to read as a status while leaving ready/loading/error themes
     // to the existing state classes.
     .sw-studio__ai-header .sw-studio__state-badge:not(.is-ready):not(.is-loading):not(.is-error):not(.is-draft):not(.is-muted) {
-        border-color: color-mix(in srgb, var(--b3-theme-on-surface-light) 18%, var(--sw-polish-line-soft));
-        background: color-mix(in srgb, var(--b3-theme-on-surface-light) 7%, var(--b3-theme-surface));
-        color: var(--b3-theme-on-surface);
+        border-color: color-mix(in srgb, var(--sw-color-text-muted) 18%, var(--sw-polish-line-soft));
+        background: color-mix(in srgb, var(--sw-color-text-muted) 7%, var(--sw-color-surface));
+        color: var(--sw-color-text-subtle);
     }
     .sw-studio__header-actions > .sw-studio__button:last-child {
         border-color: var(--sw-platform-accent);
         background: var(--sw-platform-accent);
-        color: var(--b3-theme-on-primary, #fff);
+        color: var(--sw-color-on-accent, #fff);
     }
 }
 
@@ -2267,7 +2307,7 @@
     }
 
     .sw__doc-status--loading > .sw__spin {
-        color: var(--b3-theme-primary);
+        color: var(--sw-color-accent);
         animation: sw-spin .8s linear infinite;
     }
 
@@ -2285,10 +2325,10 @@
         display: inline-flex;
         align-items: center;
         padding: var(--sw-space-2xs, 2px) var(--sw-space-sm, 6px);
-        border: 1px solid color-mix(in srgb, var(--sw-platform-accent, var(--b3-theme-primary)) 36%, transparent);
+        border: 1px solid color-mix(in srgb, var(--sw-platform-accent, var(--sw-color-accent)) 36%, transparent);
         border-radius: var(--sw-platform-radius-pill, 999px);
-        background: color-mix(in srgb, var(--sw-platform-accent, var(--b3-theme-primary)) 12%, transparent);
-        color: var(--sw-platform-accent, var(--b3-theme-primary));
+        background: color-mix(in srgb, var(--sw-platform-accent, var(--sw-color-accent)) 12%, transparent);
+        color: var(--sw-platform-accent, var(--sw-color-accent));
         font-size: var(--sw-font-2xs, 10px);
         font-weight: 600;
     }
@@ -2297,10 +2337,10 @@
         display: inline-flex;
         align-items: center;
         padding: var(--sw-space-2xs, 2px) var(--sw-space-sm, 6px);
-        border: 1px solid color-mix(in srgb, var(--sw-color-data, var(--b3-theme-primary)) 36%, transparent);
+        border: 1px solid color-mix(in srgb, var(--sw-color-data, var(--sw-color-accent)) 36%, transparent);
         border-radius: var(--sw-platform-radius-pill, 999px);
-        background: color-mix(in srgb, var(--sw-color-data, var(--b3-theme-primary)) 12%, transparent);
-        color: var(--sw-color-data, var(--b3-theme-primary));
+        background: color-mix(in srgb, var(--sw-color-data, var(--sw-color-accent)) 12%, transparent);
+        color: var(--sw-color-data, var(--sw-color-accent));
         font-size: var(--sw-font-2xs, 10px);
         font-weight: 600;
     }
@@ -2314,8 +2354,8 @@
         transition: background-color $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease;
 
         &:hover {
-            background: color-mix(in srgb, var(--b3-theme-primary) 10%, transparent);
-            color: var(--b3-theme-primary);
+            background: color-mix(in srgb, var(--sw-color-accent) 10%, transparent);
+            color: var(--sw-color-accent);
         }
     }
 
@@ -2328,12 +2368,12 @@
 
     .sw__doc-status--loading {
         border-style: dashed;
-        background: color-mix(in srgb, var(--b3-theme-primary) 6%, var(--b3-theme-surface));
+        background: color-mix(in srgb, var(--sw-color-accent) 6%, var(--sw-color-surface));
     }
 
     .sw__doc-status--error {
-        border-color: color-mix(in srgb, var(--b3-theme-error) 48%, var(--sw-polish-line));
-        background: color-mix(in srgb, var(--b3-theme-error) 10%, var(--b3-theme-surface));
+        border-color: color-mix(in srgb, var(--sw-color-error) 48%, var(--sw-polish-line));
+        background: color-mix(in srgb, var(--sw-color-error) 10%, var(--sw-color-surface));
     }
 
     .sw__doc-status--empty,
@@ -2350,7 +2390,7 @@
         border-top: 1px dashed var(--sw-polish-line-soft);
     }
     .sw__search-empty-hints-label {
-        color: var(--b3-theme-on-surface-light);
+        color: var(--sw-color-text-muted);
         font-size: var(--sw-font-xs, 11px);
         opacity: 0.85;
     }
@@ -2360,15 +2400,15 @@
         padding: var(--sw-space-2xs, 2px) var(--sw-space-sm, 6px);
         border: 1px solid var(--sw-polish-line);
         border-radius: var(--sw-platform-radius-pill, 999px);
-        background: var(--b3-theme-surface);
-        color: var(--b3-theme-primary);
+        background: var(--sw-color-surface);
+        color: var(--sw-color-accent);
         font-size: var(--sw-font-xs, 11px);
         font-variant-numeric: tabular-nums;
         cursor: pointer;
         transition: transform $sw-dur-fast $sw-ease, background $sw-dur-fast $sw-ease;
 
         &:hover {
-            background: color-mix(in srgb, var(--b3-theme-primary) 12%, transparent);
+            background: color-mix(in srgb, var(--sw-color-accent) 12%, transparent);
             transform: translateY(-1px);
         }
     }
@@ -2384,7 +2424,7 @@
     }
     .sw__recent-query-label {
         font-size: var(--sw-font-xs, 11px);
-        color: var(--b3-theme-on-surface-light);
+        color: var(--sw-color-text-muted);
         opacity: 0.85;
     }
     .sw__recent-query-chip {
@@ -2394,22 +2434,22 @@
         padding: var(--sw-space-2xs, 2px) var(--sw-space-sm, 6px);
         border: 1px solid var(--sw-polish-line-soft);
         border-radius: var(--sw-platform-radius-pill, 999px);
-        background: var(--b3-theme-surface);
-        color: var(--b3-theme-on-surface);
+        background: var(--sw-color-surface);
+        color: var(--sw-color-text-subtle);
         font-size: var(--sw-font-xs, 11px);
         cursor: pointer;
         transition: border-color $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease, background $sw-dur-fast $sw-ease;
 
         &:hover {
-            border-color: color-mix(in srgb, var(--b3-theme-primary) 40%, var(--sw-polish-line));
-            background: color-mix(in srgb, var(--b3-theme-primary) 10%, var(--b3-theme-surface));
-            color: var(--b3-theme-primary);
+            border-color: color-mix(in srgb, var(--sw-color-accent) 40%, var(--sw-polish-line));
+            background: color-mix(in srgb, var(--sw-color-accent) 10%, var(--sw-color-surface));
+            color: var(--sw-color-accent);
         }
     }
 
     .sw__recent-query-clear {
         padding: var(--sw-space-2xs, 2px) var(--sw-space-xs, 4px);
-        color: var(--b3-theme-on-surface-light);
+        color: var(--sw-color-text-muted);
         font-size: var(--sw-font-xs, 11px);
         opacity: 0.7;
         cursor: pointer;
@@ -2417,7 +2457,7 @@
         transition: opacity $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease;
 
         &:hover {
-            color: var(--b3-theme-error);
+            color: var(--sw-color-error);
             opacity: 1;
         }
     }
@@ -2432,7 +2472,8 @@
         scrollbar-width: none;
         -webkit-overflow-scrolling: touch;
         border-bottom: 1px solid var(--sw-polish-line-soft);
-        background: color-mix(in srgb, var(--b3-theme-surface) 92%, var(--b3-theme-background));
+        background: color-mix(in srgb, var(--sw-color-surface) 92%, var(--sw-color-bg));
+        &.fn__none { display: none !important; }
     }
     .sw__mode-chips-bar::-webkit-scrollbar { display: none; }
 
@@ -2446,8 +2487,8 @@
         padding: 0 var(--sw-space-md, 10px);
         border: 1px solid var(--sw-polish-line-soft);
         border-radius: var(--sw-platform-radius-pill, 999px);
-        background: var(--sw-card-float-bg, var(--b3-theme-surface));
-        color: var(--b3-theme-on-surface);
+        background: var(--sw-card-float-bg, var(--sw-color-surface));
+        color: var(--sw-color-text-subtle);
         font-size: var(--sw-font-xs, 12px);
         font-weight: var(--sw-weight-medium, 500);
         cursor: pointer;
@@ -2462,9 +2503,9 @@
         }
 
         &:hover {
-            border-color: color-mix(in srgb, var(--b3-theme-primary) 40%, var(--sw-polish-line));
-            background: color-mix(in srgb, var(--b3-theme-primary) 8%, var(--b3-theme-surface));
-            color: var(--b3-theme-primary);
+            border-color: color-mix(in srgb, var(--sw-color-accent) 40%, var(--sw-polish-line));
+            background: color-mix(in srgb, var(--sw-color-accent) 8%, var(--sw-color-surface));
+            color: var(--sw-color-accent);
             transform: translateY(-1px);
         }
 
@@ -2479,9 +2520,9 @@
 
         &.is-active,
         &[aria-pressed="true"] {
-            border-color: color-mix(in srgb, var(--b3-theme-primary) 50%, transparent);
-            background: color-mix(in srgb, var(--b3-theme-primary) 14%, var(--b3-theme-surface));
-            color: var(--b3-theme-primary);
+            border-color: color-mix(in srgb, var(--sw-color-accent) 50%, transparent);
+            background: color-mix(in srgb, var(--sw-color-accent) 14%, var(--sw-color-surface));
+            color: var(--sw-color-accent);
             font-weight: var(--sw-weight-semibold, 600);
             box-shadow: var(--sw-shadow-xs);
 
@@ -2546,27 +2587,27 @@
         white-space: nowrap;
 
         &[data-sw-workbench-kind="saved-search"] {
-            border-color: color-mix(in srgb, var(--b3-theme-primary) 32%, var(--sw-polish-line));
-            background: color-mix(in srgb, var(--b3-theme-primary) 6%, var(--b3-theme-surface));
+            border-color: color-mix(in srgb, var(--sw-color-accent) 32%, var(--sw-polish-line));
+            background: color-mix(in srgb, var(--sw-color-accent) 6%, var(--sw-color-surface));
         }
     }
 
     .sw__workbench-entries .sw__doc-item {
         border: 1px solid var(--sw-polish-line);
         border-radius: var(--sw-platform-radius-sm, 8px);
-        background: var(--b3-theme-surface);
+        background: var(--sw-color-surface);
     }
 
     .sw__workbench-chip:focus-visible,
     .sw__workbench .sw__doc-item:focus-visible {
-        outline: 2px solid var(--b3-theme-primary);
+        outline: 2px solid var(--sw-color-accent);
         outline-offset: 2px;
         box-shadow: var(--sw-platform-focus), var(--sw-polish-shadow-card);
     }
 
     .sw__scroll {
         scrollbar-width: thin;
-        scrollbar-color: color-mix(in srgb, var(--b3-theme-on-surface-light) 42%, transparent) transparent;
+        scrollbar-color: color-mix(in srgb, var(--sw-color-text-muted) 42%, transparent) transparent;
     }
 
     .sw__scroll::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -2575,10 +2616,10 @@
         border: 2px solid transparent;
         border-radius: var(--sw-platform-radius-pill);
         background-clip: padding-box;
-        background-color: color-mix(in srgb, var(--b3-theme-on-surface-light) 38%, transparent);
+        background-color: color-mix(in srgb, var(--sw-color-text-muted) 38%, transparent);
     }
     .sw__scroll::-webkit-scrollbar-thumb:hover {
-        background-color: color-mix(in srgb, var(--sw-color-accent, var(--b3-theme-primary)) 55%, transparent);
+        background-color: color-mix(in srgb, var(--sw-color-accent, var(--sw-color-accent)) 55%, transparent);
     }
 }
 
@@ -2676,7 +2717,7 @@
             left: 0;
             height: 12px;
             pointer-events: none;
-            background: linear-gradient(0deg, var(--b3-theme-surface), color-mix(in srgb, var(--b3-theme-surface) 0%, transparent));
+            background: linear-gradient(0deg, var(--sw-color-surface), color-mix(in srgb, var(--sw-color-surface) 0%, transparent));
         }
         .sw-studio__details:has(:focus-visible)::after { opacity: 0; }
 
@@ -2710,7 +2751,7 @@
             scroll-padding-inline-end: var(--sw-space-xl, 16px);
             scrollbar-gutter: stable;
             scrollbar-width: thin;
-            scrollbar-color: color-mix(in srgb, var(--b3-theme-on-surface-light) 70%, transparent) transparent;
+            scrollbar-color: color-mix(in srgb, var(--sw-color-text-muted) 70%, transparent) transparent;
             box-shadow: none;
         }
         .sw-studio__editor-section > .sw-studio__section-bar::after {
@@ -2734,7 +2775,7 @@
         }
         .sw-studio__editor-section > .sw-studio__section-bar::-webkit-scrollbar-thumb {
             border-radius: var(--sw-platform-radius-pill);
-            background: color-mix(in srgb, var(--b3-theme-on-surface-light) 70%, transparent);
+            background: color-mix(in srgb, var(--sw-color-text-muted) 70%, transparent);
         }
         .sw-studio__editor-section > .sw-studio__section-bar > .sw-studio__section-lead {
             flex: 0 0 auto;
@@ -2756,7 +2797,7 @@
         .sw-studio__ai {
             position: relative;
             scrollbar-width: thin;
-            scrollbar-color: color-mix(in srgb, var(--b3-theme-on-surface-light) 78%, transparent) transparent;
+            scrollbar-color: color-mix(in srgb, var(--sw-color-text-muted) 78%, transparent) transparent;
             scrollbar-gutter: stable;
             overscroll-behavior: contain;
             padding-bottom: var(--sw-space-2xl, 24px);
@@ -2771,13 +2812,13 @@
             left: 0;
             height: 16px;
             pointer-events: none;
-            background: linear-gradient(0deg, var(--b3-theme-surface) 0%, var(--b3-theme-surface) 46%, color-mix(in srgb, var(--b3-theme-surface) 0%, transparent) 100%);
+            background: linear-gradient(0deg, var(--sw-color-surface) 0%, var(--sw-color-surface) 46%, color-mix(in srgb, var(--sw-color-surface) 0%, transparent) 100%);
         }
         .sw-studio__ai:has(:focus-visible)::after { opacity: 0; }
         .sw-studio__ai::-webkit-scrollbar-track { background: transparent; }
         .sw-studio__ai::-webkit-scrollbar-thumb {
-            box-shadow: inset 1px 0 0 color-mix(in srgb, var(--b3-theme-on-surface-light) 18%, transparent);
-            background-color: color-mix(in srgb, var(--b3-theme-on-surface-light) 78%, transparent);
+            box-shadow: inset 1px 0 0 color-mix(in srgb, var(--sw-color-text-muted) 18%, transparent);
+            background-color: color-mix(in srgb, var(--sw-color-text-muted) 78%, transparent);
         }
         .sw-studio__preview-section > .sw-studio__hint {
             flex: 0 0 auto;
@@ -2915,9 +2956,9 @@
     width: 100%;
     max-width: 540px;
     max-height: min(520px, 75vh);
-    background: var(--sw-card-float-bg, var(--b3-theme-surface, #ffffff));
-    color: var(--b3-theme-on-surface, #24292f);
-    border: 1px solid color-mix(in srgb, var(--b3-theme-primary) 22%, var(--b3-border-color));
+    background: var(--sw-card-float-bg, var(--sw-color-surface, #ffffff));
+    color: var(--sw-color-text-subtle, #24292f);
+    border: 1px solid color-mix(in srgb, var(--sw-color-accent) 22%, var(--sw-color-line));
     border-radius: var(--sw-radius-card, 14px);
     box-shadow: var(--sw-shadow-bento);
     overflow: hidden;
@@ -2936,7 +2977,7 @@
     .sw__palette-hint {
         flex: 0 0 auto;
         font-size: var(--sw-font-xs, 11px);
-        color: var(--b3-theme-on-surface-light);
+        color: var(--sw-color-text-muted);
         white-space: nowrap;
     }
 
@@ -2953,15 +2994,15 @@
         border: 0;
         border-radius: var(--sw-radius-md, 8px);
         background: transparent;
-        color: var(--b3-theme-on-surface-light);
+        color: var(--sw-color-text-muted);
         font-size: var(--sw-font-2xl, 20px);
         line-height: 1;
         cursor: pointer;
 
         &:hover,
         &:focus-visible {
-            background: color-mix(in srgb, var(--b3-theme-primary) 10%, transparent);
-            color: var(--b3-theme-primary);
+            background: color-mix(in srgb, var(--sw-color-accent) 10%, transparent);
+            color: var(--sw-color-accent);
         }
     }
 
@@ -2971,13 +3012,13 @@
         display: flex;
         align-items: center;
         padding: var(--sw-space-lg, 12px) var(--sw-space-xl, 16px);
-        border-bottom: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--b3-border-color) 45%, transparent));
+        border-bottom: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--sw-color-line) 45%, transparent));
         background: transparent;
         box-sizing: border-box;
 
         /* 输入聚焦时底部线高亮，给键盘用户明确的焦点位置反馈 */
         &:focus-within {
-            border-bottom-color: color-mix(in srgb, var(--b3-theme-primary) 55%, transparent);
+            border-bottom-color: color-mix(in srgb, var(--sw-color-accent) 55%, transparent);
         }
 
         input,
@@ -2988,11 +3029,11 @@
             outline: none;
             background: transparent;
             font-size: var(--sw-font-lg, 15px);
-            color: var(--b3-theme-on-surface, #24292f);
+            color: var(--sw-color-text-subtle, #24292f);
             box-shadow: none;
 
             &::placeholder {
-                color: var(--b3-theme-on-surface-light, rgba(128, 128, 128, 0.7));
+                color: var(--sw-color-text-muted, rgba(128, 128, 128, 0.7));
             }
         }
     }
@@ -3018,7 +3059,7 @@
         + .sw__palette-section {
             margin-top: var(--sw-space-sm, 6px);
             padding-top: var(--sw-space-sm, 6px);
-            border-top: 1px solid color-mix(in srgb, var(--b3-border-color) 40%, transparent);
+            border-top: 1px solid color-mix(in srgb, var(--sw-color-line) 40%, transparent);
         }
     }
 
@@ -3026,7 +3067,7 @@
         padding: var(--sw-space-sm, 6px) var(--sw-space-md, 8px) var(--sw-space-xs, 4px);
         font-size: var(--sw-font-xs, 11px);
         font-weight: 600;
-        color: var(--b3-theme-on-surface-light, rgba(128, 128, 128, 0.8));
+        color: var(--sw-color-text-muted, rgba(128, 128, 128, 0.8));
         text-transform: uppercase;
         letter-spacing: 0.04em;
     }
@@ -3038,31 +3079,31 @@
         padding: var(--sw-space-md, 8px) 10px;
         border-radius: $sw-radius-sm;
         font-size: var(--sw-font-md, 13px);
-        color: var(--b3-theme-on-surface, #24292f);
+        color: var(--sw-color-text-subtle, #24292f);
         cursor: pointer;
         transition: background $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease, transform $sw-dur-fast $sw-ease;
         outline: none;
         box-sizing: border-box;
 
         &:hover {
-            background: color-mix(in srgb, var(--b3-theme-primary) 8%, transparent);
+            background: color-mix(in srgb, var(--sw-color-accent) 8%, transparent);
         }
 
         &.is-selected {
-            background: color-mix(in srgb, var(--b3-theme-primary) 15%, transparent);
-            color: var(--b3-theme-primary);
+            background: color-mix(in srgb, var(--sw-color-accent) 15%, transparent);
+            color: var(--sw-color-accent);
             font-weight: 500;
-            box-shadow: inset 3px 0 0 var(--b3-theme-primary);
+            box-shadow: inset 3px 0 0 var(--sw-color-accent);
             transform: translateX(1.5px);
         }
 
         &.is-destructive {
-            color: var(--b3-theme-error, #d83b01);
+            color: var(--sw-color-error, #d83b01);
 
             &:hover,
             &.is-selected {
-                background: color-mix(in srgb, var(--b3-theme-error, #d83b01) 12%, transparent);
-                color: var(--b3-theme-error, #d83b01);
+                background: color-mix(in srgb, var(--sw-color-error, #d83b01) 12%, transparent);
+                color: var(--sw-color-error, #d83b01);
             }
         }
     }
@@ -3104,12 +3145,12 @@
         height: 20px;
         padding: 1px var(--sw-space-sm, 6px);
         margin-left: auto;
-        border: 1px solid color-mix(in srgb, var(--b3-border-color) 70%, transparent);
-        border-bottom: 2px solid color-mix(in srgb, var(--b3-border-color) 85%, #000 15%);
+        border: 1px solid color-mix(in srgb, var(--sw-color-line) 70%, transparent);
+        border-bottom: 2px solid color-mix(in srgb, var(--sw-color-line) 85%, #000 15%);
         border-radius: var(--sw-platform-radius-sm, 6px);
-        background: linear-gradient(180deg, color-mix(in srgb, var(--b3-theme-surface) 96%, #fff 4%), color-mix(in srgb, var(--b3-theme-surface) 88%, var(--b3-theme-background) 12%));
+        background: linear-gradient(180deg, color-mix(in srgb, var(--sw-color-surface) 96%, #fff 4%), color-mix(in srgb, var(--sw-color-surface) 88%, var(--sw-color-bg) 12%));
         box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.15);
-        color: var(--b3-theme-on-surface-light, rgba(128, 128, 128, 0.9));
+        color: var(--sw-color-text-muted, rgba(128, 128, 128, 0.9));
         font-family: var(--sw-font-mono, monospace);
         font-size: var(--sw-font-xs, 11px);
         font-weight: 600;
@@ -3125,11 +3166,11 @@
     }
 
     .sw__palette-item.is-selected .sw__palette-item-shortcut {
-        border-color: color-mix(in srgb, var(--b3-theme-primary) 50%, transparent);
-        border-bottom-color: color-mix(in srgb, var(--b3-theme-primary) 70%, #000 30%);
-        background: color-mix(in srgb, var(--b3-theme-primary) 18%, var(--b3-theme-surface));
-        color: var(--b3-theme-primary);
-        box-shadow: 0 1px 1px color-mix(in srgb, var(--b3-theme-primary) 40%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+        border-color: color-mix(in srgb, var(--sw-color-accent) 50%, transparent);
+        border-bottom-color: color-mix(in srgb, var(--sw-color-accent) 70%, #000 30%);
+        background: color-mix(in srgb, var(--sw-color-accent) 18%, var(--sw-color-surface));
+        color: var(--sw-color-accent);
+        box-shadow: 0 1px 1px color-mix(in srgb, var(--sw-color-accent) 40%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.25);
     }
 
     .sw__palette-item-badge--recommend {
@@ -3158,7 +3199,7 @@
         padding: var(--sw-space-2xl, 24px) var(--sw-space-xl, 16px);
         text-align: center;
         font-size: var(--sw-font-md, 13px);
-        color: var(--b3-theme-on-surface-light, rgba(128, 128, 128, 0.7));
+        color: var(--sw-color-text-muted, rgba(128, 128, 128, 0.7));
     }
 
     &--mobile {
@@ -3232,10 +3273,10 @@ mark.sw__search-mark,
 .sw__doc-snippet mark {
     padding: 1px var(--sw-space-2xs, 2px);
     border-radius: 3px;
-    background: color-mix(in srgb, var(--b3-theme-primary) 22%, transparent);
-    color: var(--b3-theme-primary);
+    background: color-mix(in srgb, var(--sw-color-accent) 22%, transparent);
+    color: var(--sw-color-accent);
     font-weight: 700;
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--b3-theme-primary) 30%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sw-color-accent) 30%, transparent);
 }
 
 @media (forced-colors: active) {
@@ -3294,7 +3335,7 @@ button:active:not(:disabled),
 
     .lv-dialog-title-text {
         font-weight: var(--sw-weight-bold, 700);
-        color: var(--b3-theme-on-background);
+        color: var(--sw-color-text);
         line-height: 1.2;
         vertical-align: middle;
     }
@@ -3320,7 +3361,7 @@ button:active:not(:disabled),
 .sw-home__cell--midnight,
 .sw-home__midnight-card {
     background: var(--sw-card-accent-dark, var(--lv-midnight-card, #1B1E2E));
-    border: 1px solid color-mix(in srgb, var(--sw-color-accent) 28%, var(--b3-border-color));
+    border: 1px solid color-mix(in srgb, var(--sw-color-accent) 28%, var(--sw-color-line));
     border-radius: var(--sw-radius-card, 16px);
     box-shadow: var(--sw-shadow-bento);
     color: var(--sw-card-accent-dark-text, #ffffff);
@@ -3356,15 +3397,15 @@ button:active:not(:disabled),
         padding: var(--sw-space-2xs, 2px) var(--sw-space-md, 8px);
         border-radius: var(--sw-platform-radius-pill, 999px);
         border: 1px solid var(--sw-polish-line-soft);
-        background: color-mix(in srgb, var(--b3-theme-surface) 75%, transparent);
+        background: color-mix(in srgb, var(--sw-color-surface) 75%, transparent);
         font-size: var(--sw-font-xs, 11px);
-        color: var(--b3-theme-on-surface-light);
+        color: var(--sw-color-text-muted);
         cursor: pointer;
         transition: border-color $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease, background-color $sw-dur-fast $sw-ease, transform $sw-dur-fast $sw-ease;
 
         &:hover {
-            border-color: var(--b3-theme-primary);
-            color: var(--b3-theme-primary);
+            border-color: var(--sw-color-accent);
+            color: var(--sw-color-accent);
             background: var(--sw-hover-bg);
             transform: translateY(-1px);
         }
@@ -3382,9 +3423,9 @@ button:active:not(:disabled),
     .sw__search-empty-clear {
         cursor: pointer;
         font-size: var(--sw-font-sm, 12px);
-        color: var(--b3-theme-primary);
+        color: var(--sw-color-accent);
         padding: var(--sw-space-xs, 4px) var(--sw-space-lg, 12px);
-        border: 1px solid color-mix(in srgb, var(--b3-theme-primary) 30%, transparent);
+        border: 1px solid color-mix(in srgb, var(--sw-color-accent) 30%, transparent);
         border-radius: var(--sw-platform-radius-pill, 999px);
 
         &:hover {
@@ -3418,8 +3459,8 @@ button:active:not(:disabled),
 // 第一面板与全局卡片浮起、弱化实线边框与悬停亮度微反馈
 .sw__card,
 .sw__doc-item {
-    border-color: var(--sw-color-line-soft, color-mix(in srgb, var(--b3-border-color) 45%, transparent));
-    background: var(--sw-card-float-bg, var(--b3-theme-surface));
+    border-color: var(--sw-color-line-soft, color-mix(in srgb, var(--sw-color-line) 45%, transparent));
+    background: var(--sw-card-float-bg, var(--sw-color-surface));
     box-shadow: var(--sw-shadow-bento, var(--sw-shadow-xs));
     transition: transform $sw-dur-base var(--sw-ease-out-back, $sw-ease), box-shadow $sw-dur-base var(--sw-ease-out-back, $sw-ease), border-color $sw-dur-fast $sw-ease, filter $sw-dur-fast $sw-ease;
     animation: sw-list-item-enter $sw-dur-base var(--sw-ease-out-back, $sw-ease) backwards;
@@ -3510,16 +3551,16 @@ button:active:not(:disabled),
     .sw-home__cell--dragging {
         opacity: 0.52;
         transform: scale(0.985);
-        border-color: color-mix(in srgb, var(--sw-color-accent, var(--b3-theme-primary)) 60%, transparent);
+        border-color: color-mix(in srgb, var(--sw-color-accent, var(--sw-color-accent)) 60%, transparent);
         box-shadow: var(--sw-shadow-xs);
         filter: grayscale(0.2);
         transition: transform $sw-dur-fast $sw-ease, opacity $sw-dur-fast $sw-ease, filter $sw-dur-fast $sw-ease;
     }
 
     .sw-home__cell--dragover {
-        outline: 2px dashed var(--sw-color-accent, var(--b3-theme-primary)) !important;
+        outline: 2px dashed var(--sw-color-accent, var(--sw-color-accent)) !important;
         outline-offset: -2px;
-        background: color-mix(in srgb, var(--sw-color-accent, var(--b3-theme-primary)) 12%, var(--sw-card-float-bg, var(--b3-theme-surface))) !important;
+        background: color-mix(in srgb, var(--sw-color-accent, var(--sw-color-accent)) 12%, var(--sw-card-float-bg, var(--sw-color-surface))) !important;
         box-shadow: var(--sw-focus-glow), var(--sw-shadow-bento) !important;
         transform: scale(1.008) !important;
         transition: transform $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease, background-color $sw-dur-fast $sw-ease, outline-color $sw-dur-fast $sw-ease;
@@ -3527,7 +3568,7 @@ button:active:not(:disabled),
 
     // T-7314：工作台内容行键盘焦点环——Bento 重构后必须保留可见焦点（内缩避免溢出裁切）。
     .sw-home__cell .sw__home-module-item-action:focus-visible {
-        outline: 2px solid var(--sw-platform-accent, var(--b3-theme-primary));
+        outline: 2px solid var(--sw-platform-accent, var(--sw-color-accent));
         outline-offset: -2px;
     }
 }
@@ -3535,9 +3576,9 @@ button:active:not(:disabled),
 // ==================== T-7771~T-7772：工作台尺寸型号菜单 Bento 白卡浮层与选项微动效 ====================
 .sw-home__size-menu,
 .sw__sort-menu {
-    border: 1px solid var(--sw-color-line-soft, var(--b3-border-color));
+    border: 1px solid var(--sw-color-line-soft, var(--sw-color-line));
     border-radius: var(--sw-radius-card, 14px);
-    background: var(--sw-card-float-bg, var(--b3-theme-surface));
+    background: var(--sw-card-float-bg, var(--sw-color-surface));
     box-shadow: var(--sw-shadow-bento);
     backdrop-filter: var(--sw-blur-md, blur(8px));
     -webkit-backdrop-filter: var(--sw-blur-md, blur(8px));
@@ -3551,7 +3592,7 @@ button:active:not(:disabled),
 
         &:hover {
             background: var(--sw-color-accent-soft, var(--sw-accent-soft));
-            color: var(--sw-color-accent, var(--b3-theme-primary));
+            color: var(--sw-color-accent, var(--sw-color-accent));
             transform: translateX(1.5px);
         }
 
@@ -3560,19 +3601,19 @@ button:active:not(:disabled),
         }
 
         &[aria-checked="true"] {
-            color: var(--sw-color-accent, var(--b3-theme-primary));
+            color: var(--sw-color-accent, var(--sw-color-accent));
             font-weight: var(--sw-weight-semibold, 600);
 
             svg {
-                color: var(--sw-color-accent, var(--b3-theme-primary));
+                color: var(--sw-color-accent, var(--sw-color-accent));
             }
         }
     }
 
     .sw__size-tile {
-        border: 1px solid color-mix(in srgb, var(--sw-color-accent, var(--b3-theme-primary)) 50%, transparent);
+        border: 1px solid color-mix(in srgb, var(--sw-color-accent, var(--sw-color-accent)) 50%, transparent);
         border-radius: 4px;
-        background: color-mix(in srgb, var(--sw-color-accent, var(--b3-theme-primary)) 16%, transparent);
+        background: color-mix(in srgb, var(--sw-color-accent, var(--sw-color-accent)) 16%, transparent);
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
         transition: transform $sw-dur-fast $sw-ease, background-color $sw-dur-fast $sw-ease, border-color $sw-dur-fast $sw-ease;
     }
@@ -3617,55 +3658,55 @@ button:active:not(:disabled),
     }
 
     .sw-home__preset-btn {
-        border: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--b3-border-color) 45%, transparent));
-        background: var(--sw-card-float-bg, var(--b3-theme-surface));
-        color: var(--sw-color-accent, var(--b3-theme-primary));
+        border: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--sw-color-line) 45%, transparent));
+        background: var(--sw-card-float-bg, var(--sw-color-surface));
+        color: var(--sw-color-accent, var(--sw-color-accent));
 
         &:hover {
             background: var(--sw-color-accent-soft, var(--sw-accent-soft));
-            border-color: var(--sw-color-accent, var(--b3-theme-primary));
+            border-color: var(--sw-color-accent, var(--sw-color-accent));
         }
     }
 
     .sw-home__stack-btn {
-        border: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--b3-border-color) 45%, transparent));
-        background: var(--sw-card-float-bg, var(--b3-theme-surface));
-        color: var(--sw-color-accent, var(--b3-theme-primary));
+        border: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--sw-color-line) 45%, transparent));
+        background: var(--sw-card-float-bg, var(--sw-color-surface));
+        color: var(--sw-color-accent, var(--sw-color-accent));
 
         &:hover {
             background: var(--sw-color-accent-soft, var(--sw-accent-soft));
-            border-color: var(--sw-color-accent, var(--b3-theme-primary));
+            border-color: var(--sw-color-accent, var(--sw-color-accent));
         }
     }
 
     .sw-home__restore-default {
-        border: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--b3-border-color) 45%, transparent));
-        background: var(--sw-card-float-bg, var(--b3-theme-surface));
-        color: var(--b3-theme-on-surface);
+        border: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--sw-color-line) 45%, transparent));
+        background: var(--sw-card-float-bg, var(--sw-color-surface));
+        color: var(--sw-color-text-subtle);
 
         &:hover:not(:disabled) {
             background: var(--sw-hover-bg);
-            border-color: var(--b3-border-color);
+            border-color: var(--sw-color-line);
         }
     }
 
     .sw-home__clear-btn {
-        border: 1px solid color-mix(in srgb, var(--b3-theme-error, #f43f5e) 30%, transparent);
-        background: var(--sw-card-float-bg, var(--b3-theme-surface));
-        color: var(--b3-theme-error, #f43f5e);
+        border: 1px solid color-mix(in srgb, var(--sw-color-error, #f43f5e) 30%, transparent);
+        background: var(--sw-card-float-bg, var(--sw-color-surface));
+        color: var(--sw-color-error, #f43f5e);
 
         &:hover {
-            background: color-mix(in srgb, var(--b3-theme-error, #f43f5e) 10%, transparent);
-            border-color: var(--b3-theme-error, #f43f5e);
+            background: color-mix(in srgb, var(--sw-color-error, #f43f5e) 10%, transparent);
+            border-color: var(--sw-color-error, #f43f5e);
         }
     }
 }
 
 // 场景预设弹窗菜单 Bento 白卡浮层
 .b3-menu.sw-home__presets-menu {
-    border: 1px solid var(--sw-color-line-soft, var(--b3-border-color));
+    border: 1px solid var(--sw-color-line-soft, var(--sw-color-line));
     border-radius: var(--sw-radius-card, 14px);
-    background: var(--sw-card-float-bg, var(--b3-theme-surface));
+    background: var(--sw-card-float-bg, var(--sw-color-surface));
     box-shadow: var(--sw-shadow-bento);
     backdrop-filter: var(--sw-blur-md, blur(8px));
     -webkit-backdrop-filter: var(--sw-blur-md, blur(8px));
@@ -3680,7 +3721,7 @@ button:active:not(:disabled),
 
         &:hover {
             background: var(--sw-color-accent-soft, var(--sw-accent-soft));
-            color: var(--sw-color-accent, var(--b3-theme-primary));
+            color: var(--sw-color-accent, var(--sw-color-accent));
             transform: translateX(1.5px);
         }
 
@@ -3691,7 +3732,7 @@ button:active:not(:disabled),
         .b3-menu__icon {
             width: 14px;
             height: 14px;
-            color: var(--sw-color-accent, var(--b3-theme-primary));
+            color: var(--sw-color-accent, var(--sw-color-accent));
         }
 
         .b3-menu__label {
@@ -3709,8 +3750,8 @@ button:active:not(:disabled),
         padding-block: var(--sw-space-2xs, 2px);
         padding-inline: var(--sw-space-lg, 12px) !important;
         justify-content: center;
-        background: var(--sw-card-float-bg, var(--b3-theme-surface));
-        border-color: var(--sw-color-line-soft, color-mix(in srgb, var(--b3-border-color) 45%, transparent));
+        background: var(--sw-card-float-bg, var(--sw-color-surface));
+        border-color: var(--sw-color-line-soft, color-mix(in srgb, var(--sw-color-line) 45%, transparent));
         box-shadow: var(--sw-shadow-xs);
         transition: transform $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease, border-color $sw-dur-fast $sw-ease, max-height $sw-dur-base $sw-ease;
         cursor: pointer;
@@ -3757,9 +3798,9 @@ button:active:not(:disabled),
         line-height: 18px;
         padding: 0 var(--sw-space-sm, 6px);
         border-radius: var(--sw-platform-radius-pill, 999px);
-        background: var(--sw-color-accent-soft, color-mix(in srgb, var(--b3-theme-primary) 12%, transparent));
-        color: var(--sw-color-accent, var(--b3-theme-primary));
-        border: 1px solid color-mix(in srgb, var(--sw-color-accent, var(--b3-theme-primary)) 28%, transparent);
+        background: var(--sw-color-accent-soft, color-mix(in srgb, var(--sw-color-accent) 12%, transparent));
+        color: var(--sw-color-accent, var(--sw-color-accent));
+        border: 1px solid color-mix(in srgb, var(--sw-color-accent, var(--sw-color-accent)) 28%, transparent);
         font-family: var(--sw-font-mono, monospace);
         font-size: var(--sw-font-2xs, 10px);
         font-weight: var(--sw-weight-semibold, 600);
@@ -3774,7 +3815,7 @@ button:active:not(:disabled),
 
         &:hover {
             background: var(--sw-color-accent-soft, var(--sw-accent-soft));
-            color: var(--sw-color-accent, var(--b3-theme-primary));
+            color: var(--sw-color-accent, var(--sw-color-accent));
             transform: scale(1.08);
         }
 
@@ -3798,7 +3839,7 @@ button:active:not(:disabled),
     // 顶栏关闭与标题
     .sw-home-store__close-bar {
         background: transparent !important;
-        border-bottom: 1px solid color-mix(in srgb, var(--b3-border-color) 35%, transparent) !important;
+        border-bottom: 1px solid color-mix(in srgb, var(--sw-color-line) 35%, transparent) !important;
         padding: var(--sw-space-lg, 12px) var(--sw-space-2xl, 24px) !important;
     }
 
@@ -3809,7 +3850,7 @@ button:active:not(:disabled),
 
         input {
             border-radius: 999px !important;
-            background: color-mix(in srgb, var(--b3-theme-surface) 65%, rgba(255, 255, 255, 0.5)) !important;
+            background: color-mix(in srgb, var(--sw-color-surface) 65%, rgba(255, 255, 255, 0.5)) !important;
             border: 1px solid rgba(255, 255, 255, 0.7) !important;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03), inset 0 1px 1px rgba(255, 255, 255, 0.8) !important;
             padding: var(--sw-space-md, 8px) 18px !important;
@@ -3817,7 +3858,7 @@ button:active:not(:disabled),
             backdrop-filter: var(--sw-blur-xl) !important;
 
             :is(html[data-theme-mode="dark"], [data-theme-mode="dark"], [data-appearance="dark"], body.body--dark, body.theme--dark, html.dark, .b3-theme-dark) & {
-                background: color-mix(in srgb, var(--b3-theme-surface) 65%, rgba(255, 255, 255, 0.06)) !important;
+                background: color-mix(in srgb, var(--sw-color-surface) 65%, rgba(255, 255, 255, 0.06)) !important;
                 border-color: rgba(255, 255, 255, 0.12) !important;
             }
 
@@ -3830,8 +3871,8 @@ button:active:not(:disabled),
         .sw-home-store__guide {
             border-radius: 999px !important;
             padding: var(--sw-space-sm, 6px) var(--sw-space-xl, 16px) !important;
-            background: color-mix(in srgb, var(--b3-theme-surface) 70%, transparent) !important;
-            border: 1px solid color-mix(in srgb, var(--b3-border-color) 45%, transparent) !important;
+            background: color-mix(in srgb, var(--sw-color-surface) 70%, transparent) !important;
+            border: 1px solid color-mix(in srgb, var(--sw-color-line) 45%, transparent) !important;
             backdrop-filter: var(--sw-blur-xl) !important;
             font-weight: 600 !important;
         }
@@ -3839,10 +3880,10 @@ button:active:not(:disabled),
 
     // 分类药丸 Tab 栏（Apple Segmented Control）
     .sw-home-store__tabs {
-        background: color-mix(in srgb, var(--b3-theme-on-surface) 6%, transparent) !important;
+        background: color-mix(in srgb, var(--sw-color-text-subtle) 6%, transparent) !important;
         padding: var(--sw-space-xs, 4px) !important;
         border-radius: var(--sw-platform-radius-pill, 999px) !important;
-        border: 1px solid color-mix(in srgb, var(--b3-border-color) 30%, transparent) !important;
+        border: 1px solid color-mix(in srgb, var(--sw-color-line) 30%, transparent) !important;
         backdrop-filter: var(--sw-blur-lg) !important;
         gap: var(--sw-space-xs, 4px) !important;
         margin: var(--sw-space-sm, 6px) 0 14px !important;
@@ -3855,17 +3896,17 @@ button:active:not(:disabled),
         border: none !important;
         font-weight: 650 !important;
         font-size: 12px !important;
-        color: var(--b3-theme-on-surface-light) !important;
+        color: var(--sw-color-text-muted) !important;
         transition: transform $sw-dur-fast $sw-ease, background $sw-dur-fast $sw-ease, border-color $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease, opacity $sw-dur-fast $sw-ease !important;
 
         &:hover:not(.is-active) {
-            background: color-mix(in srgb, var(--b3-theme-on-surface) 8%, transparent) !important;
-            color: var(--b3-theme-on-surface) !important;
+            background: color-mix(in srgb, var(--sw-color-text-subtle) 8%, transparent) !important;
+            color: var(--sw-color-text-subtle) !important;
         }
 
         &.is-active {
-            background: var(--sw-card-float-bg, var(--b3-theme-surface)) !important;
-            color: var(--b3-theme-on-background) !important;
+            background: var(--sw-card-float-bg, var(--sw-color-surface)) !important;
+            color: var(--sw-color-text) !important;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 0 1px rgba(0, 0, 0, 0.06) !important;
         }
     }
@@ -3894,14 +3935,14 @@ button:active:not(:disabled),
 
             &:hover {
                 transform: translateY(-2px);
-                border-color: color-mix(in srgb, var(--sw-platform-accent, var(--b3-theme-primary)) 50%, rgba(255, 255, 255, 0.8)) !important;
+                border-color: color-mix(in srgb, var(--sw-platform-accent, var(--sw-color-accent)) 50%, rgba(255, 255, 255, 0.8)) !important;
                 box-shadow:
                     inset 0 1.5px 2px 0 rgba(255, 255, 255, 1),
                     0 12px 28px -4px rgba(0, 0, 0, 0.1) !important;
             }
 
             &.is-active {
-                border-color: var(--sw-platform-accent, var(--b3-theme-primary)) !important;
+                border-color: var(--sw-platform-accent, var(--sw-color-accent)) !important;
                 box-shadow:
                     inset 0 1.5px 2px 0 rgba(255, 255, 255, 1),
                     0 0 0 2px color-mix(in srgb, var(--sw-platform-accent) 30%, transparent),
@@ -3911,7 +3952,7 @@ button:active:not(:disabled),
 
             :is(html[data-theme-mode="dark"], [data-theme-mode="dark"], [data-appearance="dark"], body.body--dark, body.theme--dark, html.dark, .b3-theme-dark) & {
                 &:hover {
-                    border-color: color-mix(in srgb, var(--sw-platform-accent, var(--b3-theme-primary)) 55%, rgba(255, 255, 255, 0.16)) !important;
+                    border-color: color-mix(in srgb, var(--sw-platform-accent, var(--sw-color-accent)) 55%, rgba(255, 255, 255, 0.16)) !important;
                     box-shadow:
                         inset 0 1px 1px 0 rgba(255, 255, 255, 0.16),
                         0 12px 28px -4px rgba(0, 0, 0, 0.45) !important;
@@ -3997,19 +4038,19 @@ button:active:not(:disabled),
             border-radius: 999px !important;
             padding: var(--sw-space-xs, 4px) 14px !important;
             min-height: var(--sw-control-h-md, 26px) !important;
-            background: color-mix(in srgb, var(--b3-theme-surface) 60%, rgba(255, 255, 255, 0.5)) !important;
+            background: color-mix(in srgb, var(--sw-color-surface) 60%, rgba(255, 255, 255, 0.5)) !important;
             border: 1px solid rgba(255, 255, 255, 0.6) !important;
             font-weight: 600 !important;
             transition: transform $sw-dur-fast $sw-ease, background $sw-dur-fast $sw-ease, border-color $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease, opacity $sw-dur-fast $sw-ease !important;
 
             :is(html[data-theme-mode="dark"], [data-theme-mode="dark"], [data-appearance="dark"], body.body--dark, body.theme--dark, html.dark, .b3-theme-dark) & {
-                background: color-mix(in srgb, var(--b3-theme-surface) 84%, rgba(255, 255, 255, 0.08)) !important;
+                background: color-mix(in srgb, var(--sw-color-surface) 84%, rgba(255, 255, 255, 0.08)) !important;
                 border-color: rgba(255, 255, 255, 0.18) !important;
             }
 
             &.is-recommended {
                 border-color: color-mix(in srgb, var(--sw-platform-accent, #3b82f6) 55%, transparent) !important;
-                background: color-mix(in srgb, var(--sw-platform-accent, #3b82f6) 14%, var(--b3-theme-surface)) !important;
+                background: color-mix(in srgb, var(--sw-platform-accent, #3b82f6) 14%, var(--sw-color-surface)) !important;
                 font-weight: 700 !important;
             }
 
@@ -4042,8 +4083,8 @@ button:active:not(:disabled),
 
     .b3-dialog__container:not(.sw-dialog--fullscreen) {
         border-radius: var(--sw-radius-dialog, 16px) !important;
-        background: var(--b3-theme-surface, var(--lv-safe-surface, #ffffff)) !important;
-        border: 1px solid var(--b3-border-color, var(--lv-safe-border, rgba(0, 0, 0, 0.08))) !important;
+        background: var(--sw-color-surface, var(--lv-safe-surface, #ffffff)) !important;
+        border: 1px solid var(--sw-color-line, var(--lv-safe-border, rgba(0, 0, 0, 0.08))) !important;
         box-shadow: 0 16px 48px -8px rgba(0, 0, 0, 0.22), 0 4px 16px -2px rgba(0, 0, 0, 0.08) !important;
         animation: sw-dialog-pop 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         will-change: transform, opacity;
@@ -4051,7 +4092,7 @@ button:active:not(:disabled),
 
     .b3-dialog__header {
         background: transparent !important;
-        border-bottom: 1px solid var(--b3-border-color, var(--lv-safe-border, rgba(0, 0, 0, 0.08))) !important;
+        border-bottom: 1px solid var(--sw-color-line, var(--lv-safe-border, rgba(0, 0, 0, 0.08))) !important;
 
         .b3-dialog__close {
             cursor: pointer;
@@ -4059,15 +4100,15 @@ button:active:not(:disabled),
             height: 28px;
             padding: $sw-space-sm;
             border-radius: $sw-radius-sm;
-            color: var(--b3-theme-on-surface);
+            color: var(--sw-color-text-subtle);
             opacity: 0.7;
             transition: transform $sw-dur-fast $sw-ease, background $sw-dur-fast $sw-ease, border-color $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease, opacity $sw-dur-fast $sw-ease;
             box-sizing: border-box;
 
             &:hover {
                 opacity: 1;
-                background: var(--b3-theme-surface-light, rgba(128, 128, 128, 0.12));
-                color: var(--b3-theme-on-surface);
+                background: var(--sw-color-bg-soft, rgba(128, 128, 128, 0.12));
+                color: var(--sw-color-text-subtle);
                 transform: scale(1.05);
             }
 
@@ -4085,7 +4126,7 @@ button:active:not(:disabled),
 
     .b3-dialog__action {
         background: transparent !important;
-        border-top: 1px solid var(--b3-border-color, var(--lv-safe-border, rgba(0, 0, 0, 0.08))) !important;
+        border-top: 1px solid var(--sw-color-line, var(--lv-safe-border, rgba(0, 0, 0, 0.08))) !important;
     }
 
     .b3-dialog__scrim {
@@ -4192,6 +4233,24 @@ button:active:not(:disabled),
     .sw__close:hover,
     .sw-fab-recovery:hover,
     .sw-quick-icon-picker__cat:hover {
-        background: color-mix(in srgb, var(--b3-theme-primary) 8%, transparent);
+        background: color-mix(in srgb, var(--sw-color-accent) 8%, transparent);
     }
+}
+
+/* 插件与扩展页签智能身份胶囊标签 (Plugin Identity Capsule) */
+.sw__plugin-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sw-space-xs, 4px);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.25;
+    padding: 1px var(--sw-space-sm, 6px);
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--sw-color-accent, #6366f1) 12%, transparent);
+    color: var(--sw-color-accent, #6366f1);
+    border: 1px solid color-mix(in srgb, var(--sw-color-accent, #6366f1) 26%, transparent);
+    margin-left: var(--sw-space-sm, 6px);
+    vertical-align: middle;
+    flex-shrink: 0;
 }

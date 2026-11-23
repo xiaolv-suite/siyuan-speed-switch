@@ -124,7 +124,12 @@ function buildDocumentSetsWidgetSnapshot(value, config, labels = {}) {
         const stamp = Number(set.updatedAt) || Number(set.createdAt) || 0;
         if (normalized.showUpdated && stamp > 0) {
             const date = new Date(stamp);
-            if (!Number.isNaN(date.getTime())) parts.push(date.toISOString().slice(0, 10));
+            if (!Number.isNaN(date.getTime())) {
+                // 本地日历日键：updatedAt 是本地时刻，toISOString 的 UTC 键在 UTC+8 的
+                // 00:00~08:00 会把日期显示成前一天
+                const p2 = (n) => String(n).padStart(2, "0");
+                parts.push(`${date.getFullYear()}-${p2(date.getMonth() + 1)}-${p2(date.getDate())}`);
+            }
         }
         return {label: text(set.name, 80), value: `set:${text(set.setId, 96)}`, secondary: parts.join(" · ")};
     });

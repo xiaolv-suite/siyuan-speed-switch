@@ -250,8 +250,10 @@ function planPenetrationSearchRequest(rawQuery, context = {}, options = {}) {
  * @param {number} [depth] 当前层级
  * @returns {Array<object>} 扁平化的标题节点列表 [{id, content, depth, subType}]
  */
+const MAX_OUTLINE_DEPTH = 16;
+
 function flattenOutlineTree(nodes, depth = 1) {
-    if (!Array.isArray(nodes)) return [];
+    if (!Array.isArray(nodes) || depth > MAX_OUTLINE_DEPTH) return [];
     const flattened = [];
     nodes.forEach((node) => {
         if (!node || typeof node !== "object") return;
@@ -266,8 +268,11 @@ function flattenOutlineTree(nodes, depth = 1) {
                 subType: String(node.subType || `h${currentDepth}`),
             });
         }
-        if (Array.isArray(node.children) && node.children.length > 0) {
-            flattened.push(...flattenOutlineTree(node.children, depth + 1));
+        if (Array.isArray(node.children) && node.children.length > 0 && depth < MAX_OUTLINE_DEPTH) {
+            const subNodes = flattenOutlineTree(node.children, depth + 1);
+            for (let i = 0; i < subNodes.length; i++) {
+                flattened.push(subNodes[i]);
+            }
         }
     });
     return flattened;
@@ -315,10 +320,11 @@ function aggregatePenetrationResults(plan, rawResponse, context = {}) {
 
         const results = [];
         rows.forEach((row) => {
-            const normalized = normalizePenetrationBlockResult(row, {
+            const isCurrentDoc = Boolean(row && safeCtx.activeDocId && (row.root_id === safeCtx.activeDocId || row.rootId === safeCtx.activeDocId));
+            const normalized = normalizePenetrationBlockResult(row, isCurrentDoc ? {
                 rootId: safeCtx.activeDocId,
                 title: safeCtx.activeDocTitle,
-            });
+            } : {});
             if (normalized) {
                 results.push({
                     id: normalized.blockId,
@@ -343,8 +349,8 @@ function aggregatePenetrationResults(plan, rawResponse, context = {}) {
         const needle = (plan.tagNeedle || "").toLowerCase();
         const results = [];
 
-        function extractTags(nodes) {
-            if (!Array.isArray(nodes)) return;
+        function extractTags(nodes, depth = 0) {
+            if (!Array.isArray(nodes) || depth > 16) return;
             for (const item of nodes) {
                 if (!item || typeof item !== "object") continue;
                 const label = String(item.label || item.tag || item.name || item.title || "");
@@ -363,7 +369,7 @@ function aggregatePenetrationResults(plan, rawResponse, context = {}) {
                     });
                 }
                 if (Array.isArray(item.children)) {
-                    extractTags(item.children);
+                    extractTags(item.children, depth + 1);
                 }
             }
         }
@@ -379,8 +385,8 @@ function aggregatePenetrationResults(plan, rawResponse, context = {}) {
         const needle = (plan.bookmarkNeedle || "").toLowerCase();
         const results = [];
 
-        function extractBookmarks(nodes) {
-            if (!Array.isArray(nodes)) return;
+        function extractBookmarks(nodes, depth = 0) {
+            if (!Array.isArray(nodes) || depth > 16) return;
             for (const item of nodes) {
                 if (!item || typeof item !== "object") continue;
                 const label = String(item.label || item.bookmark || item.name || item.title || "");
@@ -401,7 +407,7 @@ function aggregatePenetrationResults(plan, rawResponse, context = {}) {
                     });
                 }
                 if (Array.isArray(item.children)) {
-                    extractBookmarks(item.children);
+                    extractBookmarks(item.children, depth + 1);
                 }
             }
         }

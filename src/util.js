@@ -1247,6 +1247,88 @@ function normalizeThumbCache(values, options = {}) {
  * }
  * 返回 Array<{key, label, icon, items}>，key 稳定可作折叠状态键。
  */
+/**
+ * 智能识别页签是否属于插件自定义页面或系统功能页（非笔记本 Markdown 文档）
+ */
+function detectSpecialTabKind(tab) {
+    if (!tab) return { isSpecial: false, category: "doc" };
+    const head = tab.headElement;
+    const type = head?.getAttribute?.("data-type") || tab.type || "";
+    const initDataStr = head?.getAttribute?.("data-initdata") || head?.dataset?.initdata || "";
+    let initData = null;
+    if (initDataStr && typeof initDataStr === "string" && initDataStr.startsWith("{")) {
+        try { initData = JSON.parse(initDataStr); } catch {}
+    }
+
+    const pluginId = initData?.plugin || tab.model?.plugin?.name || "";
+    const pluginTitle = tab.model?.plugin?.displayName || "";
+    const tabTitle = head?.querySelector?.(".item__text")?.textContent?.trim() || tab.title || "";
+
+    // 1. 明确标记为 custom 的插件自定义页签
+    if (type === "custom" || pluginId || tab.model?.plugin) {
+        let name = pluginTitle || pluginId;
+        if (!name || /siyuan-plugin-|sy-/i.test(name)) {
+            if (/闪卡|riff/i.test(tabTitle)) name = "小驴闪卡";
+            else if (/管家|home/i.test(tabTitle)) name = "小驴管家";
+            else if (/打卡|checkin/i.test(tabTitle)) name = "小驴打卡";
+            else if (/考试|exam/i.test(tabTitle)) name = "小驴考试";
+            else if (/人脉|contacts/i.test(tabTitle)) name = "小驴人脉";
+            else if (/拾遗|glean/i.test(tabTitle)) name = "小驴拾遗";
+            else if (/常用|common/i.test(tabTitle)) name = "小驴常用";
+            else if (/雷切|speed/i.test(tabTitle)) name = "小驴雷切";
+            else name = "插件工作台";
+        }
+        return {
+            isSpecial: true,
+            isPlugin: true,
+            category: "plugin",
+            groupKey: `plugin:${name}`,
+            groupLabel: `🧩 ${name}`,
+            icon: "iconSparkles",
+            badgeText: name,
+        };
+    }
+
+    // 2. 思源系统内置虚拟页签
+    const SYSTEM_TYPES = {
+        graph: { label: "🌐 全局关系图", icon: "iconGraph", badge: "关系图" },
+        search: { label: "🔍 全局搜索", icon: "iconSearch", badge: "搜索" },
+        riffCard: { label: "🎴 闪卡复习", icon: "iconRiffCard", badge: "闪卡" },
+        browser: { label: "🌍 网页浏览", icon: "iconBrowser", badge: "网页" },
+        pdf: { label: "📑 PDF 阅读器", icon: "iconFile", badge: "PDF" },
+        backlink: { label: "🔗 反向链接", icon: "iconLink", badge: "反链" },
+        outline: { label: "📋 文档大纲", icon: "iconAlignLeft", badge: "大纲" },
+    };
+    if (type && SYSTEM_TYPES[type]) {
+        const sys = SYSTEM_TYPES[type];
+        return {
+            isSpecial: true,
+            isPlugin: false,
+            category: "system",
+            groupKey: `sys:${type}`,
+            groupLabel: sys.label,
+            icon: sys.icon,
+            badgeText: sys.badge,
+        };
+    }
+
+    // 3. 兜底标题推导（某些插件没有设置 data-type="custom"，但带有插件名称）
+    if (/^(小驴[闪管打考人拾常用雷]|思维导图|看板|日历|图片工具箱)/.test(tabTitle)) {
+        const matchedName = tabTitle.match(/^(小驴[闪管打考人拾常用雷][^\s·-]*|思维导图|看板|日历|图片工具箱)/)?.[0] || "插件页面";
+        return {
+            isSpecial: true,
+            isPlugin: true,
+            category: "plugin",
+            groupKey: `plugin:${matchedName}`,
+            groupLabel: `🧩 ${matchedName}`,
+            icon: "iconSparkles",
+            badgeText: matchedName,
+        };
+    }
+
+    return { isSpecial: false, category: "doc" };
+}
+
 function groupTabsByMode(tabs, mode, ctx) {
     const labels = ctx.labels || {};
     if (mode === "path") {
@@ -1266,21 +1348,46 @@ function groupTabsByMode(tabs, mode, ctx) {
     if (mode === "notebook") {
         const groups = new Map();
         tabs.forEach((tab) => {
+            const special = detectSpecialTabKind(tab);
+            if (special.isSpecial) {
+                if (!groups.has(special.groupKey)) {
+                    groups.set(special.groupKey, {
+                        key: special.groupKey,
+                        label: special.groupLabel,
+                        icon: special.icon,
+                        isSpecial: true,
+                        items: [],
+                    });
+                }
+                groups.get(special.groupKey).items.push(tab);
+                return;
+            }
+
             const id = String(ctx.notebookIdOf(tab) || "");
-            if (!groups.has(id)) groups.set(id, []);
-            groups.get(id).push(tab);
+            const nbKey = `nb:${id || "none"}`;
+            if (!groups.has(nbKey)) {
+                groups.set(nbKey, {
+                    key: nbKey,
+                    id,
+                    label: ctx.notebookNameOf(id) || (id ? id : (labels.standaloneDoc || labels.unknownNotebook || "独立文档")),
+                    icon: "iconFile",
+                    isSpecial: false,
+                    items: [],
+                });
+            }
+            groups.get(nbKey).items.push(tab);
         });
+
         const order = new Map((ctx.notebookOrder || []).map((id, index) => [id, index]));
-        return [...groups.entries()]
-            .map(([id, items]) => ({
-                key: `nb:${id || "none"}`,
-                label: ctx.notebookNameOf(id) || labels.unknownNotebook || id || "—",
-                icon: "iconFile",
-                items,
-            }))
+        return [...groups.values()]
             .sort((a, b) => {
-                const ia = order.has(ctx.notebookIdOf(a.items[0])) ? order.get(ctx.notebookIdOf(a.items[0])) : Number.MAX_SAFE_INTEGER;
-                const ib = order.has(ctx.notebookIdOf(b.items[0])) ? order.get(ctx.notebookIdOf(b.items[0])) : Number.MAX_SAFE_INTEGER;
+                // 特殊插件与系统页面统一排在真实笔记本后面，保持笔记本列表有序
+                if (a.isSpecial && !b.isSpecial) return 1;
+                if (!a.isSpecial && b.isSpecial) return -1;
+                if (a.isSpecial && b.isSpecial) return compareText(a.label, b.label);
+
+                const ia = order.has(a.id) ? order.get(a.id) : Number.MAX_SAFE_INTEGER;
+                const ib = order.has(b.id) ? order.get(b.id) : Number.MAX_SAFE_INTEGER;
                 return ia !== ib ? ia - ib : compareText(a.label, b.label);
             });
     }
@@ -1371,10 +1478,22 @@ function clampOversizedIcons(root) {
     // Phase 1: 纯读取阶段（集中读取几何尺寸，无任何 DOM 写入，杜绝交替回流）
     for (let i = 0; i < svgs.length; i++) {
         const svg = svgs[i];
+        if (svg.dataset && svg.dataset.swIconClamped === "true") continue;
+        // 快速短路：若 svg 已显式定义且符合阈值的属性，直接免除 getBoundingClientRect 昂贵回流
+        const attrW = typeof svg.getAttribute === "function" ? parseFloat(svg.getAttribute("width") || "") : NaN;
+        const attrH = typeof svg.getAttribute === "function" ? parseFloat(svg.getAttribute("height") || "") : NaN;
+        if (Number.isFinite(attrW) && attrW > 0 && attrW <= OVERSIZED_ICON_THRESHOLD_PX &&
+            Number.isFinite(attrH) && attrH > 0 && attrH <= OVERSIZED_ICON_THRESHOLD_PX) {
+            if (svg.dataset) svg.dataset.swIconClamped = "true";
+            continue;
+        }
         if (typeof svg.getBoundingClientRect !== "function") continue;
         const rect = svg.getBoundingClientRect();
         if (!rect) continue;
-        if (rect.width <= OVERSIZED_ICON_THRESHOLD_PX && rect.height <= OVERSIZED_ICON_THRESHOLD_PX) continue;
+        if (rect.width <= OVERSIZED_ICON_THRESHOLD_PX && rect.height <= OVERSIZED_ICON_THRESHOLD_PX) {
+            if (rect.width > 0 && rect.height > 0 && svg.dataset) svg.dataset.swIconClamped = "true";
+            continue;
+        }
         let size = DEFAULT_ICON_FALLBACK_PX;
         for (const entry of MOBILE_ICON_SIZE_FALLBACKS) {
             try {
@@ -1395,6 +1514,7 @@ function clampOversizedIcons(root) {
         svg.setAttribute("height", String(size));
         svg.style.setProperty("width", `${size}px`, "important");
         svg.style.setProperty("height", `${size}px`, "important");
+        if (svg.dataset) svg.dataset.swIconClamped = "true";
     }
     return toFix.length;
 }
@@ -1501,4 +1621,4 @@ function hasVisibleThumbContent(root) {
     return Boolean(root.querySelector && root.querySelector("img,video,iframe,canvas,svg,table"));
 }
 
-module.exports = {isGlobalShortcutHostReady, safeRegisterPluginCommand, MOBILE_ICON_SIZE_FALLBACKS, clampOversizedIcons, graphemeLength, graphemeSlice, graphemeSliceByCodePoints, clampNum, stableSortBy, normalizeSortBy, sortItems, sortGroupItems, resolveQuickActionSurfaceState, groupFavoritesByGroup, groupTabsByMode, resolveIconFallback, resolveIconReference, normalizeCustomIcon, isImageIconReference, buildTabGroupsByParent, resolveTabRootId, resolveFavoriteRootId, planGroupOpenFavorites, sanitizeDocIds, normalizeSqlResult, normalizeCapacityLimit, buildCapacitySummary, buildStorageCapacitySnapshot, normalizeStorageCapacitySnapshot, serializeStorageCapacitySnapshot, parseStorageCapacitySnapshot, mergeStorageCapacitySnapshots, diffStorageCapacitySnapshots, summarizeStorageCapacityDiff, classifyStorageCapacityRisk, buildStorageCapacityHealth, normalizeStorageCapacityHealth, serializeStorageCapacityHealth, parseStorageCapacityHealth, diffStorageCapacityHealth, assessStorageCapacityTrend, normalizeStorageCapacityTrend, serializeStorageCapacityTrend, parseStorageCapacityTrend, buildStorageCapacityReport, normalizeStorageCapacityReport, serializeStorageCapacityReport, parseStorageCapacityReport, summarizeStorageCapacityReports, trimStorageCapacityReportHistory, selectStorageCapacityReportWindow, summarizeStorageCapacityReportWindow, normalizeStorageCapacityReportWindow, serializeStorageCapacityReportWindow, parseStorageCapacityReportWindow, validateStorageCapacityReportWindow, validateStorageCapacityReport, reconcileStorageCapacityReport, buildStorageCapacityReportEvents, normalizeStorageCapacityReportEvents, serializeStorageCapacityReportEvents, parseStorageCapacityReportEvents, createStorageCapacityReportEventQueue, replayStorageCapacityReportEvents, recoverStorageCapacityReportEventQueue, createStorageCapacityReportEventCoordinator, readStorageCapacityReportEventsWithSignal, readStorageCapacityReportEventsWithDeadline, normalizeStorageCapacityReportEventQueueStatus, getStorageCapacityReportEventQueueStatus, normalizeStorageCapacityReportEventQueueSummary, serializeStorageCapacityReportEventQueueSummary, parseStorageCapacityReportEventQueueSummary, diffStorageCapacityReportEventQueueSummary, buildStorageCapacityReportEventQueueSummaryEvents, normalizeStorageCapacityReportEventQueueSummaryHistory, summarizeStorageCapacityReportEventQueueSummaryHistory, serializeStorageCapacityReportEventQueueSummaryHistory, parseStorageCapacityReportEventQueueSummaryHistory, validateStorageCapacityReportEventQueueSummary, capMru, sanitizeStringList, sanitizeFavorites, sanitizeOpenHistory, isSuccessfulMobileTabsResult, normalizeQuickActionText, normalizeThumbCache, compareText, isBlankThumbNode, trimLeadingBlankThumbNodes, hasVisibleThumbContent};
+module.exports = {detectSpecialTabKind, isGlobalShortcutHostReady, safeRegisterPluginCommand, MOBILE_ICON_SIZE_FALLBACKS, clampOversizedIcons, graphemeLength, graphemeSlice, graphemeSliceByCodePoints, clampNum, stableSortBy, normalizeSortBy, sortItems, sortGroupItems, resolveQuickActionSurfaceState, groupFavoritesByGroup, groupTabsByMode, resolveIconFallback, resolveIconReference, normalizeCustomIcon, isImageIconReference, buildTabGroupsByParent, resolveTabRootId, resolveFavoriteRootId, planGroupOpenFavorites, sanitizeDocIds, normalizeSqlResult, normalizeCapacityLimit, buildCapacitySummary, buildStorageCapacitySnapshot, normalizeStorageCapacitySnapshot, serializeStorageCapacitySnapshot, parseStorageCapacitySnapshot, mergeStorageCapacitySnapshots, diffStorageCapacitySnapshots, summarizeStorageCapacityDiff, classifyStorageCapacityRisk, buildStorageCapacityHealth, normalizeStorageCapacityHealth, serializeStorageCapacityHealth, parseStorageCapacityHealth, diffStorageCapacityHealth, assessStorageCapacityTrend, normalizeStorageCapacityTrend, serializeStorageCapacityTrend, parseStorageCapacityTrend, buildStorageCapacityReport, normalizeStorageCapacityReport, serializeStorageCapacityReport, parseStorageCapacityReport, summarizeStorageCapacityReports, trimStorageCapacityReportHistory, selectStorageCapacityReportWindow, summarizeStorageCapacityReportWindow, normalizeStorageCapacityReportWindow, serializeStorageCapacityReportWindow, parseStorageCapacityReportWindow, validateStorageCapacityReportWindow, validateStorageCapacityReport, reconcileStorageCapacityReport, buildStorageCapacityReportEvents, normalizeStorageCapacityReportEvents, serializeStorageCapacityReportEvents, parseStorageCapacityReportEvents, createStorageCapacityReportEventQueue, replayStorageCapacityReportEvents, recoverStorageCapacityReportEventQueue, createStorageCapacityReportEventCoordinator, readStorageCapacityReportEventsWithSignal, readStorageCapacityReportEventsWithDeadline, normalizeStorageCapacityReportEventQueueStatus, getStorageCapacityReportEventQueueStatus, normalizeStorageCapacityReportEventQueueSummary, serializeStorageCapacityReportEventQueueSummary, parseStorageCapacityReportEventQueueSummary, diffStorageCapacityReportEventQueueSummary, buildStorageCapacityReportEventQueueSummaryEvents, normalizeStorageCapacityReportEventQueueSummaryHistory, summarizeStorageCapacityReportEventQueueSummaryHistory, serializeStorageCapacityReportEventQueueSummaryHistory, parseStorageCapacityReportEventQueueSummaryHistory, validateStorageCapacityReportEventQueueSummary, capMru, sanitizeStringList, sanitizeFavorites, sanitizeOpenHistory, isSuccessfulMobileTabsResult, normalizeQuickActionText, normalizeThumbCache, compareText, isBlankThumbNode, trimLeadingBlankThumbNodes, hasVisibleThumbContent};

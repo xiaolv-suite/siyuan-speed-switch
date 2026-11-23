@@ -30,6 +30,8 @@ export interface MobileSwitcherUiHost {
     applySearch(scrollElement: HTMLElement, searchInput: HTMLInputElement, onClose: IOverlayClose): void;
     bindSearchInputComposition(input: HTMLInputElement, onTrigger: () => void, scrollElement?: HTMLElement, onClose?: IOverlayClose): void;
     buildEmptyState(): HTMLElement;
+    /** DL2 阶段3：空态吉祥物（mascot 偏好门控，关闭回退线性 emoji） */
+    resolveLvMascotHtml(): string;
     buildMobileGroupGrid(settings: ISwSettings): HTMLElement;
     closeGroupTabs(items: IFavoriteItem[]): Promise<number>;
     createMobileSwitcherDialog(release: {fn: () => void}): Dialog;
@@ -265,6 +267,13 @@ export function openMobileSwitcherDialog(this: MobileSwitcherUiHost, tabs: Tab[]
             disposeModeChips();
             disposeVisualViewport();
             unregisterRefresh();
+            // 2026-11-21 走查修复：body 级分组操作 sheet 随切换器销毁级联收敛（原先滞留 body 层，可手动关闭但脱离宿主生命周期）
+            if (typeof activeGroupSheetClosers !== "undefined") {
+                for (const closer of [...activeGroupSheetClosers]) {
+                    try { closer(); } catch { /* ignore */ }
+                }
+                activeGroupSheetClosers.clear();
+            }
             if (scrollElement) {
                 disposeDocSearchSession.call(this, scrollElement);
             }
@@ -463,10 +472,11 @@ export function bindMobileSwitcherToolbarActions(this: MobileSwitcherUiHost,
             sortTrigger = sortButton;
             const overlay = document.createElement("div");
             overlay.className = "sw__mobile-sort-overlay";
-            // WebView 里的思源 Dialog 可能建立新的 stacking context，内联层级作为最后一道兜底。
+            // 2026-11-21 走查修复：层高收敛到样式表既有规范值（.sw__mobile-sort-overlay z-index:3100，
+            // 高于宿主 Dialog stacking context、低于全局紧急菜单层）。原先内联 2147483647 兜底会连
+            // 生态通知层（lv-notice-host z≈999）一并盖住，sheet 打开期间全局通知被吞。
             overlay.style.position = "fixed";
             overlay.style.inset = "0";
-            overlay.style.zIndex = "2147483647";
             const sheet = document.createElement("div");
             sheet.className = "sw__mobile-sort-sheet";
             sheet.setAttribute("role", "dialog");
@@ -736,8 +746,10 @@ export function renderMobileList(this: MobileSwitcherUiHost, scrollElement: HTML
         if (tabs.length === 0) {
             const emptyEl = document.createElement("div");
             emptyEl.className = "sw__empty sw__mobile-empty";
-            emptyEl.style.cssText = "display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 16px;text-align:center;gap:8px;color:var(--b3-theme-on-surface);opacity:0.85;";
-            emptyEl.innerHTML = `<div style="font-size:32px;">🗂️</div><div style="font-size:14px;font-weight:600;">${this.i18n.noOpenedTabs || "暂无已打开页签"}</div><div style="font-size:12px;opacity:0.75;">${this.i18n.noOpenedTabsHint || "输入关键词或点击下方药丸即可全库穿透检索"}</div>`;
+            emptyEl.style.cssText = "display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 16px;text-align:center;gap:8px;color:var(--sw-color-text-subtle);opacity:0.85;";
+            /* DL2 阶段3：空态吉祥物（mascot 偏好门控，关闭回退线性 emoji） */
+            const mascotHtml = this.resolveLvMascotHtml();
+            emptyEl.innerHTML = `${mascotHtml}<div style="font-size:14px;font-weight:600;">${this.i18n.noOpenedTabs || "暂无已打开页签"}</div><div style="font-size:12px;opacity:0.75;">${this.i18n.noOpenedTabsHint || "输入关键词或点击下方药丸即可全库穿透检索"}</div>`;
             scrollElement.appendChild(emptyEl);
             return all;
         }
@@ -811,6 +823,9 @@ export function renderMobileList(this: MobileSwitcherUiHost, scrollElement: HTML
 
     // 构造手机端分组卡片网格：根据 settings.mobileColumns 决定单列/双列/自适应
 
+/** body 级分组操作 sheet 的活跃关闭器注册表：切换器销毁（Esc/路由切换）时级联收敛（2026-11-21 走查修复） */
+const activeGroupSheetClosers = new Set<() => void>();
+
 export function openMobileGroupActions(this: MobileSwitcherUiHost, groupName: string, items: IFavoriteItem[], onChanged: () => void, returnFocus?: HTMLElement | null) {
         const overlay = document.createElement("div");
         overlay.className = "sw__mobile-sheet-overlay sw__mobile-sheet-overlay--nested";
@@ -826,6 +841,10 @@ export function openMobileGroupActions(this: MobileSwitcherUiHost, groupName: st
     <div class="sw__mobile-sheet-body"></div>
 </div>`;
         document.body.appendChild(overlay);
+        const unregisterGroupSheet = () => {
+            if (typeof activeGroupSheetClosers !== "undefined") activeGroupSheetClosers.delete(unregisterGroupSheet);
+        };
+        if (typeof activeGroupSheetClosers !== "undefined") activeGroupSheetClosers.add(unregisterGroupSheet);
 
         const sheet = overlay.querySelector<HTMLElement>(".sw__mobile-sheet");
         const body = overlay.querySelector<HTMLElement>(".sw__mobile-sheet-body");
@@ -839,6 +858,7 @@ export function openMobileGroupActions(this: MobileSwitcherUiHost, groupName: st
         const closeSelf = () => {
             if (!overlay.isConnected || overlay.dataset.closing === "true") return;
             overlay.dataset.closing = "true";
+            unregisterGroupSheet();
             sheet.classList.remove("sw__mobile-sheet--open");
             overlay.style.opacity = "0";
             setTimeout(() => {

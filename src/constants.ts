@@ -10,7 +10,7 @@
 
 // ==================== 版本单一事实源 ====================
 // 与 package.json、plugin.json、README 保持四处一致，供全表面弹窗徽标与诊断快照统一消费。
-export const PLUGIN_VERSION = "0.48.92";
+export const PLUGIN_VERSION = "0.48.93";
 export const PLUGIN_VERSION_BADGE = `v${PLUGIN_VERSION}`;
 
 // ==================== 搜索与缓存 ====================
@@ -162,6 +162,19 @@ export const SNIPPET_RECYCLE_KEY = "sw_snippet_recycle"; // 片段回收站（T-
 export const SNIPPET_GROUPS_KEY = "sw_snippet_groups"; // 片段分组（T-6972）：分组元数据、归属和视图偏好
 export const RSS_READ_KEY = "sw_rss_read"; // RSS 已读状态（T-6685）：条目键 → 标记时间 ms，有界 200 条
 export const RELATED_SWR_KEY = "sw_related_swr"; // 关联内容 SWR 持久缓存（T-6840）：rootId → 投影快照，有界 8 条、7 天年龄上界
+// 轨道 A 存储分级（Track A Startup Optimization）：
+// Tier 1（5 槽）：核心设置/mru/pinned/quick-actions（留启动关键路径）
+export const PERSISTENT_TIER1_KEYS: readonly string[] = Object.freeze([
+    SETTINGS_KEY, MRU_KEY, PINNED_KEY, QUICK_ACTIONS_KEY, QUICK_ACTIONS_DEFAULTS_KEY,
+]);
+
+// Tier 2（13 槽）：缩略图/SWR缓存/历史/收藏/文档集/回收站等（延迟静默+空闲两阶段加载）
+export const PERSISTENT_TIER2_KEYS: readonly string[] = Object.freeze([
+    HISTORY_KEY, CLOSED_HISTORY_KEY, FAV_KEY, FAV_GROUPS_KEY, FAV_COLLAPSED_KEY,
+    DOCUMENT_SETS_KEY, HOME_STATE_KEY, THUMB_CACHE_KEY, SCHEMA_VERSION_KEY,
+    RSS_READ_KEY, RELATED_SWR_KEY, SNIPPET_RECYCLE_KEY, SNIPPET_GROUPS_KEY,
+]);
+
 // 全部持久化 key 的唯一清单。加载（loadPersistentKeys）与容量测量都必须遍历它，
 // 不得在别处再列一遍——历史上两处各写一份，新增 key 时极易漏掉一处。
 // 与本仓 storage-migration.js 的 KEY_ORDER 同集，由 tests/data-change-refresh.test.cjs 锁定。

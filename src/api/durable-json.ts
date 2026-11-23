@@ -1,7 +1,11 @@
 /** Raw kernel IO: a successful Plugin.loadData/saveData promise is not disk evidence. */
 export type JsonRead<T = unknown> = {kind: "present"; value: T} | {kind: "missing"};
 export class JsonFileError extends Error {
-    constructor(message: string, public outcome: "not-sent" | "unknown" = "not-sent") { super(message); }
+    public outcome: "not-sent" | "unknown";
+    constructor(message: string, outcome: "not-sent" | "unknown" = "not-sent") {
+        super(message);
+        this.outcome = outcome;
+    }
 }
 export function createDurableJsonIO(request: typeof fetch = fetch) {
     const validate = (path: string) => {

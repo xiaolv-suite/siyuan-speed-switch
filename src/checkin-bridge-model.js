@@ -206,9 +206,10 @@ function eventsByItem(events) {
 }
 
 function shiftDateKey(dateKey, offsetDays) {
-    const parsed = Date.parse(`${dateKey}T00:00:00`);
-    if (!Number.isFinite(parsed)) return "";
-    return localDateKey(new Date(parsed + offsetDays * 24 * 60 * 60 * 1000));
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateKey || "").trim());
+    if (!m) return "";
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + offsetDays);
+    return localDateKey(d);
 }
 
 // 连续天数：从今天（或昨天，今天还没记录时）往回数，逐日命中即累加。
@@ -221,7 +222,8 @@ function streakOf(daySet, todayKey) {
         if (!daySet.has(cursor)) return {days: 0, current: false};
     }
     let days = 0;
-    while (cursor && daySet.has(cursor)) {
+    let safety = 10000;
+    while (cursor && daySet.has(cursor) && safety-- > 0) {
         days += 1;
         cursor = shiftDateKey(cursor, -1);
     }

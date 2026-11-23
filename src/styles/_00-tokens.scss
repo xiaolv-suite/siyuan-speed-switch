@@ -149,7 +149,7 @@ $sw-space-2xl: 24px;
     --b3-theme-background: #f5f5fa;
     --b3-theme-surface: #ffffff;
     --b3-theme-surface-lighter: #edeff6;
-    --b3-theme-primary: #5b5bd6;
+    --b3-theme-primary: #6A6EE0; /* DL2 柔雾紫 */
     --b3-theme-on-primary: #ffffff;
     --b3-theme-on-background: #23222e;
     --b3-theme-on-surface: #4c4a5e;
@@ -157,17 +157,20 @@ $sw-space-2xl: 24px;
     --b3-border-color: rgba(35, 34, 46, 0.1);
     --b3-theme-background-light: #eef0f7;
     --b3-theme-surface-light: #eef0f7;
-    --b3-theme-primary-light: rgba(91, 91, 214, 0.12);
-    --b3-theme-primary-lightest: rgba(91, 91, 214, 0.06);
+    --b3-theme-primary-light: rgba(106, 110, 224, 0.12);
+    --b3-theme-primary-lightest: rgba(106, 110, 224, 0.06);
     --b3-theme-success: #2d9865;
     --b3-theme-warning: #b7761d;
     --b3-theme-error: #c7515b;
-    --b3-list-hover: rgba(91, 91, 214, 0.08);
+    --b3-list-hover: rgba(106, 110, 224, 0.08);
     color-scheme: light;
 
     // 统一步调语义色彩令牌（由上方插件作用域色板派生，零宿主依赖）
     --sw-color-accent: var(--b3-theme-primary);
     --sw-color-accent-soft: color-mix(in srgb, var(--sw-color-accent) 12%, transparent);
+    --sw-color-accent-faint: color-mix(in srgb, var(--sw-color-accent) 6%, transparent);
+    --sw-color-hover: rgba(106, 110, 224, 0.08);
+    --sw-color-bg-soft: var(--b3-theme-background-light);
     --sw-color-accent-hover: color-mix(in srgb, var(--sw-color-accent) 88%, #000 12%);
     --sw-color-accent-pressed: color-mix(in srgb, var(--sw-color-accent) 78%, #000 22%);
     --sw-color-on-accent: var(--b3-theme-on-primary, #ffffff);
@@ -188,14 +191,14 @@ $sw-space-2xl: 24px;
     --sw-color-error: var(--b3-theme-error, #c7515b);
 
     // 小驴全生态品牌与午夜黑金卡 Token (Epoch 6 联邦规范)
-    --lv-brand: #8B5CF6; /* 星际电光紫 */
+    --lv-brand: #6A6EE0; /* DL2 柔雾紫（原星际电光紫） */
     --lv-brand-soft: color-mix(in srgb, var(--lv-brand) 12%, transparent);
     --lv-accent-gold: #FACC15; /* 钛金雷刃黄 */
     --lv-midnight-card: #1B1E2E; /* 参考图午夜深空黑金卡底色 */
 
     // 视觉辨识度与细节品质核心规范：
     // 1. 同族极浅底色托底 + 纯白浮卡双层结构
-    --sw-bg-tinted: color-mix(in srgb, var(--sw-color-accent) 4.5%, var(--b3-theme-background));
+    --sw-bg-tinted: color-mix(in srgb, var(--sw-color-accent) 4.5%, var(--sw-color-bg));
     --sw-card-float-bg: var(--b3-theme-surface, #ffffff);
 
     // 2. 两色分工：数据语义色（色轮顺时针偏转25°极光青绿，承载连续打卡、热力等正向数据）
@@ -224,7 +227,7 @@ $sw-space-2xl: 24px;
     --b3-theme-background: #17171f;
     --b3-theme-surface: #20202b;
     --b3-theme-surface-lighter: #2a2a38;
-    --b3-theme-primary: #a5a1ff;
+    --b3-theme-primary: #9B9EF0; /* DL2 深色提亮 */
     --b3-theme-on-primary: #17171f;
     --b3-theme-on-background: #ecebf4;
     --b3-theme-on-surface: #b8b6c9;
@@ -232,11 +235,14 @@ $sw-space-2xl: 24px;
     --b3-border-color: rgba(236, 235, 244, 0.12);
     --b3-theme-background-light: #23232f;
     --b3-theme-surface-light: #23232f;
-    --b3-theme-primary-light: rgba(165, 161, 255, 0.14);
-    --b3-theme-primary-lightest: rgba(165, 161, 255, 0.07);
+    --b3-theme-primary-light: rgba(155, 158, 240, 0.14);
+    --b3-theme-primary-lightest: rgba(155, 158, 240, 0.07);
     --b3-theme-success: #34d399;
     --b3-theme-warning: #f0b45c;
     --b3-theme-error: #ff7a76;
-    --b3-list-hover: rgba(165, 161, 255, 0.1);
+    --b3-list-hover: rgba(155, 158, 240, 0.1);
+    --sw-color-accent-faint: color-mix(in srgb, var(--sw-color-accent) 7%, transparent);
+    --sw-color-hover: rgba(155, 158, 240, 0.1);
+    --sw-color-bg-soft: #23232f;
     color-scheme: dark;
 }

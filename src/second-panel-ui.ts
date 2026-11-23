@@ -97,9 +97,11 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
         const prepareLayoutMutation = () => {
             if (!layoutHistory) layoutHistory = createLayoutHistory(layoutSnapshotOf(this.getHomeState()));
         };
-        const commitLayoutMutation = (next: any) => {
+        // 2026-11-21 走查修复：接受可选专用操作名——原先恒用通用「更新布局」，各操作点其后写的
+        // layoutOpLabel 会被 renderPanel 二次压栈的深比较去重吞掉，专用撤销名（场景预设/清空/自动对齐）永不生效。
+        const commitLayoutMutation = (next: any, label?: string) => {
             prepareLayoutMutation();
-            layoutHistory = pushLayoutHistory(layoutHistory!, layoutSnapshotOf(next), this.i18n.homeHistoryUpdate);
+            layoutHistory = pushLayoutHistory(layoutHistory!, layoutSnapshotOf(next), label || this.i18n.homeHistoryUpdate);
         };
         const applyLayoutSnapshot = (snapshot: any) => {
             const current = this.getHomeState();
@@ -511,8 +513,7 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                 });
                 next.layouts[device] = layoutList;
                 this.saveHomeState(next);
-                commitLayoutMutation(next);
-                layoutOpLabel = this.i18n.homeHistoryUpdate;
+                commitLayoutMutation(next, this.i18n.homeHistoryUpdate);
                 renderPanel();
             };
 
@@ -603,17 +604,24 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                 presetBtn.addEventListener("click", () => {
                     const menu = new Menu("swWorkbenchPresets");
                     menu.element?.classList.add("sw-home__presets-menu");
+                    // 2026-11-21 i18n 债务收敛：场景预设标题按 preset.id 走字面量 i18n（静态扫描闭环）
+                    const presetTitleOf = (preset: any): string => {
+                        if (preset.id === "default") return this.i18n.homeScenePresetDefaultTitle || preset.title;
+                        if (preset.id === "minimal") return this.i18n.homeScenePresetMinimalTitle || preset.title;
+                        if (preset.id === "research") return this.i18n.homeScenePresetResearchTitle || preset.title;
+                        if (preset.id === "daily") return this.i18n.homeScenePresetDailyTitle || preset.title;
+                        return preset.title;
+                    };
                     WORKBENCH_SCENE_PRESETS.forEach((preset: any) => {
                         menu.addItem({
                             icon: preset.icon,
-                            label: preset.title,
+                            label: presetTitleOf(preset),
                             click: () => {
                                 prepareLayoutMutation();
                                 const result = applyWorkbenchScenePreset(this.getHomeState(), preset.id, device);
                                 this.saveHomeState(result.state);
-                                commitLayoutMutation(result.state);
-                                layoutOpLabel = preset.title;
-                                showMessage((this.i18n.homeScenePresetApplied || "已套用预设场景：{x}（支持一键撤销）").replace("{x}", preset.title));
+                                commitLayoutMutation(result.state, presetTitleOf(preset));
+                                showMessage((this.i18n.homeScenePresetApplied || "已套用预设场景：{x}（支持一键撤销）").replace("{x}", presetTitleOf(preset)));
                                 renderPanel();
                             },
                         });
@@ -659,8 +667,7 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                         const nextState = this.getHomeState();
                         nextState.layouts[device] = [];
                         this.saveHomeState(nextState);
-                        commitLayoutMutation(nextState);
-                        layoutOpLabel = this.i18n.homeHistoryClear || "清空工作台";
+                        commitLayoutMutation(nextState, this.i18n.homeHistoryClear || "清空工作台");
                         showMessage(this.i18n.homeHistoryClear || "已清空工作台（支持一键撤销恢复）");
                         renderPanel();
                     });
@@ -847,8 +854,7 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                         }
                     });
                     this.saveHomeState(state);
-                    commitLayoutMutation(state);
-                    layoutOpLabel = this.i18n.homeAutoAlign || "自动对齐网格";
+                    commitLayoutMutation(state, this.i18n.homeAutoAlign || "自动对齐网格");
                     renderPanel();
                 });
                 banner.appendChild(autoAlignButton);
@@ -1579,7 +1585,7 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                         });
                         toolsChildren.push(configButton);
                     }
-                    const colorBtn = tool("🎨 变色", () => {
+                    const colorBtn = tool(this.i18n.homeChangeColor || "🎨 变色", () => {
                         const curAccent = cell.style.getPropertyValue("--sw-home-accent");
                         const curIdx = this.homeAccents.indexOf(curAccent);
                         const nextAccent = this.homeAccents[(curIdx + 1) % this.homeAccents.length];
@@ -1731,17 +1737,17 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                     const curH = Number(layout.h) || preset.h || 3;
                     const widthSteps = [3, 4, 6, 8, 12];
                     const heightSteps = [2, 3, 4, 5, 6];
-                    const widthButton = tool(`宽: ${curW}列 ▾`, () => {
+                    const widthButton = tool((this.i18n.homeWidthColumns || "宽: {x}列 ▾").replace("{x}", String(curW)), () => {
                         const nextIdx = (widthSteps.indexOf(curW) + 1) % widthSteps.length;
                         const nextW = widthSteps[nextIdx];
-                        layoutOpLabel = "调整宽度";
+                        layoutOpLabel = this.i18n.homeHistoryWidth || "调整宽度";
                         persistLayout({w: nextW});
                         renderPanel();
                     });
-                    const heightButton = tool(`高: ${curH}行 ▾`, () => {
+                    const heightButton = tool((this.i18n.homeHeightRows || "高: {x}行 ▾").replace("{x}", String(curH)), () => {
                         const nextIdx = (heightSteps.indexOf(curH) + 1) % heightSteps.length;
                         const nextH = heightSteps[nextIdx];
-                        layoutOpLabel = "调整高度";
+                        layoutOpLabel = this.i18n.homeHistoryHeight || "调整高度";
                         persistLayout({h: nextH});
                         renderPanel();
                     });
@@ -1777,7 +1783,7 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                         if (nextW !== curW || nextH !== curH) {
                             event.preventDefault();
                             event.stopPropagation();
-                            layoutOpLabel = "自由拉伸";
+                            layoutOpLabel = this.i18n.homeHistoryFreeResize || "自由拉伸";
                             persistLayout({w: nextW, h: nextH});
                             renderPanel();
                             const fresh = root.querySelector<HTMLElement>(`.sw-home__cell[data-instance-id="${inst.instanceId}"] .sw-home__cell-resize-handle`);
@@ -1797,7 +1803,7 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                         const initialSpan = cell.style.getPropertyValue("--sw-home-span");
                         const initialGridRow = cell.style.gridRow;
                         cell.classList.add("sw-home__cell--resizing");
-                        resizeHandle.setAttribute("data-dimensions", `${lastW}列 × ${lastH}行`);
+                        resizeHandle.setAttribute("data-dimensions", (this.i18n.homeDimensionsColsRows || "{w}列 × {h}行").replace("{w}", String(lastW)).replace("{h}", String(lastH)));
                         let moveFrame = 0;
                         const onMove = (m: PointerEvent) => {
                             lastW = Math.max(2, Math.min(12, startW + Math.round((m.clientX - startX) / colW)));
@@ -1807,7 +1813,7 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                                     moveFrame = 0;
                                     cell.style.setProperty("--sw-home-span", String(lastW));
                                     cell.style.gridRow = `span ${lastH}`;
-                                    resizeHandle.setAttribute("data-dimensions", `${lastW}列 × ${lastH}行`);
+                                    resizeHandle.setAttribute("data-dimensions", (this.i18n.homeDimensionsColsRows || "{w}列 × {h}行").replace("{w}", String(lastW)).replace("{h}", String(lastH)));
                                 });
                             }
                         };
@@ -1833,7 +1839,7 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                                 return;
                             }
                             if (lastW !== startW || lastH !== startH) {
-                                layoutOpLabel = "自由拉伸";
+                                layoutOpLabel = this.i18n.homeHistoryFreeResize || "自由拉伸";
                                 persistLayout({w: lastW, h: lastH});
                                 renderPanel();
                             }

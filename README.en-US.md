@@ -1,13 +1,13 @@
 # Lv Speed Switch (小驴雷切)
 
-[![Version](https://img.shields.io/badge/version-0.48.92-blue)](./plugin.json) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE) [![SiYuan](https://img.shields.io/badge/SiYuan-SiYuan_Note-ff5c67)](https://b3log.org/siyuan)
+[![Version](https://img.shields.io/badge/version-0.48.93-blue)](./plugin.json) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE) [![SiYuan](https://img.shields.io/badge/SiYuan-SiYuan_Note-ff5c67)](https://b3log.org/siyuan)
 
 **What problem does Lv Speed Switch solve?**
 When working with dozens of opened tabs and multiple projects in SiYuan Note, heavy knowledge workers face five constant pain points: **losing track of open tabs, struggling to recover accidentally closed workspace contexts, lacking a glanceable dashboard, scattering cross-document excerpts, and risking host stability when tweaking custom CSS/JS**.
 
 **Lv Speed Switch** is a **local-first unified switcher and work-context platform** for SiYuan Note ([Interface Map](docs/interface-map.svg) · [Architecture Diagram](docs/architecture.svg)). It connects **core productivity surfaces**—the Switcher (Surface 1), Bento Widget Workbench (Surface 2), Snippet Studio (Surface 3), and an intelligent Floating Action Button (FAB)—so you can find, preview, switch, capture, and restore your work context in under a second.
 
-> **Latest stable release: v0.48.92 (2026-11-17 · Local Verified)** · [中文文档](./README.md)<br>
+> **Latest stable release: v0.48.93 (2026-11-23)** · [中文文档](./README.md)<br>
 > Minimum Supported Host Version: **SiYuan Note v3.8.4+** (Desktop, Sidebar Dock & Mobile)
 
 <div align="center">
@@ -16,7 +16,7 @@ When working with dozens of opened tabs and multiple projects in SiYuan Note, he
 
 ---
 
-## What's New In v0.48.92 (2026-11-17 · Local Verified)
+## What's New In v0.48.93 (2026-11-23)
 
 - **Launchpad Topbar Convergence & Anti-jitter**: Full alignment with ecosystem Launchpad topbar without icon oscillation or interference from SiYuan 3.8.x reflows; Launchpad remains available even with a single plugin;
 - **Ecosystem Notification Overhaul**: High-visibility upgrade capsule alerts, in-place duplicate folding (×N), and persistent multi-day snooze;
@@ -154,4 +154,4 @@ The project enforces strict local-first verification and a comprehensive Release
 - Host compatibility verification across desktop and mobile platforms (browser emulation is a structural smoke test, not Android acceptance);
 - Formal published candidate builds must satisfy all offline gating tests and retain the previous rollback archive before sealing.
 
-> The current version is `v0.48.92`
+> The current version is `v0.48.93`

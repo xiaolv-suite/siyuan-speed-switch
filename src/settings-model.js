@@ -216,6 +216,8 @@ function normalizeSettings(saved, options = {}) {    const defaults = options.de
         reuseOpenTabs: source.reuseOpenTabs === undefined ? false : source.reuseOpenTabs === true,
         // T-6848 页签卡改动信息：显示更新时间与近 7 天改动标记，默认关
         showCardUpdatedBadge: source.showCardUpdatedBadge === undefined ? false : source.showCardUpdatedBadge === true,
+        // 20261122-01 搜索模式筛选胶囊：默认关闭，归还约 40px 纵向高度
+        showSearchModeChips: source.showSearchModeChips === undefined ? false : source.showSearchModeChips === true,
         // T-6810 Essentials 常驻层：跨文档集自动打开的必需文档 rootId（≤10，形态校验）
         documentSetEssentials: normalizeEssentials(source.documentSetEssentials),
         mobileColumns: clamp(source.mobileColumns, ...range("mobileColumns"), defaults.mobileColumns),

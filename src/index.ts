@@ -3,11 +3,13 @@ import {runPluginCommand} from "./api/plugin-command";
 import {createDurableJsonIO} from "./api/durable-json";
 import {createExternalCommandReceiver, mountExternalCommandTransport, publishExternalReceipt, isExternalNavigationCommand, type ExternalCommandPolicy} from "./api/external-command-receiver";
 import {showMessage, lvNotify, lvSurfaceStack, withDocLock, lvActivity, lvBackup, lvEcosystem, lvLaunchpad, lvAi, lvOmnisearch, lvTicker, showDocTreeNativeMenu, toggleNativeDock} from "./libs/lv-notice-kit";
+import {resolveEffectiveMotion} from "./libs/lv-ui-prefs";
+import {lvMascot} from "./libs/ui/mascots";
 import type {IMenu, TEventBus, TPluginDataChangeReason} from "siyuan";
 import "./index.scss";
 
 import {logger} from "./logger";
-import {clampNum, stableSortBy, normalizeSortBy, sortItems as sortItemsUtil, sortGroupItems as sortGroupItemsUtil, resolveQuickActionSurfaceState, groupFavoritesByGroup, groupTabsByMode, resolveIconFallback, resolveIconReference, normalizeCustomIcon, isImageIconReference, normalizeQuickActionText, buildTabGroupsByParent, resolveTabRootId, resolveFavoriteRootId, planGroupOpenFavorites, sanitizeDocIds, normalizeSqlResult, capMru, sanitizeFavorites, sanitizeOpenHistory, sanitizeStringList, isSuccessfulMobileTabsResult, clampOversizedIcons, normalizeThumbCache, isGlobalShortcutHostReady, safeRegisterPluginCommand, trimLeadingBlankThumbNodes, hasVisibleThumbContent} from "./util";
+import {detectSpecialTabKind, clampNum, stableSortBy, normalizeSortBy, sortItems as sortItemsUtil, sortGroupItems as sortGroupItemsUtil, resolveQuickActionSurfaceState, groupFavoritesByGroup, groupTabsByMode, resolveIconFallback, resolveIconReference, normalizeCustomIcon, isImageIconReference, normalizeQuickActionText, buildTabGroupsByParent, resolveTabRootId, resolveFavoriteRootId, planGroupOpenFavorites, sanitizeDocIds, normalizeSqlResult, capMru, sanitizeFavorites, sanitizeOpenHistory, sanitizeStringList, isSuccessfulMobileTabsResult, clampOversizedIcons, normalizeThumbCache, isGlobalShortcutHostReady, safeRegisterPluginCommand, trimLeadingBlankThumbNodes, hasVisibleThumbContent} from "./util";
 import {createSearchSession, beginSearch, cacheSearchResult, disposeSearchSession} from "./search-session";
 import {buildRequestKey, createRequestService} from "./request-service";
 import {normalizeClosedEntries, buildRecentHistorySections, applyRecentEvent, removeRecentEntry, recordRecentOpen, normalizeOfficialRecentHistory, formatChangedWindowStart, updatedChangedWithin, entryChangedWithin, computeScrollRatio, planScrollRestore} from "./recent-closed";
@@ -254,6 +256,8 @@ import {
     TAB_GROUP_MODES,
     TAB_GROUP_MODE_DEFAULT,
     PERSISTENT_KEYS,
+    PERSISTENT_TIER1_KEYS,
+    PERSISTENT_TIER2_KEYS,
     SCHEMA_VERSION_KEY,
     RSS_READ_KEY,
     ICON_CATALOG,
@@ -481,6 +485,7 @@ const CARD_ICON_SPRITE =
 export interface ITabGroupRenderCtx {
     reusable: Map<string, HTMLElement>;
     activeTabId: string | undefined;
+    activeRootId?: string | undefined;
     pinned: Set<string>;
     favorites: Set<string>;
     mru: string[];
@@ -773,9 +778,13 @@ export function mountPlatformChrome(root: HTMLElement, options: PlatformSurfaceC
         // 绝不输出「看起来像入口的灰字 span」（用户实测被报告为「按钮点了没用」）。
         const navigable = surface !== options.surface && typeof options.onNavigate === "function";
         if (surface !== options.surface && !navigable) return;
-        const control = doc.createElement(navigable ? "button" : "span");
+        const control = doc.createElement("button");
+        control.type = "button";
         control.className = "sw-platform-surface-nav__item";
         control.dataset.surface = surface;
+        if (!navigable) {
+            control.setAttribute("aria-disabled", "true");
+        }
         const surfaceIcon = doc.createElement("svg");
         surfaceIcon.className = "sw-platform-surface-nav__icon";
         surfaceIcon.setAttribute("aria-hidden", "true");
@@ -860,6 +869,12 @@ export function mountPlatformChrome(root: HTMLElement, options: PlatformSurfaceC
         close.title = options.closeLabel || "Close";
         close.innerHTML = '<svg><use xlink:href="#iconClose"></use></svg>';
         close.addEventListener("click", () => options.onClose?.());
+        close.addEventListener("keydown", (e: KeyboardEvent) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                options.onClose?.();
+            }
+        });
         closeGroup.appendChild(close);
         actions.appendChild(closeGroup);
     }
@@ -987,6 +1002,7 @@ const DEFAULT_SETTINGS: ISwSettings = {
     dockDisplay: "collapsed",   // Default to the compact icon rail; users can expand it when labels are needed.
     fullscreen: false,     // 全屏模式：切换器铺满整个窗口，按 Esc 退出（由 panelSizeMode 派生）
     showCardUpdatedBadge: false, // T-6848 页签卡更新时间与近 7 天改动标记（默认关）
+    showSearchModeChips: false, // 20261122-01 搜索模式筛选胶囊默认关闭，极致清爽高挑，节省约 40px 纵向高度
     sidebarLayout: "enlarge", // 侧边栏缩略图布局：enlarge 放大填满栏宽（默认）/ columns 按宽度自动加列
     fabEnabled: false,     // 手机端悬浮按钮默认关闭，需要的用户在设置中打开
     floatingBall: createDefaultFloatingBallConfig(), // T-6757 版本化悬浮球配置（旧 fabEnabled 仍兼容）
@@ -1072,6 +1088,7 @@ export interface ISwSettings {
     savedSearches: Array<{id: string; name: string; query: string; notebook?: string}>; // T-6827 保存的搜索（最多 16 条）
     skin: PanelSkin; // T-6796 界面皮肤：fusion=跟随思源主题（默认）
     pinyinMatch: boolean; // T-6805 拼音辅助匹配（全拼/首字母），默认开
+    showSearchModeChips: boolean; // 20261122-01 搜索模式筛选胶囊显隐（默认关）
     density: "comfortable" | "compact"; // T-6823 密度档位（默认 comfortable）
     /** T-6851 组件商店视图状态（密度/视图模式/排序/折叠分组，normalize 有界清洗） */
     homeStore: {rememberState?: boolean; defaultViewMode?: "grid" | "list"; retryFailed?: boolean; density?: string; viewMode?: string; sort?: string; collapsedGroups?: string[]};
@@ -1371,7 +1388,15 @@ export default class SpeedSwitchPlugin extends Plugin {
     }
     private groupOperationBusy = false;
 
+    public tier2Ready = false;
+    public tier2LoadingPromise?: Promise<void>;
+    public tier2ScheduledTimer?: number;
+    public tier2IdleId?: number;
+
     async onload() {
+        if (typeof performance !== "undefined" && typeof performance.mark === "function") {
+            try { performance.mark("siyuan-speed-switch-onload-start"); } catch { /* ignore */ }
+        }
         this.isUnloading = false;
         this.lifecycleGeneration += 1;
         // 允许同一插件实例在宿主热重载后重新开始一段独立的审计历史。
@@ -1546,9 +1571,7 @@ export default class SpeedSwitchPlugin extends Plugin {
         if (this.isMobile) {
             this.registerMobileEntries();
         } else {
-            // ADR 0072: only the desktop window mounts a floating ball; the
-            // sidebar dock no longer hosts its own portal.
-            this.updateFloatingBallVisibility();
+            // ADR 0072 / Track A: 悬浮球挂载推迟至 onLayoutReady 之后按需启用
         }
 
         this.captureRecentOpenSnapshot();
@@ -1883,6 +1906,15 @@ export default class SpeedSwitchPlugin extends Plugin {
                 return {structuredContent: receipt, result: JSON.stringify(receipt)};
             },
         }, onFail);
+
+        if (typeof performance !== "undefined" && typeof performance.mark === "function") {
+            try {
+                performance.mark("siyuan-speed-switch-onload-end");
+                if (typeof performance.measure === "function") {
+                    performance.measure("siyuan-speed-switch-onload", "siyuan-speed-switch-onload-start", "siyuan-speed-switch-onload-end");
+                }
+            } catch { /* ignore */ }
+        }
     }
 
     // T-6685 RSS 已读状态：宿主侧唯一读写点。读取返回归一化后的 seen 映射；
@@ -1891,8 +1923,11 @@ export default class SpeedSwitchPlugin extends Plugin {
         return normalizeRssReadState(this.data[RSS_READ_KEY]).seen;
     }
 
-    public markRssItemsSeen(keys: string[]): void {
+    public async markRssItemsSeen(keys: string[]): Promise<void> {
         if (!Array.isArray(keys) || keys.length === 0) return;
+        if (typeof this.ensureTier2Loaded === "function") {
+            await this.ensureTier2Loaded();
+        }
         const state = normalizeRssReadState(this.data[RSS_READ_KEY]);
         const stamp = Date.now();
         for (const key of keys) {
@@ -1903,16 +1938,50 @@ export default class SpeedSwitchPlugin extends Plugin {
         this.saveDataDebounced(RSS_READ_KEY);
     }
 
-    // 只读取持久化 key、不产生任何写入：onload 与 onDataChanged 共用同一份清单，
-    // 防止两处 key 列表各写一遍而漂移。
-    private async loadPersistentKeys() {
-        return Promise.all(PERSISTENT_KEYS.map((key) => this.loadData(key)))
-            .catch((e) => logger.warn("load data fail", e));
+    // 底层纯只读槽位加载原语：纯读取、零写盘、不触发任何数据清洗与迁移
+    private async readTier1Keys(): Promise<void> {
+        await Promise.all(PERSISTENT_TIER1_KEYS.map((key) => this.loadData(key)));
     }
 
-    // 预加载 13 个持久化 key：loadData 写入 this.data，让 getMru 等能读到旧值
+    private async readTier2Keys(): Promise<void> {
+        await Promise.all(PERSISTENT_TIER2_KEYS.map((key) => this.loadData(key)));
+    }
+
+    // 只读取持久化 key、不产生任何写入：onDataChanged 显式重读路径
+    // 纯读取、零写盘；若 Tier 2 已就绪则显式重读 Tier 1 与 Tier 2 全部槽位以同步外部变更，
+    // 未就绪则仅重读 Tier 1，杜绝回环与漏读。
+    private async loadPersistentKeys(): Promise<void> {
+        await this.readTier1Keys();
+        if (this.tier2Ready) {
+            await this.readTier2Keys();
+            if (this.data[RELATED_SWR_KEY]) {
+                const relatedSwr = normalizeRelatedSwrStore(this.data[RELATED_SWR_KEY]);
+                this.relatedSwrStore = new Map(relatedSwr.entries.map((entry) => [entry.rootId, entry]));
+            }
+        }
+    }
+
+    // 轨道 A 存储分级：启动关键路径仅读取 Tier 1（5 槽：settings/mru/pinned/quick-actions/floating-ball）
+    public async loadTier1Keys(): Promise<void> {
+        if (typeof performance !== "undefined" && typeof performance.mark === "function") {
+            try { performance.mark("siyuan-speed-switch-tier1-start"); } catch { /* ignore */ }
+        }
+        await this.readTier1Keys();
+        this.sanitizeTier1Data();
+        this.runQuickActionDefaultsMigration();
+        if (typeof performance !== "undefined" && typeof performance.mark === "function") {
+            try {
+                performance.mark("siyuan-speed-switch-tier1-end");
+                if (typeof performance.measure === "function") {
+                    performance.measure("siyuan-speed-switch-tier1-load", "siyuan-speed-switch-tier1-start", "siyuan-speed-switch-tier1-end");
+                }
+            } catch { /* ignore */ }
+        }
+    }
+
+    // 预加载 Tier 1 持久化 key：loadData 写入 this.data，让 getMru 等能读到旧值
     private async initPersistentData() {
-        await this.loadPersistentKeys();
+        await this.loadTier1Keys();
         // 加载期 sanitize：清理历史脏数据（0.16.5），仅在确实变化时回写，避免每次启动重写文件
         this.sanitizePersistentData();
         // 存储迁移演练快照（v0.20 数据连续性，D-386）：在宿主静默修复链之后运行
@@ -1926,6 +1995,120 @@ export default class SpeedSwitchPlugin extends Plugin {
         this.stampStorageSchemaVersion();
         // 收藏分组折叠状态：从持久化数据初始化（旧版本无此数据时为默认展开）
         this.initFavCollapsed();
+    }
+
+    public cancelTier2Schedule(): void {
+        if (this.tier2ScheduledTimer !== undefined) {
+            window.clearTimeout(this.tier2ScheduledTimer);
+            this.tier2ScheduledTimer = undefined;
+        }
+        if (this.tier2IdleId !== undefined) {
+            if (typeof window !== "undefined" && typeof (window as any).cancelIdleCallback === "function") {
+                try {
+                    (window as any).cancelIdleCallback(this.tier2IdleId);
+                } catch { /* ignore */ }
+            }
+            this.tier2IdleId = undefined;
+        }
+    }
+
+    public scheduleTier2Load(): void {
+        if (this.tier2Ready || this.tier2LoadingPromise || this.isUnloading) return;
+        this.cancelTier2Schedule();
+        const executeLoad = () => {
+            this.tier2ScheduledTimer = undefined;
+            this.tier2IdleId = undefined;
+            if (this.isUnloading || this.tier2Ready) return;
+            void this.ensureTier2Loaded().catch((err) => {
+                logger.warn("[siyuan-speed-switch] Background Tier 2 load failed, retryable on-demand:", err);
+            });
+        };
+        const scheduleIdle = () => {
+            this.tier2ScheduledTimer = undefined;
+            if (this.isUnloading || this.tier2Ready) return;
+            if (typeof window !== "undefined" && typeof (window as any).requestIdleCallback === "function") {
+                try {
+                    this.tier2IdleId = (window as any).requestIdleCallback(() => executeLoad(), {timeout: 2000});
+                    return;
+                } catch { /* ignore and fallback */ }
+            }
+            executeLoad();
+        };
+        this.tier2ScheduledTimer = window.setTimeout(scheduleIdle, 150);
+    }
+
+    public ensureTier2Loaded(): Promise<void> {
+        if (this.tier2Ready) return Promise.resolve();
+        if (this.tier2LoadingPromise) return this.tier2LoadingPromise;
+        this.cancelTier2Schedule();
+        const generation = this.lifecycleGeneration;
+        let flight: Promise<void>;
+        flight = (async () => {
+            try {
+                await this.loadTier2Storage(generation);
+            } catch (err) {
+                if (this.lifecycleGeneration === generation && !this.isUnloading) {
+                    this.tier2Ready = false;
+                }
+                throw err;
+            } finally {
+                if (this.tier2LoadingPromise === flight && this.lifecycleGeneration === generation) {
+                    this.tier2LoadingPromise = undefined;
+                }
+            }
+        })();
+        this.tier2LoadingPromise = flight;
+        return this.tier2LoadingPromise;
+    }
+
+    private async loadTier2Storage(generation: number): Promise<void> {
+        if (this.isUnloading || this.lifecycleGeneration !== generation) return;
+        if (typeof performance !== "undefined" && typeof performance.mark === "function") {
+            try { performance.mark("siyuan-speed-switch-tier2-start"); } catch { /* ignore */ }
+        }
+        try {
+            await this.readTier2Keys();
+            if (this.isUnloading || this.lifecycleGeneration !== generation) return;
+            this.sanitizeTier2Data();
+            this.tier2Ready = true;
+        } catch (error) {
+            if (this.lifecycleGeneration === generation && !this.isUnloading) {
+                this.tier2Ready = false;
+            }
+            logger.warn("load Tier 2 data fail", error);
+            throw error;
+        } finally {
+            if (typeof performance !== "undefined" && typeof performance.mark === "function") {
+                try {
+                    performance.mark("siyuan-speed-switch-tier2-end");
+                    if (typeof performance.measure === "function") {
+                        performance.measure("siyuan-speed-switch-tier2-load", "siyuan-speed-switch-tier2-start", "siyuan-speed-switch-tier2-end");
+                    }
+                } catch { /* ignore */ }
+            }
+        }
+    }
+
+    public getStartupPerformanceMetrics(): Record<string, number | undefined> {
+        if (typeof performance === "undefined" || typeof performance.getEntriesByName !== "function") {
+            return {};
+        }
+        const getMeasure = (name: string): number | undefined => {
+            try {
+                const entries = performance.getEntriesByName(name, "measure");
+                if (entries && entries.length > 0) {
+                    const duration = entries[entries.length - 1]?.duration;
+                    return typeof duration === "number" && !Number.isNaN(duration) ? Math.round(duration * 100) / 100 : undefined;
+                }
+            } catch { /* ignore */ }
+            return undefined;
+        };
+        return {
+            onloadMs: getMeasure("siyuan-speed-switch-onload"),
+            layoutReadyMs: getMeasure("siyuan-speed-switch-layoutready"),
+            tier1LoadMs: getMeasure("siyuan-speed-switch-tier1-load"),
+            tier2LoadMs: getMeasure("siyuan-speed-switch-tier2-load"),
+        };
     }
 
     // 存储版本戳（D-401）：STORAGE_SCHEMA_VERSION 此前只存在于演练管道，
@@ -1950,17 +2133,26 @@ export default class SpeedSwitchPlugin extends Plugin {
         this.saveDataDebounced(SCHEMA_VERSION_KEY);
     }
 
-    // 加载期数据净化：收藏列表结构校验/按 key 去重，置顶与分组注册表过滤非法字符串
-    private sanitizePersistentData() {
-        const favorites = sanitizeFavorites(this.data[FAV_KEY], FAVORITES_MAX);
-        if (favorites.changed) {
-            this.data[FAV_KEY] = favorites.items;
-            this.saveDataDebounced(FAV_KEY);
-        }
+    // 轨道 A 数据净化分级：Tier 1 数据净化（pinned、quick-actions）
+    private sanitizeTier1Data() {
         const pinned = sanitizeStringList(this.data[PINNED_KEY], PINNED_MAX);
         if (pinned.changed) {
             this.data[PINNED_KEY] = pinned.items;
             this.saveDataDebounced(PINNED_KEY);
+        }
+        const quickActions = sanitizeQuickActions(this.data[QUICK_ACTIONS_KEY], QUICK_ACTIONS_MAX);
+        if (quickActions.changed) {
+            this.data[QUICK_ACTIONS_KEY] = quickActions.items;
+            this.saveDataDebounced(QUICK_ACTIONS_KEY);
+        }
+    }
+
+    // 轨道 A 数据净化分级：Tier 2 延迟载入后的数据净化、演练快照与版本落戳
+    private sanitizeTier2Data() {
+        const favorites = sanitizeFavorites(this.data[FAV_KEY], FAVORITES_MAX);
+        if (favorites.changed) {
+            this.data[FAV_KEY] = favorites.items;
+            this.saveDataDebounced(FAV_KEY);
         }
         const groups = sanitizeStringList(this.data[FAV_GROUPS_KEY], FAVORITE_GROUPS_MAX);
         if (groups.changed) {
@@ -1977,21 +2169,11 @@ export default class SpeedSwitchPlugin extends Plugin {
             this.data[CLOSED_HISTORY_KEY] = closedHistory.items;
             this.saveDataDebounced(CLOSED_HISTORY_KEY);
         }
-        const quickActions = sanitizeQuickActions(this.data[QUICK_ACTIONS_KEY], QUICK_ACTIONS_MAX);
-        if (quickActions.changed) {
-            this.data[QUICK_ACTIONS_KEY] = quickActions.items;
-            this.saveDataDebounced(QUICK_ACTIONS_KEY);
-        }
         const documentSets = normalizeDocumentSets(this.data[DOCUMENT_SETS_KEY]);
         if (documentSets.changed || this.data[DOCUMENT_SETS_KEY]?.schemaVersion !== documentSets.schemaVersion) {
             this.data[DOCUMENT_SETS_KEY] = documentSets;
             this.saveDataDebounced(DOCUMENT_SETS_KEY);
         }
-        // 缩略图缓存（v0.20 数据连续性，D-392）：此前只有写入侧上限，而写入侧只拦新增、
-        // 不清理存量——磁盘上的超限/损坏条目无处回收（结构损坏，或手机端 v0.7.0 写入侧
-        // 误用桌面上限、v0.8.0 起收紧到 30 条 / 80 KiB 后留下的 31~40 条残留）。
-        // 桌面 40 条 / 200 KiB 自 v0.2.0 引入起从未变过。
-        // 这里按当前端型（手机上限更保守）做读取侧归一化，规则与 setThumbCache 完全镜像。
         const thumbCache = normalizeThumbCache(this.data[THUMB_CACHE_KEY], {
             max: this.isMobile ? THUMB_CACHE_MAX_MOBILE : THUMB_CACHE_MAX,
             htmlMax: this.isMobile ? THUMB_HTML_MAX_MOBILE : THUMB_HTML_MAX,
@@ -2000,8 +2182,6 @@ export default class SpeedSwitchPlugin extends Plugin {
             this.data[THUMB_CACHE_KEY] = thumbCache.cache;
             this.saveDataDebounced(THUMB_CACHE_KEY);
         }
-        // 关联内容 SWR 持久缓存（T-6840）：重启后工作台"当前文档相关"冷启动消除。
-        // 载入侧归一化（版本/年龄/有界/去重）；显示语义=先显缓存标注"缓存"再后台刷新。
         const relatedSwr = normalizeRelatedSwrStore(this.data[RELATED_SWR_KEY]);
         this.relatedSwrStore = new Map(relatedSwr.entries.map((entry) => [entry.rootId, entry]));
         if (relatedSwr.entries.length > 0 && JSON.stringify(this.data[RELATED_SWR_KEY]) !== JSON.stringify(relatedSwr)) {
@@ -2013,6 +2193,14 @@ export default class SpeedSwitchPlugin extends Plugin {
             this.data[SNIPPET_GROUPS_KEY] = snippetGroups;
             this.saveDataDebounced(SNIPPET_GROUPS_KEY);
         }
+        this.captureStorageMigrationSnapshot();
+        this.initFavCollapsed();
+    }
+
+    // 加载期数据净化：收藏列表结构校验/按 key 去重，置顶与分组注册表过滤非法字符串
+    private sanitizePersistentData() {
+        this.sanitizeTier1Data();
+        this.sanitizeTier2Data();
     }
 
     // 存储迁移演练快照（D-386 第二步·保守桥接）：宿主静默修复链已执行完毕，
@@ -2157,7 +2345,7 @@ export default class SpeedSwitchPlugin extends Plugin {
         this.eventBus.on("sync-fail", syncFail);
         this.eventBus.on("open-siyuan-url-plugin", openSiyuanUrlPlugin as any);
         this.bindEcosystemEventSubscriptions();
-        this.bindEditorSelectionObserver();
+        // Track A: 全局 selectionchange 选区监听推迟至 onLayoutReady 之后按需启用
         this.noticeHubCleaner = lvNotify.registerPlugin("siyuan-speed-switch");
         this.backupCleaner = lvBackup.register(
             "siyuan-speed-switch",
@@ -2300,10 +2488,23 @@ export default class SpeedSwitchPlugin extends Plugin {
     // 布局就绪后再次确认手机端入口：部分机型上 onload 执行时顶栏尚未构建完成，
     // 插件按钮会插入失败；这里兜底重试一次
     onLayoutReady() {
+        if (typeof performance !== "undefined" && typeof performance.mark === "function") {
+            try { performance.mark("siyuan-speed-switch-layoutready-start"); } catch { /* ignore */ }
+        }
         this.updateFloatingBallVisibility();
+        this.bindEditorSelectionObserver();
         this.exposePublicApi();
         this.mountExternalCommands();
         this.setupBreadcrumbEntry();
+        this.scheduleTier2Load();
+        if (typeof performance !== "undefined" && typeof performance.mark === "function") {
+            try {
+                performance.mark("siyuan-speed-switch-layoutready-end");
+                if (typeof performance.measure === "function") {
+                    performance.measure("siyuan-speed-switch-layoutready", "siyuan-speed-switch-layoutready-start", "siyuan-speed-switch-layoutready-end");
+                }
+            } catch { /* ignore */ }
+        }
     }
 
     // T-6831 面包屑入口：3.8.5+ Plugin.addBreadcrumbButton（v3.8.5 源码实证，
@@ -2495,6 +2696,9 @@ export default class SpeedSwitchPlugin extends Plugin {
     }
 
     async onunload() {
+        this.cancelTier2Schedule();
+        this.tier2LoadingPromise = undefined;
+        this.tier2Ready = false;
         this.externalCommandCleanup?.();
         this.externalCommandCleanup = undefined;
         this.omnisearchCleaner?.();
@@ -2771,15 +2975,20 @@ export default class SpeedSwitchPlugin extends Plugin {
         }
         this.saveTimers.set(key, window.setTimeout(() => {
             this.saveTimers.delete(key);
-            this.queueSave(key, this.data[key]);
+            this.queueSave(key, this.data[key]).catch((e) => {
+                logger.warn("debounced queueSave fail", key, e);
+            });
         }, SAVE_DEBOUNCE_MS));
     }
 
     private queueSave(key: string, value: unknown): Promise<void> {
+        const guardTier2 = (PERSISTENT_TIER2_KEYS.includes(key) && !this.tier2Ready && typeof this.ensureTier2Loaded === "function")
+            ? this.ensureTier2Loaded()
+            : Promise.resolve();
         const previous = this.saveChains.get(key) || Promise.resolve();
         // T-7003：记录落盘结果供设置页保存回执消费（失败不再只进日志）。
         this.lastSaveOutcome[key] = "pending";
-        const next = previous
+        const next = Promise.all([previous, guardTier2])
             .then(() => this.saveData(key, value))
             .then(() => {
                 this.lastSaveOutcome[key] = "ok";
@@ -2789,9 +2998,14 @@ export default class SpeedSwitchPlugin extends Plugin {
                 this.lastSaveOutcome[key] = "failed";
                 if (key === SETTINGS_KEY) this.notifySettingsSaveState();
                 logger.warn("save data fail", e);
+                throw e;
             });
         this.saveChains.set(key, next);
         void next.then(() => {
+            if (this.saveChains.get(key) === next) {
+                this.saveChains.delete(key);
+            }
+        }, () => {
             if (this.saveChains.get(key) === next) {
                 this.saveChains.delete(key);
             }
@@ -3962,6 +4176,11 @@ export default class SpeedSwitchPlugin extends Plugin {
     // T-7012：returnTo 是打开设置时的平台表面；设置关闭后恢复该表面
     // （不固定回切换器）。无面板来源的入口（顶栏/悬浮球/侧栏）不传，行为不变。
     openSetting(initialPanel?: string, returnTo?: PlatformSurface | null, returnContext?: PlatformSurfaceContext | null) {
+        if (typeof this.ensureTier2Loaded === "function") {
+            void this.ensureTier2Loaded().catch((err) => {
+                logger.warn("openSetting tier2 load fail", err);
+            });
+        }
         const restoreSurface = normalizeSurfaceId(returnTo || "", "");
         const restoreContext = normalizeSurfaceContext(returnContext);
         const panelKeys = ["appearance", "behavior", "panels", "favorites", "quickActions", "floatingBall", "documentSets", "journal", "mobile", "storage"] as const;
@@ -4633,6 +4852,11 @@ export default class SpeedSwitchPlugin extends Plugin {
      */
     public openPlatformSurface(surface: PlatformSurface, returnTo: PlatformSurface = "switcher", context?: PlatformSurfaceContext | null) {
         if (this.isUnloading) return;
+        if (typeof this.ensureTier2Loaded === "function") {
+            void this.ensureTier2Loaded().catch((err) => {
+                logger.warn("openPlatformSurface tier2 load fail", err);
+            });
+        }
         // T-7026（ADR 0099）：路由层唯一校验点——禁用模块的残留调用（命令/Agent 动作/
         // 会话回跳）诚实回执拒绝，不静默也不降级打开；已打开窗口保留至用户关闭（D5）。
         if (!this.getAvailablePlatformSurfaces().includes(surface)) {
@@ -4723,6 +4947,11 @@ export default class SpeedSwitchPlugin extends Plugin {
 
     // 打开页签切换器
     private showSwitcher(focusSearch = false, returnTo: PlatformSurface = "switcher", context?: PlatformSurfaceContext | null) {
+        if (typeof this.ensureTier2Loaded === "function") {
+            void this.ensureTier2Loaded().catch((err) => {
+                logger.warn("showSwitcher tier2 load fail", err);
+            });
+        }
         this.notePlatformSurface("switcher", context);
         // T-7163：新入口（热键/悬浮球等无 context）重置会话现场；往返（带 context）恢复。
         if (!context) this.switcherScene = null;
@@ -4845,6 +5074,11 @@ export default class SpeedSwitchPlugin extends Plugin {
     // a mobile surface before the wide layout has real device evidence.
     private openSnippetStudio(returnTo: PlatformSurface = "switcher", context?: PlatformSurfaceContext | null) {
         if (this.isMobile) return;
+        if (typeof this.ensureTier2Loaded === "function") {
+            void this.ensureTier2Loaded().catch((err) => {
+                logger.warn("openSnippetStudio tier2 load fail", err);
+            });
+        }
         context = context || ({entry: "internal"} as PlatformSurfaceContext);
         if (!this.getAvailablePlatformSurfaces().includes("studio")) {
             showMessage(this.i18n.moduleDisabledReceipt.replace("{x}", this.i18n.moduleStudio));
@@ -4943,7 +5177,7 @@ export default class SpeedSwitchPlugin extends Plugin {
                 recycle: {
                     load: () => normalizeRecycleStore(this.data[SNIPPET_RECYCLE_KEY]),
                     save: (next: unknown) => {
-                        this.data[SNIPPET_RECYCLE_KEY] = next;
+                        this.data[SNIPPET_RECYCLE_KEY] = (next && typeof next === "object" && (next as any).store) ? (next as any).store : next;
                         this.saveDataDebounced(SNIPPET_RECYCLE_KEY);
                     },
                 },
@@ -5384,18 +5618,43 @@ const updatedMap: {[rootId: string]: string} = {};
         input.addEventListener("focus", () => {
             if (input.value) input.select();
         });
+        let inputDebounceTimer: number | null = null;
+        const triggerDebounced = (immediate = false) => {
+            if (inputDebounceTimer) {
+                window.clearTimeout(inputDebounceTimer);
+                inputDebounceTimer = null;
+            }
+            if (immediate) {
+                onTrigger();
+                return;
+            }
+            inputDebounceTimer = window.setTimeout(() => {
+                inputDebounceTimer = null;
+                onTrigger();
+            }, 80);
+        };
+
         input.addEventListener("compositionstart", () => {
             composing = true;
+            if (inputDebounceTimer) {
+                window.clearTimeout(inputDebounceTimer);
+                inputDebounceTimer = null;
+            }
         });
         input.addEventListener("compositionend", () => {
             composing = false;
             updateClearVisibility();
-            onTrigger();
+            triggerDebounced(true);
         });
         input.addEventListener("input", () => {
             updateClearVisibility();
             if (composing) return;
-            onTrigger();
+            // 若用户清空了输入框，立即恢复全量列表；若处于连续敲击打字中，使用 80ms 黄金防抖合并高频重绘
+            if (!input.value) {
+                triggerDebounced(true);
+            } else {
+                triggerDebounced(false);
+            }
         });
         input.addEventListener("keydown", (event) => {
             if (event.key === "Escape" && input.value) {
@@ -5797,6 +6056,7 @@ const updatedMap: {[rootId: string]: string} = {};
             };
             document.addEventListener("pointerdown", outsideHandler, true);
             keyHandler = (event) => {
+                if (event.isComposing || event.keyCode === 229 || event.key === "Process") return;
                 if (event.key === "Escape") {
                     event.preventDefault();
                     event.stopPropagation();
@@ -5943,6 +6203,14 @@ const updatedMap: {[rootId: string]: string} = {};
     // 常驻多模态搜索模式 Chips 栏（对标 Arc / Raycast 模式指示与快速切换）
     setupSearchModeChips(container: HTMLElement | null, searchInput: HTMLInputElement | null, onTrigger: () => void): () => void {
         if (!container || !searchInput) return () => undefined;
+        const isVisible = Boolean(this.getSettings?.()?.showSearchModeChips);
+        if (!isVisible) {
+            container.classList.add("fn__none");
+            container.style.display = "none";
+        } else {
+            container.classList.remove("fn__none");
+            container.style.display = "";
+        }
         const defaultPlaceholder = this.i18n.searchTabs || "搜索页签或全库文档…";
         const modes = [
             {key: "all", prefix: "", label: this.i18n.chipsTabs || "页签", icon: "iconLayout", placeholder: defaultPlaceholder},
@@ -5955,7 +6223,7 @@ const updatedMap: {[rootId: string]: string} = {};
             {key: "help", prefix: "?", label: "? " + (this.i18n.searchModeHelp || "速查"), icon: "iconHelp", placeholder: "? " + (this.i18n.searchModeHelp || "速查") + "…"},
         ];
         container.innerHTML = "";
-        container.className = "sw__mode-chips-bar";
+        container.className = "sw__mode-chips-bar" + (isVisible ? "" : " fn__none");
         container.setAttribute("role", "group");
         container.setAttribute("aria-label", this.i18n.chipsLabel);
 
@@ -5981,62 +6249,65 @@ const updatedMap: {[rootId: string]: string} = {};
             searchInput.placeholder = activeMode.placeholder;
         };
 
-        modes.forEach(({key, prefix, label, icon}) => {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "b3-button b3-button--text sw__mode-chip" + (prefix === "" ? " is-active" : "");
-            btn.dataset.mode = key;
-            btn.dataset.prefix = prefix;
-            btn.setAttribute("aria-pressed", String(prefix === ""));
-            btn.innerHTML = `<svg width="12" height="12"><use xlink:href="#${icon}"></use></svg><span>${label}</span>`;
-            btn.addEventListener("click", () => {
-                const rawVal = searchInput.value || "";
-                const currentPrefixMatch = rawVal.match(/^(@|＠|\^|＾|#|＃|!|！|\*|＊|>|》|\?|？|:|：|-|－|task:|task：|\[ \])/);
-                const pureText = currentPrefixMatch ? rawVal.slice(currentPrefixMatch[0].length).trim() : rawVal.trim();
-                const isAlreadyActive = btn.classList.contains("is-active") && prefix !== "";
-                if (isAlreadyActive || prefix === "") {
-                    // T-7599: 二次点击当前已激活药丸，或者点击“全部/页签”，翻转取消前缀恢复全量模式
-                    searchInput.value = pureText;
-                } else {
-                    searchInput.value = pureText ? `${prefix}${pureText}` : prefix;
-                }
-                updateActiveMode();
-                onTrigger();
-                searchInput.focus();
-            });
-            btn.addEventListener("keydown", (e: KeyboardEvent) => {
-                const idx = chipButtons.indexOf(btn);
-                if (e.key === "ArrowRight") {
-                    e.preventDefault();
-                    chipButtons[(idx + 1) % chipButtons.length]?.focus();
-                } else if (e.key === "ArrowLeft") {
-                    e.preventDefault();
-                    chipButtons[(idx - 1 + chipButtons.length) % chipButtons.length]?.focus();
-                } else if (e.key === "Tab") {
-                    e.preventDefault();
-                    if (e.shiftKey) {
-                        if (idx === 0) searchInput.focus();
-                        else chipButtons[idx - 1]?.focus();
+        if (isVisible) {
+            modes.forEach(({key, prefix, label, icon}) => {
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "b3-button b3-button--text sw__mode-chip" + (prefix === "" ? " is-active" : "");
+                btn.dataset.mode = key;
+                btn.dataset.prefix = prefix;
+                btn.setAttribute("aria-pressed", String(prefix === ""));
+                btn.innerHTML = `<svg width="12" height="12"><use xlink:href="#${icon}"></use></svg><span>${label}</span>`;
+                btn.addEventListener("click", () => {
+                    const rawVal = searchInput.value || "";
+                    const currentPrefixMatch = rawVal.match(/^(@|＠|\^|＾|#|＃|!|！|\*|＊|>|》|\?|？|:|：|-|－|task:|task：|\[ \])/);
+                    const pureText = currentPrefixMatch ? rawVal.slice(currentPrefixMatch[0].length).trim() : rawVal.trim();
+                    const isAlreadyActive = btn.classList.contains("is-active") && prefix !== "";
+                    if (isAlreadyActive || prefix === "") {
+                        // T-7599: 二次点击当前已激活药丸，或者点击“全部/页签”，翻转取消前缀恢复全量模式
+                        searchInput.value = pureText;
                     } else {
-                        if (idx === chipButtons.length - 1) searchInput.focus();
-                        else chipButtons[idx + 1]?.focus();
+                        searchInput.value = pureText ? `${prefix}${pureText}` : prefix;
                     }
-                } else if (e.key === "ArrowDown") {
-                    e.preventDefault();
+                    updateActiveMode();
+                    onTrigger();
                     searchInput.focus();
-                } else if (e.key === "Home") {
-                    e.preventDefault();
-                    chipButtons[0]?.focus();
-                } else if (e.key === "End") {
-                    e.preventDefault();
-                    chipButtons[chipButtons.length - 1]?.focus();
-                }
+                });
+                btn.addEventListener("keydown", (e: KeyboardEvent) => {
+                    const idx = chipButtons.indexOf(btn);
+                    if (e.key === "ArrowRight") {
+                        e.preventDefault();
+                        chipButtons[(idx + 1) % chipButtons.length]?.focus();
+                    } else if (e.key === "ArrowLeft") {
+                        e.preventDefault();
+                        chipButtons[(idx - 1 + chipButtons.length) % chipButtons.length]?.focus();
+                    } else if (e.key === "Tab") {
+                        e.preventDefault();
+                        if (e.shiftKey) {
+                            if (idx === 0) searchInput.focus();
+                            else chipButtons[idx - 1]?.focus();
+                        } else {
+                            if (idx === chipButtons.length - 1) searchInput.focus();
+                            else chipButtons[idx + 1]?.focus();
+                        }
+                    } else if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        searchInput.focus();
+                    } else if (e.key === "Home") {
+                        e.preventDefault();
+                        chipButtons[0]?.focus();
+                    } else if (e.key === "End") {
+                        e.preventDefault();
+                        chipButtons[chipButtons.length - 1]?.focus();
+                    }
+                });
+                chipButtons.push(btn);
+                container.appendChild(btn);
             });
-            chipButtons.push(btn);
-            container.appendChild(btn);
-        });
+        }
 
         const onSearchKeyDown = (e: KeyboardEvent) => {
+            if (!isVisible || chipButtons.length === 0) return;
             if (e.key === "ArrowUp" && searchInput.selectionStart === 0 && searchInput.selectionEnd === 0) {
                 const activeBtn = chipButtons.find((b) => b.classList.contains("is-active")) || chipButtons[0];
                 if (activeBtn) {
@@ -6415,6 +6686,7 @@ const updatedMap: {[rootId: string]: string} = {};
     }
 
     public async dumpData(): Promise<Record<string, unknown>> {
+        if (typeof this.ensureTier2Loaded === "function") await this.ensureTier2Loaded();
         return {
             version: this.data[SCHEMA_VERSION_KEY] ?? 1,
             exportedAt: new Date().toISOString(),
@@ -6432,6 +6704,7 @@ const updatedMap: {[rootId: string]: string} = {};
 
     public async restoreData(data: Record<string, unknown>): Promise<boolean> {
         if (!data || typeof data !== "object") return false;
+        if (typeof this.ensureTier2Loaded === "function") await this.ensureTier2Loaded();
         try {
             if (data.snippetStack) {
                 this.saveSnippetStack(data.snippetStack);
@@ -6479,6 +6752,11 @@ const updatedMap: {[rootId: string]: string} = {};
     }
 
     public openMainView(): void {
+        if (typeof this.ensureTier2Loaded === "function") {
+            void this.ensureTier2Loaded().catch((err) => {
+                logger.warn("openMainView tier2 load fail", err);
+            });
+        }
         this.showSwitcher();
     }
 
@@ -6626,7 +6904,10 @@ const updatedMap: {[rootId: string]: string} = {};
                 ],
             });
             const synthesizedMarkdown = res.content || "";
-            const title = `AI编织专题-${new Date().toISOString().slice(0, 10)}`;
+            // 本地日历日键：toISOString 在 UTC+8 的 00:00~08:00 会回退到昨天，专题标题挂错日期
+            const weaveNow = new Date();
+            const weaveDayKey = `${weaveNow.getFullYear()}-${String(weaveNow.getMonth() + 1).padStart(2, "0")}-${String(weaveNow.getDate()).padStart(2, "0")}`;
+            const title = `AI编织专题-${weaveDayKey}`;
             if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
                 try {
                     await navigator.clipboard.writeText(synthesizedMarkdown);
@@ -7141,16 +7422,16 @@ const updatedMap: {[rootId: string]: string} = {};
             content: `
                 <div class="sw-activity-stream-dialog b3-dialog__content" style="padding: 16px; max-height: 60vh; overflow-y: auto;">
                     <div class="sw-activity-stream-meta" style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
-                        <span style="font-size: 13px; color: var(--b3-theme-on-surface-light);">今日共沉淀 <strong>${records.length}</strong> 条生态记录</span>
+                        <span style="font-size: 13px; color: var(--sw-color-text-muted);">今日共沉淀 <strong>${records.length}</strong> 条生态记录</span>
                         <button type="button" class="b3-button b3-button--primary sw-activity-stream-copy-btn" style="font-size: 12px; padding: 4px 10px;">
                             ${this.i18n.snippetStackAssembleCopy || "复制今日汇编"}
                         </button>
                     </div>
                     <div class="sw-activity-stream-list" style="display: flex; flex-direction: column; gap: 8px;">
-                        ${records.length === 0 ? `<div style="text-align: center; color: var(--b3-theme-on-surface-light); padding: 24px 0;">今日暂无生态沉淀</div>` : records.map((r: any) => `
-                            <div class="sw-activity-stream-item" style="display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; padding: 8px 10px; border-radius: 8px; background: var(--b3-theme-surface-lighter, rgba(0,0,0,0.03));">
-                                <span style="font-size: 11px; font-weight: 600; color: var(--b3-theme-primary); font-family: monospace;">${r.timeStr}</span>
-                                <span style="font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--b3-theme-surface-light, rgba(0,0,0,0.06)); font-weight: 500;">${r.source}</span>
+                        ${records.length === 0 ? `<div style="text-align: center; color: var(--sw-color-text-muted); padding: 24px 0;">今日暂无生态沉淀</div>` : records.map((r: any) => `
+                            <div class="sw-activity-stream-item" style="display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; padding: 8px 10px; border-radius: 8px; background: var(--sw-color-surface-muted, rgba(0,0,0,0.03));">
+                                <span style="font-size: 11px; font-weight: 600; color: var(--sw-color-accent); font-family: monospace;">${r.timeStr}</span>
+                                <span style="font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--sw-color-bg-soft, rgba(0,0,0,0.06)); font-weight: 500;">${r.source}</span>
                                 <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${r.title}</span>
                                 ${r.linkBlockId ? `<a href="siyuan://blocks/${r.linkBlockId}" class="b3-link" style="font-size: 11px;">定位</a>` : ""}
                             </div>
@@ -9563,7 +9844,8 @@ const updatedMap: {[rootId: string]: string} = {};
         return normalizeHomeState(raw, new Set([...this.homeThirdPartyIds, ...persisted]));
     }
 
-    private saveHomeState(state: { schemaVersion: number; defaultsVersion?: number; instances: unknown[]; layouts: Record<string, unknown[]> }) {
+    private async saveHomeState(state: { schemaVersion: number; defaultsVersion?: number; instances: unknown[]; layouts: Record<string, unknown[]> }) {
+        if (typeof this.ensureTier2Loaded === "function") await this.ensureTier2Loaded();
         // 初始化属于持久化意图，撤销布局/删空都不能让它回退到“从未打开”。
         this.data[HOME_STATE_KEY] = {...state, defaultsVersion: Math.max(1, state.defaultsVersion || 0, this.getHomeState().defaultsVersion)};
         this.saveDataDebounced(HOME_STATE_KEY);
@@ -10533,7 +10815,8 @@ const updatedMap: {[rootId: string]: string} = {};
         }).filter((item): item is {rootId: string; title: string; index: number; active?: boolean} => Boolean(item));
     }
 
-    private saveDocumentSet(candidate: unknown) {
+    private async saveDocumentSet(candidate: unknown) {
+        if (typeof this.ensureTier2Loaded === "function") await this.ensureTier2Loaded();
         const result = upsertDocumentSet(this.data[DOCUMENT_SETS_KEY], candidate, {now: Date.now()});
         if (!result.item) return false;
         this.data[DOCUMENT_SETS_KEY] = result.state;
@@ -11174,6 +11457,20 @@ const updatedMap: {[rootId: string]: string} = {};
         parsedQuery?: {phrases: string[]; excludes: string[]; terms: string[]},
     ): number {
         const kw = keyword.trim().toLowerCase();
+        // 深入穿透检索模式（@大纲, ^正文块, #标签, !书签, >命令, -待办, ?速查等）直接短路，页签区无需计算本地拼音与标题包含
+        const isPenetrationMode = /^(@|＠|\^|＾|#|＃|!|！|\*|＊|>|》|\?|？|task:|task：|\[ \])/.test(kw)
+            || (kw.startsWith("-") && !kw.includes(" ")) || (kw.startsWith("－") && !kw.includes(" "));
+        if (isPenetrationMode) {
+            scrollElement.querySelectorAll<HTMLElement>(".sw__card").forEach((card) => {
+                card.classList.add("fn__none");
+                card.removeAttribute("data-sw-digit");
+            });
+            scrollElement.querySelectorAll<HTMLElement>(".sw__group:not(.sw__doc-results)").forEach((group) => {
+                group.classList.add("fn__none");
+            });
+            return 0;
+        }
+
         const parsed = parsedQuery || parseSearchQuery(keyword);
         const parsedPositive = parsed.phrases.length + parsed.terms.length;
         const pinyinOn = this.getSettings().pinyinMatch !== false;
@@ -11433,13 +11730,27 @@ private rootIdOf(tab: Tab): string | null {
         });
     }
 
-    private saveFavorites(list: IFavoriteItem[]) {
+    private async saveFavorites(list: IFavoriteItem[]): Promise<void> {
+        if (typeof this.ensureTier2Loaded === "function") await this.ensureTier2Loaded();
         this.data[FAV_KEY] = sanitizeFavorites(list, FAVORITES_MAX).items;
         this.saveDataDebounced(FAV_KEY);
     }
 
+    public async addFavorite(item: IFavoriteItem): Promise<void> {
+        if (typeof this.ensureTier2Loaded === "function") await this.ensureTier2Loaded();
+        const list = this.getFavorites();
+        const existingIndex = list.findIndex((x) => (x.rootId && x.rootId === item.rootId) || x.key === item.key);
+        if (existingIndex >= 0) {
+            list[existingIndex] = {...list[existingIndex], ...item};
+        } else {
+            list.unshift(item);
+        }
+        await this.saveFavorites(list);
+    }
+
     // 切换收藏状态，返回切换后是否为已收藏
-    private toggleFavorite(tab: Tab): boolean {
+    private async toggleFavorite(tab: Tab): Promise<boolean> {
+        if (typeof this.ensureTier2Loaded === "function") await this.ensureTier2Loaded();
         const list = this.getFavorites();
         const rootId = this.rootIdOf(tab);
         if (!rootId) {
@@ -11448,40 +11759,45 @@ private rootIdOf(tab: Tab): string | null {
             const index = list.findIndex((item) => item.key === tab.id);
             if (index >= 0) {
                 list.splice(index, 1);
-                this.saveFavorites(list);
+                await this.saveFavorites(list);
                 return false;
             }
             showMessage(this.i18n.favNeedActivate);
             return false;
         }
-        if (this.migrateFavoriteKey(list, tab, rootId)) {
+        if (await this.migrateFavoriteKey(list, tab, rootId)) {
             return true;
         }
         const index = list.findIndex((item) => item.key === rootId);
         if (index >= 0) {
             list.splice(index, 1);
-            this.saveFavorites(list);
+            await this.saveFavorites(list);
             return false;
         }
         list.unshift({key: rootId, title: this.titleOf(tab), rootId, group: ""});
-        this.saveFavorites(list);
+        await this.saveFavorites(list);
         return true;
     }
 
     // 迁移历史脏收藏条目：旧版本曾把未解析页签的 tab.id（UUID）当作收藏 key，
     // 此类条目 rootId 为空、跳转必然失效。页签激活解析出 rootId 后将其改写为稳定键；
     // 若同文档已存在正常条目则脏条目属于历史重复，直接移除。返回是否发生了迁移
-    private migrateFavoriteKey(list: IFavoriteItem[], tab: Tab, rootId: string): boolean {
+    private async migrateFavoriteKey(list: IFavoriteItem[], tab: Tab, rootId: string): Promise<boolean> {
         const result = migrateFavoriteEntry(list, tab.id, rootId);
         if (!result.migrated) return false;
         list.splice(0, list.length, ...result.items);
-        this.saveFavorites(list);
+        try {
+            await this.saveFavorites(list);
+        } catch (err) {
+            logger.warn("migrateFavoriteKey saveFavorites fail", err);
+        }
         return true;
     }
 
-    private removeFavorite(key: string) {
+    public async removeFavorite(key: string): Promise<void> {
+        if (typeof this.ensureTier2Loaded === "function") await this.ensureTier2Loaded();
         const result = removeFavoriteEntry(this.getFavorites(), key);
-        if (result.changed) this.saveFavorites(result.items);
+        if (result.changed) await this.saveFavorites(result.items);
     }
 
     // ==================== 收藏分组折叠状态持久化 ====================
@@ -11503,8 +11819,9 @@ private rootIdOf(tab: Tab): string | null {
         this.favCollapsed = next;
     }
 
-    // 鎶樺彔/灞曞紑鐘舵€佸彉鍖栧悗鍘绘姈鍐欏叆鎸佷箙鍖?
-    private saveFavCollapsed() {
+    // 折叠/展开状态变化后去抖写入持久化
+    private async saveFavCollapsed(): Promise<void> {
+        if (typeof this.ensureTier2Loaded === "function") await this.ensureTier2Loaded();
         this.data[FAV_COLLAPSED_KEY] = Array.from(this.favCollapsed);
         this.saveDataDebounced(FAV_COLLAPSED_KEY);
     }
@@ -11599,9 +11916,13 @@ private rootIdOf(tab: Tab): string | null {
                     const src = activeItem.dataset.historySource;
                     const rootId = activeItem.dataset.rootId;
                     if (src === "closed") {
-                        this.removeClosedHistoryEntry(rootId || key || "");
+                        void this.removeClosedHistoryEntry(rootId || key || "").catch((err) => {
+                            logger.warn("removeClosedHistoryEntry fail", err);
+                        });
                     } else if (key) {
-                        this.removeOpenHistoryEntry(key);
+                        void this.removeOpenHistoryEntry(key).catch((err) => {
+                            logger.warn("removeOpenHistoryEntry fail", err);
+                        });
                     }
                     this.refreshOpenHistoryDropdowns();
                     const nextButtons = Array.from(panel.querySelectorAll<HTMLButtonElement>(".sw__history-item"));
@@ -11912,8 +12233,8 @@ private rootIdOf(tab: Tab): string | null {
             this.activeHistoryMenu = menu;
             menu.addItem({label: this.i18n.historyOpenAction, icon: "iconOpen", click: () => onPick(entry)});
             menu.addItem({label: this.i18n.historyRemove, icon: "iconTrashcan", click: () => {
-                if (entry.source === "closed") this.removeClosedHistoryEntry(entry.rootId || entry.key);
-                else this.removeOpenHistoryEntry(entry.key);
+                if (entry.source === "closed") void this.removeClosedHistoryEntry(entry.rootId || entry.key).catch((err) => logger.warn("removeClosedHistoryEntry fail", err));
+                else void this.removeOpenHistoryEntry(entry.key).catch((err) => logger.warn("removeOpenHistoryEntry fail", err));
                 this.refreshOpenHistoryDropdowns();
             }});
             menu.open({x: clientX, y: clientY});
@@ -11979,15 +12300,15 @@ private rootIdOf(tab: Tab): string | null {
         // T-6806：切换离开前记录跳转原点（后退栈）
         this.captureJumpOrigin();
         if (!entry.rootId || !BLOCK_ID_RE.test(entry.rootId)) {
-            if (entry.source === "closed") this.removeClosedHistoryEntry(entry.rootId || entry.key);
-            else this.removeOpenHistoryEntry(entry.key);
+            if (entry.source === "closed") void this.removeClosedHistoryEntry(entry.rootId || entry.key).catch((err) => logger.warn("removeClosedHistoryEntry fail", err));
+            else void this.removeOpenHistoryEntry(entry.key).catch((err) => logger.warn("removeOpenHistoryEntry fail", err));
             showMessage(this.i18n.historyInvalid);
             return;
         }
         if (this.isMobile) {
             const opened = await this.mobileOpenDoc(entry.rootId);
             if (!opened) {
-                if (entry.source === "closed") this.removeClosedHistoryEntry(entry.rootId);
+                if (entry.source === "closed") void this.removeClosedHistoryEntry(entry.rootId).catch((err) => logger.warn("removeClosedHistoryEntry fail", err));
                 showMessage(this.i18n.openDocFailed);
             }
         } else {
@@ -11998,8 +12319,8 @@ private rootIdOf(tab: Tab): string | null {
                 logger,
             });
             if (!opened) {
-                if (entry.source === "closed") this.removeClosedHistoryEntry(entry.rootId || entry.key);
-                else this.removeOpenHistoryEntry(entry.key);
+                if (entry.source === "closed") void this.removeClosedHistoryEntry(entry.rootId || entry.key).catch((err) => logger.warn("removeClosedHistoryEntry fail", err));
+                else void this.removeOpenHistoryEntry(entry.key).catch((err) => logger.warn("removeOpenHistoryEntry fail", err));
                 showMessage(this.i18n.openDocFailed);
             } else {
                 // T-6801 重开现场：会话内有过离开记录的文档按比例回卷滚动位置
@@ -12614,17 +12935,19 @@ private rootIdOf(tab: Tab): string | null {
     }
 
     // 修改收藏项的分组（group 为空表示移出分组）
-    private setFavoriteGroup(key: string, group: string) {
+    private async setFavoriteGroup(key: string, group: string): Promise<void> {
+        if (typeof this.ensureTier2Loaded === "function") await this.ensureTier2Loaded();
         const list = this.getFavorites();
         const result = setFavoriteEntryGroup(list, key, group);
         if (!result.changed) return;
         list.splice(0, list.length, ...result.items);
-        this.saveFavorites(list);
+        await this.saveFavorites(list);
         this.refreshFavSelects();
     }
 
     // 收藏页签到指定分组（已收藏则仅调整分组），用于菜单快速收藏到组
-    private addFavoriteToGroup(tab: Tab, group: string) {
+    private async addFavoriteToGroup(tab: Tab, group: string): Promise<void> {
+        if (typeof this.ensureTier2Loaded === "function") await this.ensureTier2Loaded();
         const list = this.getFavorites();
         const rootId = this.rootIdOf(tab);
         if (!rootId) {
@@ -12632,14 +12955,14 @@ private rootIdOf(tab: Tab): string | null {
             showMessage(this.i18n.favNeedActivate);
             return;
         }
-        this.migrateFavoriteKey(list, tab, rootId);
+        await this.migrateFavoriteKey(list, tab, rootId);
         const item = list.find((fav) => fav.key === rootId);
         if (item) {
             item.group = group.trim();
         } else {
             list.unshift({key: rootId, title: this.titleOf(tab), rootId, group: group.trim()});
         }
-        this.saveFavorites(list);
+        await this.saveFavorites(list);
         this.refreshFavSelects();
     }
 
@@ -12654,7 +12977,8 @@ private rootIdOf(tab: Tab): string | null {
         return result.items;
     }
 
-    private saveFavGroupRegistry(names: string[]) {
+    private async saveFavGroupRegistry(names: string[]): Promise<void> {
+        if (typeof this.ensureTier2Loaded === "function") await this.ensureTier2Loaded();
         this.data[FAV_GROUPS_KEY] = sanitizeStringList(names, FAVORITE_GROUPS_MAX).items;
         this.saveDataDebounced(FAV_GROUPS_KEY);
     }
@@ -12762,8 +13086,8 @@ private rootIdOf(tab: Tab): string | null {
         menu.addItem({
             label: this.i18n.favoriteTab,
             icon: "iconStar",
-            click: () => {
-                this.toggleFavorite(tab);
+            click: async () => {
+                await this.toggleFavorite(tab);
                 this.refreshCardFavState(tab, card);
                 this.refreshFavSelects();
                 const favBtn = card.querySelector<HTMLElement>(".sw__fav-btn");
@@ -12779,7 +13103,9 @@ private rootIdOf(tab: Tab): string | null {
                     label: this.escapeAttr(name),
                     icon: "iconFolder",
                     click: () => {
-                        this.addFavoriteToGroup(tab, name);
+                        void this.addFavoriteToGroup(tab, name).catch((err) => {
+                            logger.warn("addFavoriteToGroup fail", err);
+                        });
                         this.refreshCardFavState(tab, card);
                     },
                 });
@@ -12807,14 +13133,22 @@ private rootIdOf(tab: Tab): string | null {
                 menu.addItem({
                     label: this.escapeAttr(name),
                     icon: favorite.group === name ? "iconSelect" : "iconFolder",
-                    click: () => this.setFavoriteGroup(key, name),
+                    click: () => {
+                        void this.setFavoriteGroup(key, name).catch((err) => {
+                            logger.warn("setFavoriteGroup fail", err);
+                        });
+                    },
                 });
             });
             if (favorite.group) {
                 menu.addItem({
                     label: this.i18n.removeFromGroup,
                     icon: "iconUnpin",
-                    click: () => this.setFavoriteGroup(key, ""),
+                    click: () => {
+                        void this.setFavoriteGroup(key, "").catch((err) => {
+                            logger.warn("setFavoriteGroup fail", err);
+                        });
+                    },
                 });
             }
             menu.addSeparator();
@@ -12828,8 +13162,8 @@ private rootIdOf(tab: Tab): string | null {
         menu.addItem({
             label: this.i18n.unfavoriteTab,
             icon: "iconClose",
-            click: () => {
-                this.toggleFavorite(tab);
+            click: async () => {
+                await this.toggleFavorite(tab);
                 this.refreshCardFavState(tab, card);
                 this.refreshFavSelects();
                 const favBtn = card.querySelector<HTMLElement>(".sw__fav-btn");
@@ -12894,8 +13228,8 @@ private rootIdOf(tab: Tab): string | null {
 
     // 执行收藏项变更：先落盘并同步所有下拉的徽标（refreshFavSelects 会收起展开中的面板），
     // 再让当前面板保持展开并就地重建，最后按新内容高度重新贴位
-    private applyFavItemChange(mutate: () => void, panel: HTMLElement, onPick: () => void, onChanged: IOverlayClose = () => undefined) {
-        mutate();
+    private async applyFavItemChange(mutate: () => void | Promise<void>, panel: HTMLElement, onPick: () => void, onChanged: IOverlayClose = () => undefined): Promise<void> {
+        await mutate();
         this.refreshFavSelects();
         panel.classList.remove("fn__none");
         this.renderFavPanel(panel, onPick, onChanged);
@@ -13182,7 +13516,9 @@ private rootIdOf(tab: Tab): string | null {
         scrollElement = scrollElement.closest<HTMLElement>(".sw__scroll") || scrollElement;
         // 清空前收集旧卡片：排序切换/列表刷新时同页签卡片直接复用（移动 DOM 而非重建），
         // 已渲染的缩略图原样保留，重排瞬时完成
-        cancelDocPreview(scrollElement);
+        // keepInFlight：列表异步富化重跑 renderList 是同目标冗余取消——掐断在途预览读取
+        // 只会把 200 回包变 null（"预览未完整加载"）；在途回包由 wantedRootId 校验收货
+        cancelDocPreview(scrollElement, true);
         // T-7009：异步重绘/排序切换的现场保持——innerHTML 清空前捕获滚动与焦点；
         // 焦点卡片按 tabId 在新列表找回（DOM 复用移动的是同一元素，可重新聚焦；
         // 焦点回归经 T-7007 的 focusin 委托联动预览，现场完整），找不到诚实放弃。
@@ -13218,11 +13554,13 @@ private rootIdOf(tab: Tab): string | null {
         this.groupFlowObserver = null;
 
         const activeTabId = activeTab?.id;
+        const activeRootId = activeTab ? (this.rootIdOf(activeTab) || "") : (this.resolveActiveHostEditor()?.protyle?.block?.rootID || "");
         const mru = this.getMru();
         const pinned = new Set(this.getPinned());
         const favorites = new Set(this.getFavorites().map((item) => item.key));
 
         const ctx: ITabGroupRenderCtx = {reusable, activeTabId, pinned, favorites, mru, settings, updatedMap, opts};
+        ctx.activeRootId = activeRootId;
 
         const useTabPreview = !this.isMobile && !isSidebar && (measuredWidth >= 680 || (!scrollElement.isConnected && ((settings.dialogWidth || 880) >= 680 || window.innerWidth >= 800)));
         let layout: HTMLElement | null = null;
@@ -13237,7 +13575,7 @@ private rootIdOf(tab: Tab): string | null {
         }
 
         const all: IGroupedTab[] = [];
-        const focusState: {defaultFocusIndex: number} = {defaultFocusIndex: 0};
+        const focusState: {defaultFocusIndex: number; matchedActive?: boolean; matchedMru?: boolean} = {defaultFocusIndex: 0};
         const groupMode = settings.groupBy;
         if (groupMode === "none") {
             // 按 parent（Wnd）分栏分组，保持 getAllTabs 的布局树顺序
@@ -13268,7 +13606,7 @@ private rootIdOf(tab: Tab): string | null {
         // T-7009：默认首卡焦点只服务首次打开（本表面内尚无焦点）；异步重绘/排序
         // 切换时焦点已在表面内（搜索框或某张卡片），不得被默认焦点抢走。
         if (!sceneFocusInSurface) {
-        this.focusCard(all[focusState.defaultFocusIndex]?.card, true);
+            this.focusCard(all[focusState.defaultFocusIndex]?.card, true);
         }
 
         // 视口懒渲染缩略图：复用卡片跳过，新卡片滚入可视区时才生成
@@ -13312,7 +13650,7 @@ private rootIdOf(tab: Tab): string | null {
         ordered: IGroupedTab[],
         ctx: ITabGroupRenderCtx,
         all: IGroupedTab[],
-        focusState: {defaultFocusIndex: number},
+        focusState: {defaultFocusIndex: number; matchedActive?: boolean; matchedMru?: boolean},
     ) {
         const groupEl = document.createElement("div");
         groupEl.className = "sw__group";
@@ -13328,10 +13666,21 @@ private rootIdOf(tab: Tab): string | null {
             grid.appendChild(card);
             item.card = card;
             all.push(item);
-            // 默认聚焦 MRU 里最近使用的（非当前活动）页签，更贴近 win+tab 体验
-            // MRU 按 pinKey（文档页签为 rootID）记录，需同键匹配
-            if (item.tab.id !== ctx.activeTabId && ctx.mru.indexOf(this.pinKeyOf(item.tab)) === 0) {
+            // 默认聚焦决策：优先比对当前活动文档（tabId 或 rootId），命中则将 defaultFocusIndex 指向当前卡片；
+            // 若未命中再平滑回退至 MRU 最近使用的页签或首卡
+            const itemRootId = this.rootIdOf(item.tab) || "";
+            const isItemActive = Boolean(
+                (ctx.activeTabId && item.tab.id === ctx.activeTabId) ||
+                (ctx.activeRootId && itemRootId === ctx.activeRootId)
+            );
+            if (isItemActive) {
                 focusState.defaultFocusIndex = all.length - 1;
+                focusState.matchedActive = true;
+            } else if (!focusState.matchedActive) {
+                if (ctx.mru.indexOf(this.pinKeyOf(item.tab)) === 0) {
+                    focusState.defaultFocusIndex = all.length - 1;
+                    focusState.matchedMru = true;
+                }
             }
         });
         groupEl.appendChild(grid);
@@ -13362,7 +13711,7 @@ private rootIdOf(tab: Tab): string | null {
         groupMode: TabGroupMode,
         ctx: ITabGroupRenderCtx,
         all: IGroupedTab[],
-        focusState: {defaultFocusIndex: number},
+        focusState: {defaultFocusIndex: number; matchedActive?: boolean; matchedMru?: boolean},
         listOpts: {onOverlayClose: IOverlayClose, onTabsChanged: IOverlayClose},
         sortBy: SortBy,
         updatedMap: {[rootId: string]: string},
@@ -13504,7 +13853,7 @@ private rootIdOf(tab: Tab): string | null {
         ordered: IGroupedTab[],
         ctx: ITabGroupRenderCtx,
         all: IGroupedTab[],
-        focusState: {defaultFocusIndex: number},
+        focusState: {defaultFocusIndex: number; matchedActive?: boolean; matchedMru?: boolean},
         span = 0,
         cellWidth = 0,
     ) {
@@ -13546,8 +13895,21 @@ private rootIdOf(tab: Tab): string | null {
             grid.appendChild(card);
             item.card = card;
             all.push(item);
-            if (item.tab.id !== ctx.activeTabId && ctx.mru.indexOf(this.pinKeyOf(item.tab)) === 0) {
+            // 默认聚焦决策：优先比对当前活动文档（tabId 或 rootId），命中则将 defaultFocusIndex 指向当前卡片；
+            // 若未命中再平滑回退至 MRU 最近使用的页签或首卡
+            const itemRootId = this.rootIdOf(item.tab) || "";
+            const isItemActive = Boolean(
+                (ctx.activeTabId && item.tab.id === ctx.activeTabId) ||
+                (ctx.activeRootId && itemRootId === ctx.activeRootId)
+            );
+            if (isItemActive) {
                 focusState.defaultFocusIndex = all.length - 1;
+                focusState.matchedActive = true;
+            } else if (!focusState.matchedActive) {
+                if (ctx.mru.indexOf(this.pinKeyOf(item.tab)) === 0) {
+                    focusState.defaultFocusIndex = all.length - 1;
+                    focusState.matchedMru = true;
+                }
             }
         });
         groupEl.appendChild(grid);
@@ -13634,10 +13996,21 @@ private rootIdOf(tab: Tab): string | null {
     }
 
     // 空态：主文案 + 引导副文案（提示可搜索全库文档）
+    /** DL2 阶段3：空态吉祥物（mascot 偏好门控，关闭回退线性 emoji） */
+    public resolveLvMascotHtml(): string {
+        try {
+            if (resolveEffectiveMotion().mascot) return lvMascot("carry", { class: "sw__empty-mascot" });
+        } catch {
+            // ignore（kit 缺失等异常回退 emoji）
+        }
+        return `<div style="font-size:32px;">🗂️</div>`;
+    }
+
     private buildEmptyState(surfaceRoot?: Element | null): HTMLElement {
         const empty = document.createElement("div");
         empty.className = "sw__empty";
-        empty.innerHTML = `<div class="sw__empty-message" role="status" aria-live="polite"><div class="sw__empty-title"></div><div class="sw__empty-sub"></div></div>`;
+        // DL2 阶段3：桌面空态同样落吉祥物（与移动端同口径，mascot 偏好门控）
+        empty.innerHTML = `<div class="sw__empty-message" role="status" aria-live="polite">${this.resolveLvMascotHtml()}<div class="sw__empty-title"></div><div class="sw__empty-sub"></div></div>`;
         empty.querySelector(".sw__empty-title")!.textContent = this.i18n.noOpenedTabs;
         empty.querySelector(".sw__empty-sub")!.textContent = this.i18n.emptyHint;
         if (this.recentSearchQueries.length > 0) {
@@ -13836,8 +14209,8 @@ private rootIdOf(tab: Tab): string | null {
     }
 
     // 收藏/取消收藏（右键菜单入口）：更新卡片标识与提示文案，并刷新顶栏收藏下拉
-    private handleToggleFav(tab: Tab, card: HTMLElement) {
-        const isFaved = this.toggleFavorite(tab);
+    private async handleToggleFav(tab: Tab, card: HTMLElement): Promise<void> {
+        const isFaved = await this.toggleFavorite(tab);
         this.refreshCardFavState(tab, card);
         this.refreshFavSelects();
         const favBtn = card.querySelector<HTMLElement>(".sw__fav-btn");
@@ -14134,6 +14507,15 @@ private async waitForTabStates(ids: string[], shouldBeOpen: boolean, matchTabId 
         titleEl.className = "sw__title";
         titleEl.textContent = this.titleOf(tab);
         meta.appendChild(titleEl);
+
+        const special = detectSpecialTabKind(tab);
+        if (special.isSpecial && special.badgeText) {
+            const pluginBadge = document.createElement("span");
+            pluginBadge.className = "sw__plugin-badge";
+            pluginBadge.textContent = special.badgeText;
+            pluginBadge.setAttribute("aria-label", `来源：${special.badgeText}`);
+            meta.appendChild(pluginBadge);
+        }
         // T-6848：更新时间和改动标记只消费内核 blocks.updated，同最近列表的 7 天判定。
         if (ctx?.settings.showCardUpdatedBadge === true) {
             const rootId = this.rootIdOf(tab);
@@ -14670,7 +15052,10 @@ private async waitForTabStates(ids: string[], shouldBeOpen: boolean, matchTabId 
                 if (rootId) copyToClipboard(`siyuan://blocks/${blockId || rootId}`);
                 break;
             case "copy-markdown-link":
-                if (rootId) copyToClipboard(`[${title}](siyuan://blocks/${blockId || rootId})`);
+                if (rootId) {
+                    const safeTitle = (title || "文档").replace(/[\r\n]+/g, " ").replace(/([\\\[\]])/g, "\\$1");
+                    copyToClipboard(`[${safeTitle}](siyuan://blocks/${blockId || rootId})`);
+                }
                 break;
             case "copy-id":
                 if (rootId) copyToClipboard(blockId || rootId);
@@ -14980,8 +15365,13 @@ private async waitForTabStates(ids: string[], shouldBeOpen: boolean, matchTabId 
         return data && typeof data === "object" && !Array.isArray(data) ? data as IThumbCache : {};
     }
 
-    private saveThumbCache(cache: IThumbCache) {
-        this.data[THUMB_CACHE_KEY] = cache;
+    private async saveThumbCache(cache: IThumbCache) {
+        if (typeof this.ensureTier2Loaded === "function") await this.ensureTier2Loaded();
+        const loaded = this.data[THUMB_CACHE_KEY];
+        const merged = (loaded && typeof loaded === "object" && !Array.isArray(loaded))
+            ? { ...(loaded as IThumbCache), ...cache }
+            : cache;
+        this.data[THUMB_CACHE_KEY] = merged;
         this.saveDataDebounced(THUMB_CACHE_KEY);
     }
 
@@ -15236,36 +15626,53 @@ private async waitForTabStates(ids: string[], shouldBeOpen: boolean, matchTabId 
         // 依据盒子实际宽度计算缩放比例；容器尚未完成布局（宽度为 0）时等下一帧重算，
         // 后续尺寸变化由侧边栏的 ResizeObserver 兜底重算
         content.style.visibility = "hidden";
-        this.pendingThumbScales.push({thumb, content});
+        this.pendingThumbScales.push({thumb, content, tries: 0});
         if (!this.thumbScaleFramePending) {
             this.thumbScaleFramePending = true;
-            this.scheduleAnimationFrame(() => {
-                this.thumbScaleFramePending = false;
-                const batch = this.pendingThumbScales.splice(0);
-                // T-7821：两阶段批量读写分离，将首屏 N 张卡片的交错 clientWidth/style.transform 合并为单次布局读取
-                const measured: Array<{el: HTMLElement; width: number}> = [];
-                for (let i = 0; i < batch.length; i += 1) {
-                    const entry = batch[i];
-                    if (!entry.thumb.isConnected) continue;
-                    measured.push({
-                        el: entry.content,
-                        width: entry.thumb.clientWidth || entry.thumb.getBoundingClientRect().width,
-                    });
-                }
-                for (let i = 0; i < measured.length; i += 1) {
-                    const {el, width} = measured[i];
-                    if (width > 0) {
-                        el.style.transform = `scale(${(width / CONTENT_WIDTH_PX).toFixed(3)})`;
-                    }
-                    el.style.visibility = "visible";
-                }
-            });
+            this.scheduleAnimationFrame(() => this.flushPendingThumbScales());
         }
         content.setAttribute("aria-label", title);
         return true;
     }
 
-    private pendingThumbScales: Array<{thumb: HTMLElement; content: HTMLElement}> = [];
+    /** 消费挂起的缩略图量测批次：两阶段批量读写分离（T-7821），并承接失联条目重排队 */
+    private flushPendingThumbScales(): void {
+        this.thumbScaleFramePending = false;
+        const batch = this.pendingThumbScales.splice(0);
+        const measured: Array<{el: HTMLElement; width: number}> = [];
+        // 用户实测"缩略图大面积空白"根因：renderList 重渲染的卡片复用流程会把卡片
+        // 摘下再挂回（detach→reattach）。旧批量在摘下窗口期把条目整批丢弃——重挂回
+        // 后内容永远停留在 visibility:hidden 的空白框。改为：失联条目保留重排队，
+        // 重挂回的下一帧补量测补显形；每条 60 帧重试上限，杜绝永久空转。
+        const deferred: Array<{thumb: HTMLElement; content: HTMLElement; tries: number}> = [];
+        for (let i = 0; i < batch.length; i += 1) {
+            const entry = batch[i];
+            if (!entry.thumb.isConnected) {
+                if ((entry.tries || 0) < 60) deferred.push({thumb: entry.thumb, content: entry.content, tries: (entry.tries || 0) + 1});
+                continue;
+            }
+            measured.push({
+                el: entry.content,
+                width: entry.thumb.clientWidth || entry.thumb.getBoundingClientRect().width,
+            });
+        }
+        for (let i = 0; i < measured.length; i += 1) {
+            const {el, width} = measured[i];
+            if (width > 0) {
+                el.style.transform = `scale(${(width / CONTENT_WIDTH_PX).toFixed(3)})`;
+            }
+            el.style.visibility = "visible";
+        }
+        if (deferred.length > 0) {
+            this.pendingThumbScales.unshift(...deferred);
+            if (!this.thumbScaleFramePending) {
+                this.thumbScaleFramePending = true;
+                this.scheduleAnimationFrame(() => this.flushPendingThumbScales());
+            }
+        }
+    }
+
+    private pendingThumbScales: Array<{thumb: HTMLElement; content: HTMLElement; tries?: number}> = [];
     private thumbScaleFramePending = false;
 
     // getDoc 回源并发闸门：视口懒渲染下仍可能同时暴露多张缺图卡片，
@@ -15792,6 +16199,12 @@ private async waitForTabStates(ids: string[], shouldBeOpen: boolean, matchTabId 
             }
         }
         if (card.classList.contains("sw__focused")) {
+            if (domFocus) {
+                const scrollElement = card.closest<HTMLElement>(".sw__scroll");
+                if (scrollElement?.querySelector(".sw__tab-preview")) {
+                    previewTabOrDoc.call(this, scrollElement, card, true);
+                }
+            }
             return;
         }
         const container = card.closest(".sw__scroll") || card.parentElement;
@@ -15804,8 +16217,13 @@ private async waitForTabStates(ids: string[], shouldBeOpen: boolean, matchTabId 
         card.classList.add("sw__focused");
         card.setAttribute("aria-current", "true");
         const scrollElement = card.closest<HTMLElement>(".sw__scroll");
-        if (scrollElement?.querySelector(".sw__tab-preview")) {
-            previewTabOrDoc.call(this, scrollElement, card);
+        if (scrollElement) {
+            if (domFocus) {
+                this.centerCardInView(card, scrollElement);
+            }
+            if (scrollElement.querySelector(".sw__tab-preview")) {
+                previewTabOrDoc.call(this, scrollElement, card, domFocus);
+            }
         }
     }
 
@@ -15820,6 +16238,21 @@ private async waitForTabStates(ids: string[], shouldBeOpen: boolean, matchTabId 
         }
     }
 
+    private centerCardInView(card: HTMLElement, container: HTMLElement) {
+        const cardRect = card.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        if (containerRect.height > 0) {
+            const cushion = 24;
+            const isOutOfView = cardRect.top < containerRect.top + cushion || cardRect.bottom > containerRect.bottom - cushion;
+            if (isOutOfView) {
+                const targetScrollTop = container.scrollTop + (cardRect.top + cardRect.height / 2) - (containerRect.top + containerRect.height / 2);
+                container.scrollTop = Math.max(0, Math.min(targetScrollTop, container.scrollHeight - container.clientHeight));
+            }
+        } else {
+            this.scrollIntoView(card, container);
+        }
+    }
+
     // 切换到目标页签；弹窗模式随后销毁弹窗，侧边栏模式随后刷新列表
     private activateTab(tab: Tab, onClose?: IOverlayClose) {
         // 记录 MRU：按 pinKey（文档页签为 rootID）记录，手机端与桌面端使用同一份 MRU 数据，
@@ -15831,7 +16264,9 @@ private async waitForTabStates(ids: string[], shouldBeOpen: boolean, matchTabId 
         // 上限收敛：超出 MRU_MAX 从尾部丢弃最旧条目，防止插件数据随使用无限膨胀
         this.data[MRU_KEY] = capMru(list, MRU_MAX);
         this.saveDataDebounced(MRU_KEY);
-        this.recordOpenHistory(tab);
+        void this.recordOpenHistory(tab).catch((err) => {
+            logger.warn("recordOpenHistory in activateTab fail", err);
+        });
 
         if (this.isMobile) {
             // 手机端：MobileTabs.switchTo 切换页签
@@ -16757,7 +17192,7 @@ private async waitForTabStates(ids: string[], shouldBeOpen: boolean, matchTabId 
         }
         if (kind === "closed" || kind === "recent") {
             const docId = rootId || id;
-            if (kind === "closed" && BLOCK_ID_RE.test(docId)) this.removeClosedHistoryEntry(docId);
+            if (kind === "closed" && BLOCK_ID_RE.test(docId)) void this.removeClosedHistoryEntry(docId).catch((err) => logger.warn("removeClosedHistoryEntry fail", err));
             return openDoc(docId);
         }
         if (kind === "doc-set" && id) void this.restoreDocumentSetFromHome(id);
@@ -17314,8 +17749,9 @@ private async waitForTabStates(ids: string[], shouldBeOpen: boolean, matchTabId 
         return this.readDataMemo(HISTORY_KEY, (raw) => sanitizeOpenHistory(raw, HISTORY_MAX).items);
     }
 
-    private removeOpenHistoryEntry(key: string) {
+    private async removeOpenHistoryEntry(key: string): Promise<void> {
         if (typeof key !== "string" || !key) return;
+        if (typeof this.ensureTier2Loaded === "function") await this.ensureTier2Loaded();
         const history = this.getOpenHistory();
         const result = removeRecentEntry(history, key, "key");
         if (!result.changed) return;
@@ -17324,7 +17760,8 @@ private async waitForTabStates(ids: string[], shouldBeOpen: boolean, matchTabId 
         this.refreshOpenHistoryDropdowns();
     }
 
-    private removeClosedHistoryEntry(rootId: string) {
+    private async removeClosedHistoryEntry(rootId: string): Promise<void> {
+        if (typeof this.ensureTier2Loaded === "function") await this.ensureTier2Loaded();
         const history = this.getClosedHistory();
         const result = removeRecentEntry(history, rootId, "rootId");
         if (!result.changed) return;
@@ -17342,7 +17779,7 @@ private async waitForTabStates(ids: string[], shouldBeOpen: boolean, matchTabId 
         }
         const last = history[0];
         if (!last || !last.rootId) return false;
-        this.removeClosedHistoryEntry(last.rootId);
+        void this.removeClosedHistoryEntry(last.rootId).catch((err) => logger.warn("removeClosedHistoryEntry in undo fail", err));
         if (closeOverlay) {
             closeOverlay();
         } else if (this.isMobile && this.mobileSwitcherDialog) {
@@ -17587,9 +18024,12 @@ private async waitForTabStates(ids: string[], shouldBeOpen: boolean, matchTabId 
         return false;
     }
 
-    private recordOpenHistory(tab: Tab) {
+    private async recordOpenHistory(tab: Tab): Promise<void> {
         const key = this.pinKeyOf(tab);
         if (!key) return;
+        if (typeof this.ensureTier2Loaded === "function") {
+            await this.ensureTier2Loaded();
+        }
         const rootId = this.rootIdOf(tab);
         const title = this.titleOf(tab) || key;
         const result = recordRecentOpen(this.getOpenHistory(), this.getClosedHistory(), {key, rootId, title, ts: Date.now()}, HISTORY_MAX);
@@ -17630,9 +18070,13 @@ private async waitForTabStates(ids: string[], shouldBeOpen: boolean, matchTabId 
         }, Math.max(TAB_SETTLE_MS, 30));
     }
 
-    private syncRecentClosedFromSnapshot(generation = this.lifecycleGeneration) {
+    private async syncRecentClosedFromSnapshot(generation = this.lifecycleGeneration): Promise<void> {
         if (generation !== this.lifecycleGeneration) return;
         if (this.recentOpenSnapshot.size === 0) return;
+        if (typeof this.ensureTier2Loaded === "function") {
+            await this.ensureTier2Loaded();
+        }
+        if (generation !== this.lifecycleGeneration || this.isUnloading) return;
         const tabs = this.currentTabs();
         const current = new Set<string>();
         tabs.forEach((tab) => {

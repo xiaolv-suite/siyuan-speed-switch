@@ -41,7 +41,6 @@ jobs.json
 runs.json
 
 # IDE 与本地环境临时状态
-.tasks/
 .zcode/
 .jeikcode/codegraph/
 scripts/.last-live-instance.json

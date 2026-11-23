@@ -7,6 +7,8 @@
 import {Dialog, getAllTabs, openTab} from "siyuan";
 import {showMessage, lvNotify, lvEcosystem, lvLaunchpad} from "./libs/lv-notice-kit";
 import {mountPlatformDialogCloseHint, mountPlatformDialogMobileClose, mountPlatformDialogTitleWrap} from "./platform-dom";
+// DL2 阶段0：生态统一「外观与动效」偏好分组（庆祝/吉祥物/光效可关）
+import {mountLvUiPrefsSection} from "./libs/lv-ui-prefs";
 import {logger} from "./logger";
 import {DIALOG_WIDTH_MIN_PX, DIALOG_WIDTH_MAX_PX, DIALOG_HEIGHT_MIN_PX, DIALOG_HEIGHT_MAX_PX, PANEL_SCALE_MIN, PANEL_SCALE_MAX, THUMB_HEIGHT_MIN_PX, THUMB_HEIGHT_MAX_PX, MOBILE_THUMB_HEIGHT_MIN_PX, MOBILE_THUMB_HEIGHT_MAX_PX, MOBILE_COLUMNS_SINGLE, MOBILE_COLUMNS_DOUBLE, MOBILE_COLUMNS_AUTO, DOCUMENT_SETS_KEY, DOCUMENT_SET_IMPORT_MAX_BYTES, QUICK_ACTIONS_MAX, MRU_KEY, HISTORY_KEY, CLOSED_HISTORY_KEY, PINNED_KEY, FAV_KEY, FAV_GROUPS_KEY, SETTINGS_KEY, QUICK_ACTIONS_KEY, QUICK_ACTIONS_DEFAULTS_KEY, HOME_STATE_KEY, THUMB_CACHE_KEY, FAV_COLLAPSED_KEY, RELATED_SWR_KEY, RSS_READ_KEY, SCHEMA_VERSION_KEY, SNIPPET_RECYCLE_KEY, SNIPPET_GROUPS_KEY, DEFAULT_HOTKEY, SECOND_PANEL_HOTKEY} from "./constants";
 import {formatStorageBytes, buildStorageUsageSummary} from "./settings-model";
@@ -145,7 +147,7 @@ const SETTING_GROUP_DEFAULT_KEYS: Record<string, ReadonlyArray<string>> = {
     settingsGroupTheme: ["skin"],
     settingsGroupThumbnails: ["columns", "thumbHeight", "showCardUpdatedBadge"],
     settingsGroupSortDensity: ["sortBy", "density"],
-    settingsGroupSearchOpen: ["pinyinMatch", "reuseOpenTabs", "rememberScrollPosition"],
+    settingsGroupSearchOpen: ["pinyinMatch", "reuseOpenTabs", "rememberScrollPosition", "showSearchModeChips"],
     settingsGroupPanelWindows: ["panelSizeMode", "panelScale", "dialogWidth", "dialogHeight", "studioSizeMode", "studioWidth", "studioHeight"],
     settingsGroupMobileLayout: ["mobileColumns", "mobileThumbHeight"],
     settingsGroupCompatibility: ["fabEnabled", "floatingBall"],
@@ -219,6 +221,10 @@ export function buildSettingsAppearance(this: SettingsSectionsHost, s: ISwSettin
                     })),
             ),
         );
+        // DL2 阶段0：生态「外观与动效」偏好（庆祝/吉祥物/光效，生态键唯一写入方）
+        const lvUiPrefsHost = makeSettingEl("div");
+        mountLvUiPrefsSection(lvUiPrefsHost);
+        wrapper.append(this.settingGroupCard(lvUiPrefsHost));
         return wrapper;
     }
 
@@ -261,6 +267,11 @@ export function buildSettingsBehavior(this: SettingsSectionsHost, s: ISwSettings
                 this.settingItem(this.i18n.rememberScrollPositionLabel, this.i18n.rememberScrollPositionTip,
                     this.switcher(s.rememberScrollPosition !== false, (v) => {
                         this.updateSettings({rememberScrollPosition: v});
+                    })),
+                // 20261122-01 搜索模式筛选胶囊：默认关闭，归还卡片流纵向空间
+                this.settingItem(this.i18n.showSearchModeChipsLabel, this.i18n.showSearchModeChipsTip,
+                    this.switcher(s.showSearchModeChips === true, (v) => {
+                        this.updateSettings({showSearchModeChips: v});
                     })),
             ),
             this.settingGroupTitle(this.i18n.settingsGroupShortcuts),
@@ -2104,7 +2115,7 @@ export function buildSettingsFloatingBall(this: SettingsSectionsHost, s: ISwSett
     dualBallTitle.textContent = "🐴 小驴全家桶 · 手机端双球分工与入口模式";
     const dualBallDesc = makeSettingEl("div");
     dualBallDesc.className = "b3-label__tips";
-    dualBallDesc.innerHTML = "雷切<strong>动作悬浮球</strong>负责当前文档切片采集、原子暂存与面板切换；小驴<strong>罗盘悬浮球</strong>负责全家桶插件极速弹射、全生态穿透检索与跨插件协同。<br><span style=\"color: var(--b3-theme-primary); font-weight: 500;\">罗盘球管全家桶直达，动作球管切片操作，可在罗盘设置中改为单球模式</span>";
+    dualBallDesc.innerHTML = "雷切<strong>动作悬浮球</strong>负责当前文档切片采集、原子暂存与面板切换；小驴<strong>罗盘悬浮球</strong>负责全家桶插件极速弹射、全生态穿透检索与跨插件协同。<br><span style=\"color: var(--sw-color-accent); font-weight: 500;\">罗盘球管全家桶直达，动作球管切片操作，可在罗盘设置中改为单球模式</span>";
     dualBallHead.append(dualBallTitle, dualBallDesc);
 
     const modeSelect = makeSettingEl("select") as HTMLSelectElement;

@@ -74,8 +74,8 @@ function parsePenetrationQuery(raw) {
         };
     }
 
-    // 1. 块级前缀：以 `^` 开头
-    if (text.startsWith("^")) {
+    // 1. 块级前缀：以 `^` 或 `＾` 开头
+    if (text.startsWith("^") || text.startsWith("＾")) {
         const needle = text.slice(1).trim();
         return {
             mode: SEARCH_MODES.BLOCK,
@@ -92,8 +92,8 @@ function parsePenetrationQuery(raw) {
         };
     }
 
-    // 2. 标签前缀：以 `#` 开头
-    if (text.startsWith("#")) {
+    // 2. 标签前缀：以 `#` 或 `＃` 开头
+    if (text.startsWith("#") || text.startsWith("＃")) {
         const needle = text.slice(1).trim();
         return {
             mode: SEARCH_MODES.TAG,
@@ -110,8 +110,8 @@ function parsePenetrationQuery(raw) {
         };
     }
 
-    // 3. 书签前缀：以 `!` 或 `！` 开头
-    if (text.startsWith("!") || text.startsWith("！")) {
+    // 3. 书签前缀：以 `!`、`！`、`*` 或 `＊` 开头
+    if (text.startsWith("!") || text.startsWith("！") || text.startsWith("*") || text.startsWith("＊")) {
         const needle = text.slice(1).trim();
         return {
             mode: SEARCH_MODES.BOOKMARK,
@@ -210,8 +210,8 @@ function parsePenetrationQuery(raw) {
         };
     }
 
-    // 5. 大纲穿透：以 `@` 开头或分隔
-    if (text.startsWith("@")) {
+    // 5. 大纲穿透：以 `@` 或 `＠` 开头或分隔
+    if (text.startsWith("@") || text.startsWith("＠")) {
         const needle = text.slice(1).trim();
         return {
             mode: SEARCH_MODES.OUTLINE,
@@ -228,7 +228,8 @@ function parsePenetrationQuery(raw) {
         };
     }
 
-    const atIndex = findOutlineSeparatorIndex(text, "@");
+    let atIndex = findOutlineSeparatorIndex(text, "@");
+    if (atIndex < 0) atIndex = findOutlineSeparatorIndex(text, "＠");
     if (atIndex > 0) {
         const docPart = text.slice(0, atIndex).trim();
         const headingPart = text.slice(atIndex + 1).trim();

@@ -1,16 +1,16 @@
 @use "00-tokens" as *;
 .sw-home__cell[data-module-id="external-anime-bangumi"] {
     overflow: hidden;
-    border-color: color-mix(in srgb, #d86682 52%, var(--b3-border-color));
+    border-color: color-mix(in srgb, #d86682 52%, var(--sw-color-line));
     background:
         radial-gradient(circle at 92% 8%, rgba(255, 255, 255, 0.46), transparent 25%),
-        linear-gradient(145deg, color-mix(in srgb, #f6d6de 64%, var(--b3-theme-surface, #fff)), color-mix(in srgb, #d8d5f5 56%, var(--b3-theme-surface, #fff)));
+        linear-gradient(145deg, color-mix(in srgb, #f6d6de 64%, var(--sw-color-surface, #fff)), color-mix(in srgb, #d8d5f5 56%, var(--sw-color-surface, #fff)));
     --sw-home-accent: #a83f61;
 
     :is(html[data-theme-mode="dark"], [data-theme-mode="dark"], [data-appearance="dark"], body.body--dark, body.theme--dark, html.dark, .b3-theme-dark) & {
         background:
             radial-gradient(circle at 92% 8%, color-mix(in srgb, var(--sw-home-accent) 22%, transparent), transparent 32%),
-            linear-gradient(145deg, color-mix(in srgb, var(--sw-home-accent) 16%, var(--b3-theme-surface)), var(--b3-theme-surface)) !important;
+            linear-gradient(145deg, color-mix(in srgb, var(--sw-home-accent) 16%, var(--sw-color-surface)), var(--sw-color-surface)) !important;
     }
 }
 
@@ -39,13 +39,13 @@
     border: 0;
     border-radius: 12px;
     background: transparent;
-    color: var(--b3-theme-on-background);
+    color: var(--sw-color-text);
     text-align: start;
     cursor: pointer;
     touch-action: manipulation;
 
     &:focus-visible {
-        outline: 2px solid var(--sw-home-accent, var(--b3-theme-primary));
+        outline: 2px solid var(--sw-home-accent, var(--sw-color-accent));
         outline-offset: 2px;
     }
 }
@@ -62,7 +62,7 @@
     width: 100%;
     aspect-ratio: 3 / 4;
     border-radius: 12px;
-    background: color-mix(in srgb, var(--b3-border-color) 48%, transparent);
+    background: color-mix(in srgb, var(--sw-color-line) 48%, transparent);
     box-shadow: 0 5px 14px rgba(57, 31, 47, 0.13);
     object-fit: cover;
     transition: transform $sw-dur-base $sw-ease, box-shadow $sw-dur-base $sw-ease;
@@ -98,7 +98,7 @@
 .sw__home-media-progress-bar {
     display: block;
     height: 100%;
-    background: var(--sw-home-accent, var(--b3-theme-primary));
+    background: var(--sw-home-accent, var(--sw-color-accent));
     transition: width $sw-dur-base $sw-ease;
 }
 
@@ -116,8 +116,8 @@
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
 }
-.sw__home-media-secondary { color: var(--b3-theme-on-surface-light); font-size: var(--sw-font-2xs, 10px); }
-.sw__home-media-item.is-source .sw__home-media-action { display: block; padding: var(--sw-space-2xs, 2px) 0; color: var(--b3-theme-on-surface-light); font-size: var(--sw-font-2xs, 10px); }
+.sw__home-media-secondary { color: var(--sw-color-text-muted); font-size: var(--sw-font-2xs, 10px); }
+.sw__home-media-item.is-source .sw__home-media-action { display: block; padding: var(--sw-space-2xs, 2px) 0; color: var(--sw-color-text-muted); font-size: var(--sw-font-2xs, 10px); }
 .sw__home-media-item.is-source .sw__home-media-title { font-size: var(--sw-font-2xs, 10px); font-weight: var(--sw-weight-medium, 500); }
 
 @media (max-width: 560px) {
@@ -140,9 +140,9 @@
         margin: 0 0 var(--sw-space-md, 8px);
         padding: var(--sw-space-sm, 6px) var(--sw-space-2xs, 2px) var(--sw-space-md, 8px);
         min-width: 0;
-        border-bottom: 1px solid color-mix(in srgb, var(--b3-border-color) 60%, transparent);
-        background: color-mix(in srgb, var(--b3-theme-surface) 92%, transparent);
-        color: var(--b3-theme-on-surface-light);
+        border-bottom: 1px solid color-mix(in srgb, var(--sw-color-line) 60%, transparent);
+        background: color-mix(in srgb, var(--sw-color-surface) 92%, transparent);
+        color: var(--sw-color-text-muted);
         font-size: var(--sw-font-xs, 11px);
         line-height: 1.35;
         backdrop-filter: var(--sw-blur-md);
@@ -154,7 +154,7 @@
         max-width: 100%;
         min-width: 0;
         padding: var(--sw-space-xs, 4px) var(--sw-space-md, 8px);
-        border: 1px solid var(--b3-border-color);
+        border: 1px solid var(--sw-color-line);
         border-radius: 999px;
         overflow-wrap: anywhere;
         word-break: break-word;
@@ -163,11 +163,11 @@
         // T-6967 S2（G6 收口）：联网/本机/离线是**能力事实**而非进行态或新鲜度——
         // 一律中性 chip（同 is-source），彩色语义只留给真正的进度/新鲜度徽标；
         // 修正「联网」误用 loading 橙的历史观感。
-        &.is-source { color: var(--b3-theme-on-background); }
+        &.is-source { color: var(--sw-color-text); }
         &.is-network,
         &.is-local,
-        &.is-offline { color: var(--b3-theme-on-background); }
-        &.is-context { border-style: dashed; color: var(--b3-theme-on-surface-light); }
+        &.is-offline { color: var(--sw-color-text); }
+        &.is-context { border-style: dashed; color: var(--sw-color-text-muted); }
         &.is-privacy { opacity: .84; }
     }
 
@@ -181,18 +181,18 @@
         padding: var(--sw-space-xs, 4px) var(--sw-space-2xs, 2px) var(--sw-space-md, 8px);
 
         .sw__home-module {
-            border: 1px solid var(--b3-border-color);
+            border: 1px solid var(--sw-color-line);
             border-radius: var(--sw-radius-card, 14px);
-            background: var(--b3-theme-surface);
+            background: var(--sw-color-surface);
         }
     }
 }
 
 .sw-home-store__preview-btn {
-    color: var(--b3-theme-primary);
+    color: var(--sw-color-accent);
 
     &:hover {
-        border-color: var(--b3-theme-primary);
+        border-color: var(--sw-color-accent);
     }
 }
 
@@ -209,16 +209,16 @@
     svg { width: 12px; height: 12px; }
 
     &:hover {
-        color: var(--b3-theme-primary);
-        background: color-mix(in srgb, var(--b3-theme-primary) 12%, transparent);
+        color: var(--sw-color-accent);
+        background: color-mix(in srgb, var(--sw-color-accent) 12%, transparent);
         transform: scale(1.08);
     }
 
     &:focus,
     &:focus-visible {
         outline: none;
-        color: var(--b3-theme-primary);
-        box-shadow: 0 0 0 2px color-mix(in srgb, var(--b3-theme-primary) 35%, transparent);
+        color: var(--sw-color-accent);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--sw-color-accent) 35%, transparent);
     }
 
     &:active {
@@ -261,7 +261,7 @@
         margin-right: auto;
         min-width: 0;
         overflow: hidden;
-        color: var(--b3-theme-on-background);
+        color: var(--sw-color-text);
         font-size: 14px;
         font-weight: var(--sw-weight-bold, 700);
         letter-spacing: -0.02em;
@@ -279,11 +279,11 @@
         border: 0;
         border-radius: var(--sw-radius-sm, 6px);
         background: transparent;
-        color: var(--sw-home-accent, var(--b3-theme-primary));
+        color: var(--sw-home-accent, var(--sw-color-accent));
         font-size: var(--sw-font-sm, 12px);
         line-height: 1;
 
-        &:hover { background: color-mix(in srgb, var(--sw-home-accent, var(--b3-theme-primary)) 11%, transparent); }
+        &:hover { background: color-mix(in srgb, var(--sw-home-accent, var(--sw-color-accent)) 11%, transparent); }
 
         &:focus-visible {
             outline: none;
@@ -323,13 +323,13 @@
 }
 
 .sw__home-calendar-head {
-    color: var(--b3-theme-on-surface-light);
+    color: var(--sw-color-text-muted);
     font-size: var(--sw-font-2xs, 10px);
     font-weight: var(--sw-weight-emphasis, 650);
     letter-spacing: 0.03em;
 
     &:nth-child(6),
-    &:nth-child(7) { color: color-mix(in srgb, var(--b3-theme-error, #d23f31) 68%, var(--b3-theme-on-surface-light)); }
+    &:nth-child(7) { color: color-mix(in srgb, var(--sw-color-error, #d23f31) 68%, var(--sw-color-text-muted)); }
 }
 
 .sw__home-calendar-cell {
@@ -340,7 +340,7 @@
     border: 0;
     border-radius: $sw-radius-md;
     background: transparent;
-    color: var(--b3-theme-on-background);
+    color: var(--sw-color-text);
 
     .sw__home-calendar-primary {
         display: inline-flex;
@@ -359,7 +359,7 @@
         max-width: 100%;
         margin-top: -1px;
         overflow: hidden;
-        color: var(--b3-theme-on-surface-light);
+        color: var(--sw-color-text-muted);
         font-size: 10px;
         line-height: 1;
         opacity: 0.72;
@@ -368,7 +368,7 @@
     }
 
     &.is-weekend:not(.is-outside) .sw__home-calendar-primary {
-        color: color-mix(in srgb, var(--b3-theme-error, #d23f31) 72%, var(--b3-theme-on-background));
+        color: color-mix(in srgb, var(--sw-color-error, #d23f31) 72%, var(--sw-color-text));
     }
 
     &.is-outside {
@@ -376,24 +376,24 @@
     }
 
     &.is-today .sw__home-calendar-primary {
-        background: var(--sw-home-accent, var(--b3-theme-primary));
-        color: var(--b3-theme-on-primary, #fff);
+        background: var(--sw-home-accent, var(--sw-color-accent));
+        color: var(--sw-color-on-accent, #fff);
         font-weight: 750;
     }
 
     // T-6871：节假日红与平台徽标同款处理——宿主 error 原色在暗色背景下不足 3:1
     // （对比度采样修正背景解析后实测 2.91），混入正文色保住色相并回到徽章线以上。
     &.is-holiday:not(.is-today) .sw__home-calendar-primary {
-        color: color-mix(in srgb, var(--b3-theme-error, #d23f31) 68%, var(--b3-theme-on-background));
+        color: color-mix(in srgb, var(--sw-color-error, #d23f31) 68%, var(--sw-color-text));
         font-weight: 720;
     }
 
     &.is-workday:not(.is-today) .sw__home-calendar-primary {
-        color: color-mix(in srgb, var(--b3-theme-on-background) 68%, var(--b3-theme-primary));
+        color: color-mix(in srgb, var(--sw-color-text) 68%, var(--sw-color-accent));
     }
 
-    &.is-holiday .sw__home-calendar-secondary { color: color-mix(in srgb, var(--b3-theme-error, #d23f31) 68%, var(--b3-theme-on-background)); }
-    &.is-workday .sw__home-calendar-secondary { color: var(--b3-theme-primary); opacity: 0.88; }
+    &.is-holiday .sw__home-calendar-secondary { color: color-mix(in srgb, var(--sw-color-error, #d23f31) 68%, var(--sw-color-text)); }
+    &.is-workday .sw__home-calendar-secondary { color: var(--sw-color-accent); opacity: 0.88; }
 
     &.has-journal {
         color: inherit;
@@ -412,7 +412,7 @@
     width: 4px;
     height: 4px;
     border-radius: 50%;
-    background: var(--sw-color-data, var(--sw-home-accent, var(--b3-theme-primary)));
+    background: var(--sw-color-data, var(--sw-home-accent, var(--sw-color-accent)));
     transform: translateX(-50%);
     transition: transform $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease;
 }
@@ -434,7 +434,7 @@
     transition: background-color $sw-dur-base, color $sw-dur-base;
 
     &:hover {
-        background: color-mix(in srgb, var(--sw-home-accent, var(--b3-theme-primary)) 12%, transparent);
+        background: color-mix(in srgb, var(--sw-home-accent, var(--sw-color-accent)) 12%, transparent);
     }
 }
 
@@ -506,8 +506,8 @@
     transition: border-color $sw-dur-base, background-color $sw-dur-base;
 
     &:hover {
-        border-left-color: var(--sw-home-accent, var(--b3-theme-primary));
-        background: color-mix(in srgb, var(--b3-theme-primary) 4%, transparent);
+        border-left-color: var(--sw-home-accent, var(--sw-color-accent));
+        background: color-mix(in srgb, var(--sw-color-accent) 4%, transparent);
     }
 }
 
@@ -579,8 +579,8 @@
         width: var(--sw-icon-md, 18px);
         height: 18px;
         border-radius: 50%;
-        border: 1px solid color-mix(in srgb, var(--b3-border-color) 80%, transparent);
-        background: color-mix(in srgb, var(--b3-theme-background) 60%, transparent);
+        border: 1px solid color-mix(in srgb, var(--sw-color-line) 80%, transparent);
+        background: color-mix(in srgb, var(--sw-color-bg) 60%, transparent);
         color: transparent;
         transition: background-color $sw-dur-base, border-color $sw-dur-base;
 
@@ -588,9 +588,9 @@
     }
 
     &.is-done &-dot {
-        border-color: var(--sw-home-accent, var(--b3-theme-primary));
-        background: var(--sw-home-accent, var(--b3-theme-primary));
-        color: var(--b3-theme-background);
+        border-color: var(--sw-home-accent, var(--sw-color-accent));
+        background: var(--sw-home-accent, var(--sw-color-accent));
+        color: var(--sw-color-bg);
     }
 
     &-label {
@@ -609,10 +609,10 @@
 @media (prefers-contrast: more) {
     .speed-switch,
     .sw-settings {
-        --sw-accent-soft: color-mix(in srgb, var(--b3-theme-primary, #8576e8) 20%, transparent);
+        --sw-accent-soft: color-mix(in srgb, var(--sw-color-accent, #8576e8) 20%, transparent);
         // 按下态须始终比悬停更实，故一并抬高一档，避免高对比度下反馈反转。
-        --sw-accent-pressed: color-mix(in srgb, var(--b3-theme-primary, #8576e8) 30%, transparent);
-        --sw-surface-muted: var(--b3-theme-surface);
-        --sw-control-bg: var(--b3-theme-surface);
+        --sw-accent-pressed: color-mix(in srgb, var(--sw-color-accent, #8576e8) 30%, transparent);
+        --sw-surface-muted: var(--sw-color-surface);
+        --sw-control-bg: var(--sw-color-surface);
     }
 }

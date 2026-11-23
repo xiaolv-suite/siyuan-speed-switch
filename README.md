@@ -8,9 +8,9 @@
 
 全能切换器 · Bento 小组件工作台 · 代码片段实验室 · 全局智能悬浮球 · 连续切片暂存栈
 
-**当前版本：v0.48.92** ｜ 最近正式版：v0.48.92（2026-11-17 · 本地封验） ｜ [English Documentation](./README.en-US.md) ｜ [更新日志](./CHANGELOG.md)
+**当前版本：v0.48.93** ｜ 最近正式版：v0.48.93（2026-11-23） ｜ [English Documentation](./README.en-US.md) ｜ [更新日志](./CHANGELOG.md)
 
-[![Version](https://img.shields.io/badge/version-0.48.92-blue)](./plugin.json)
+[![Version](https://img.shields.io/badge/version-0.48.93-blue)](./plugin.json)
 [![思源笔记](https://img.shields.io/badge/思源笔记-%3E%3D%203.8.4-brightgreen.svg)](https://b3log.org/siyuan)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
@@ -24,7 +24,7 @@
 
 ---
 
-## 本次更新（v0.48.92 · 2026-11-17 · 本地封验）
+## 本次更新（v0.48.93 · 2026-11-23）
 
 - **罗盘中枢顶栏常驻与防横跳**：全面接入小驴罗盘中枢顶栏，彻底消除思源 3.8.x 内置重排对中枢图标的推挤，单插件环境下亦可一键直达罗盘全功能；
 - **全生态通知体系与长效免打扰**：升级通知高可见胶囊呈现，重复通知自动折叠计数（×N），免打扰设置（未来3天/未来一周）跨会话跨重启严格固化；
@@ -197,4 +197,4 @@
 
 ## 📄 开源协议 (License)
 
-[MIT License](LICENSE) · Copyright (c) 2026 xiaolv-suite · 当前版本为 `v0.48.92`
+[MIT License](LICENSE) · Copyright (c) 2026 xiaolv-suite · 当前版本为 `v0.48.93`

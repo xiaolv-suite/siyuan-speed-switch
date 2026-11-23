@@ -16,6 +16,7 @@ import {loadWeatherLocation, loadWeatherForecast, loadAirQuality, loadBangumiCal
 import {getBridgeSafely} from "./api/ecosystem-bridge-kit";
 import {wrapEcosystemModuleRead} from "./api/external-bridge";
 import {lvActivity} from "./libs/lv-notice-kit";
+import {logger} from "./logger";
 
 export type HomeExternalAdapterRegister = (
     moduleId: string,
@@ -34,7 +35,7 @@ export interface HomeExternalAdapterHost {
     fetchBangumiCalendar: (url: string, init: {signal?: AbortSignal; headers?: Record<string, string>}) => Promise<any>;
     // T-6685 RSS 已读状态（有界，宿主持久化 sw_rss_read）
     rssReadState?: () => Record<string, number>;
-    markRssItemsSeen?: (keys: string[]) => void;
+    markRssItemsSeen?: (keys: string[]) => void | Promise<void>;
 }
 
 export function registerExternalHomeAdapters(this: HomeExternalAdapterHost, register: HomeExternalAdapterRegister) {
@@ -317,7 +318,11 @@ export function registerExternalHomeAdapters(this: HomeExternalAdapterHost, regi
                     unread: this.i18n.homeRssUnread,
                 }, undefined, feed.status, {
                     seenLookup: (key: string) => Object.prototype.hasOwnProperty.call(seen, key),
-                    onSeen: (keys: string[]) => this.markRssItemsSeen?.(keys),
+                    onSeen: (keys: string[]) => {
+                        void Promise.resolve(this.markRssItemsSeen?.(keys)).catch((err) => {
+                            logger.warn("markRssItemsSeen onSeen fail", err);
+                        });
+                    },
                 });
                 if (!snapshot) throw new Error("invalid_rss_payload");
                 // T-6971 批次⑥：档位硬上界（首屏 ≤5，L 档 ≤8），来源行恒保留
@@ -482,7 +487,10 @@ export function registerExternalHomeAdapters(this: HomeExternalAdapterHost, regi
             try {
                 const rawStats = await bridge.statsRead();
                 const stats = rawStats?.data || rawStats || {};
-                const todayStr = new Date().toISOString().substring(0, 10);
+                // 本地日历日键（生态 UTC 偏移纪律）：toISOString 在 UTC+8 的 00:00~08:00 会回退到昨天，
+                // 导致"今日刷题"显示昨天的数据、凌晨刚刷的题反而不计入
+                const nowLocal = new Date();
+                const todayStr = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth() + 1).padStart(2, "0")}-${String(nowLocal.getDate()).padStart(2, "0")}`;
                 const todayItem = Array.isArray(stats.daily) ? stats.daily.find((d: any) => d.date === todayStr) : null;
                 const todayAnswered = stats.todayAnswered ?? todayItem?.attempts ?? 0;
                 const accuracy = stats.accuracy ?? stats.accuracyPercent ?? 0;

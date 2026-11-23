@@ -955,7 +955,10 @@ function pinyinTitleHit(title, needle) {
             && walk(charIndex + 1, needleIndex + ch.full.length)) return true;
         return false;
     };
-    return walk(0, 0);
+    for (let start = 0; start < total; start++) {
+        if (walk(start, 0)) return true;
+    }
+    return false;
 }
 
 function filterOpenTabs(tabs, query, filters = {}, options = {}) {

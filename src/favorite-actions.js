@@ -105,8 +105,13 @@ function buildTagSmartGroupQuery(group, options = {}) {
     if (notebook) stmt += ` AND box='${notebook}'`;
     const days = normalizeSmartGroupDays(raw.updatedWithinDays);
     if (days) {
-        const cutoff = new Date(nowMs - days * 86400000)
-            .toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
+        // blocks.updated 是内核以本地时区写入的 YYYYMMDDHHMMSS 定长串；
+        // 此前用 toISOString() 取 UTC 时间戳，在 UTC+8 会比本地早 8 小时，
+        // 令"N 天内更新"的智能分组多吞 8 小时外的旧文档。
+        const cutoffDate = new Date(nowMs - days * 86400000);
+        const p2 = (n) => String(n).padStart(2, "0");
+        const cutoff = `${cutoffDate.getFullYear()}${p2(cutoffDate.getMonth() + 1)}${p2(cutoffDate.getDate())}`
+            + `${p2(cutoffDate.getHours())}${p2(cutoffDate.getMinutes())}${p2(cutoffDate.getSeconds())}`;
         stmt += ` AND updated >= '${cutoff}'`;
     }
     stmt += ` LIMIT ${cap}`;

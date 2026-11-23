@@ -93,6 +93,10 @@ function evictRecycleEntries(entries, {now, maxEntries = SNIPPET_RECYCLE_MAX_ENT
 function normalizeRecycleStore(value, now = Date.now()) {
     const fresh = {version: RECYCLE_STORE_VERSION, entries: []};
     if (!value || typeof value !== "object" || Array.isArray(value)) return Object.freeze(fresh);
+    // 兼容防混淆：若传入的是 appendRecycleEntry 的包装对象 { store, added, evicted }，自动解包其 store 载荷
+    if (value.store && typeof value.store === "object" && value.store.version === RECYCLE_STORE_VERSION) {
+        value = value.store;
+    }
     if (value.version !== RECYCLE_STORE_VERSION) return Object.freeze(fresh);
     if (!Array.isArray(value.entries)) return Object.freeze(fresh);
     const seen = new Set();
