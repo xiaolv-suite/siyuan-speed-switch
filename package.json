@@ -1,6 +1,6 @@
 {
   "name": "siyuan-speed-switch",
-  "version": "0.48.93",
+  "version": "0.48.94",
   "description": "Local-first SiYuan navigation and work-context platform: switcher, workbench, snippet lab, and floating-ball actions.",
   "main": "index.js",
   "scripts": {
@@ -18,6 +18,7 @@
     "test:smoke:floating-ball": "node tests/floating-ball-browser-smoke.cjs",
     "verify:release": "pnpm exec tsc --noEmit && pnpm repro:audit && pnpm test && pnpm run release:check && pnpm run current-status:audit && pnpm run compatibility:probe && pnpm run desktop:acceptance && pnpm run quality:audit && pnpm run integration:audit && pnpm test:smoke && pnpm test:smoke:layout && pnpm test:smoke:browser && pnpm test:smoke:floating-ball && pnpm test:smoke:surface-switch && pnpm run test:e2e:core",
     "test:e2e:core": "node scripts/run-e2e-core-gate.mjs",
+    "e2e:wave3": "node scripts/e2e/wave3-golden-e2e.mjs",
     "e2e:isolated": "node scripts/run-e2e-core-gate.mjs",
     "serve:isolated": "node scripts/serve-isolated.cjs",
     "serve:isolated:stop": "node scripts/serve-isolated.cjs --stop",

@@ -171,7 +171,19 @@ function createSnippetAIClient({fetchImpl = globalThis.fetch} = {}) {
             assertCurrent();
             if (response.status === 404 || response.status === 405) throw aiError("unsupported");
             if (response.status === 401 || response.status === 403) throw aiError("permission_denied");
-            if (!response.ok) throw aiError("request_failed");
+            if (!response.ok) {
+                let payload = null;
+                try {
+                    if ((response.headers?.get("Content-Type") || "").toLowerCase().includes("application/json")) {
+                        payload = await response.json();
+                    }
+                } catch (_error) {
+                    payload = null;
+                }
+                assertCurrent();
+                throw aiError(payload && typeof payload.code === "number" && payload.code !== 0
+                    ? "ai_unavailable" : "request_failed");
+            }
             if (!(response.headers.get("Content-Type") || "").toLowerCase().includes("text/event-stream")) {
                 let payload;
                 try { payload = await response.json(); } catch (_error) { throw aiError("request_failed"); }

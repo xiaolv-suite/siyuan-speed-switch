@@ -146,6 +146,7 @@ function mountQuickActionPicker(options) {
         if (search.value) search.select();
     });
     picker.addEventListener("keydown", (event) => {
+        if (event.isComposing || event.keyCode === 229) return;
         if (event.key === "Escape") {
             if (document.activeElement === search && search.value) {
                 event.preventDefault();

@@ -77,7 +77,8 @@ function createIconUseSvg(iconId: string, fallbackId: string, className?: string
     svg.setAttribute("viewBox", "0 0 24 24");
     svg.setAttribute("aria-hidden", "true");
     const use = document.createElementNS(SVG_NAMESPACE, "use");
-    use.setAttribute("xlink:href", `#${safe}`);
+    use.setAttribute("href", `#${safe}`);
+    use.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", `#${safe}`);
     svg.appendChild(use);
     return svg;
 }
@@ -328,15 +329,18 @@ export function openHomeWidgetStore(this: HomeStoreUiHost, device: "desktop" | "
         // T-6479：商店弹窗的定时器与监听器释放同样挂到宿主 destroyCallback 上。
         let disposeStore: () => void = () => undefined;
         let disposeInlinePreview: () => void = () => undefined;
+        const releaseFab: () => void = typeof (this as any).suspendFABForDialog === "function" ? (this as any).suspendFABForDialog() : () => undefined;
         // T-6967 S1（定稿原型）：主从结构——左目录（搜索+chips+行列表）+ 右详情窗格。
         // 目录沿用既有卡片 DOM（作用域 CSS 行化），详情窗格渲染选中组件的完整卡片。
         const storeDialog = new Dialog({
             title: this.i18n.homeStoreTitle,
-            content: '<div class="speed-switch sw-home-store"><div class="sw-home-store__layout"><div class="sw-home-store__catalog"></div><aside class="sw-home-store__detail sw-home-store__detail--empty"></aside></div></div>',
+            content: '<div class="speed-switch sw-home-store sw-home-store--with-layout"><div class="sw-home-store__layout"><div class="sw-home-store__catalog"></div><aside class="sw-home-store__detail sw-home-store__detail--empty"></aside></div></div>',
             width: this.isMobile ? "min(680px, 94vw)" : `${Math.min(1120, Math.round(window.innerWidth * 0.86))}px`,
             height: this.isMobile ? "min(560px, 85vh)" : `${Math.min(720, Math.round(window.innerHeight * 0.84))}px`,
             destroyCallback: () => disposeStore(),
         });
+        (this as any).activeDialogs?.add(storeDialog);
+        storeDialog.element.classList.add("sw-dialog-host", "sw-dialog-host--home-store");
         // T-7575: 移动端手势隔离，阻止触控滑动误触发思源宿主侧栏
         storeDialog.element.setAttribute("data-prevent-swipe", "true");
         mountPlatformDialogTitleWrap(storeDialog.element, this.i18n.homeStoreTitle || "组件商店", "", "iconPlugin");
@@ -623,8 +627,17 @@ export function openHomeWidgetStore(this: HomeStoreUiHost, device: "desktop" | "
                 // 里，门禁一直在读注释（2026-09-16 扫描前剥离注释后暴露，见 D-395）。
                 // T-6967 S1：筛选只作用于目录窗格——详情窗格的完整卡片不随搜索隐藏。
                 const cardDatasets = catalogCardDatasets;
+                const matchingGroupIds = new Set(
+                    catalogGroups
+                        .filter(({heading}) => !storeGroupFilter
+                            || heading.dataset.group === storeGroupFilter
+                            || (storeGroupFilter === "__ecosystem_ext__" && heading.dataset.groupTier === "ecosystem-ext"))
+                        .map(({grid}) => grid.id),
+                );
                 catalogCards.forEach((card) => {
-                    const visible = matchesHomeStoreTokens(card.dataset, query, filter);
+                    const parentGrid = card.closest<HTMLElement>(".sw-home-store__grid");
+                    const groupMatch = !storeGroupFilter || (parentGrid ? matchingGroupIds.has(parentGrid.id) : false);
+                    const visible = matchesHomeStoreTokens(card.dataset, query, filter) && groupMatch;
                     card.classList.toggle("fn__none", !visible);
                     card.setAttribute("aria-hidden", String(!visible));
                     card.dataset.filterMatch = String(visible);
@@ -661,6 +674,9 @@ export function openHomeWidgetStore(this: HomeStoreUiHost, device: "desktop" | "
                 filterEmptyState?.setAttribute("aria-hidden", String(hasVisibleCards));
                 if (resultSummary) {
                     const summary = summarizeHomeStoreCards(cardDatasets, query, filter);
+                    if (storeGroupFilter) {
+                        summary.visible = catalogCards.filter((card) => !card.classList.contains("fn__none") && !card.closest(".sw-home-store__grid")?.classList.contains("fn__none")).length;
+                    }
                     // Legacy summary contract: this.i18n.homeStoreResultSummary.replace("{visible}", String(summary.visible)).replace("{total}", String(summary.total)).replace("{added}", String(summary.added));
                     resultSummary.textContent = buildHomeStoreResultSummary(summary, this.i18n.homeStoreResultSummary);
                     resultSummary.dataset.visible = String(summary.visible);
@@ -1396,18 +1412,21 @@ const tabs: Array<{key: string; label: string; category?: string; availability?:
             };
 
         // T-6967 S1：批量添加——按商店默认档（resolveHomeTileDefaultSize）入当前面板；
-        // 已在面板中的组件跳过。返回是否真的新增。
+        // 已在面板中的组件跳过。支持批量事务模式（pendingBatchState）单次原子合并保存。
+        let pendingBatchState: {schemaVersion: number; instances: Array<any>; layouts: Record<string, Array<any>>} | null = null;
         const addModuleWithPreferredSize = (moduleId: string, def: any) => {
             const supported: string[] = Array.isArray(def.sizes) && def.sizes.length > 0 ? def.sizes : ["medium"];
             const sizeKey = resolveHomeTileDefaultSize(moduleId, supported, "medium");
             const preset = HOME_WIDGET_SIZES[(sizeKey || "medium") as HomeWidgetSize] || HOME_WIDGET_SIZES.medium;
-            const next = this.getHomeState();
-            const layoutList = (next.layouts[device] || []) as Array<any>;
+            const next = pendingBatchState || this.getHomeState();
+            if (!next.layouts[device]) next.layouts[device] = [];
+            const layoutList = next.layouts[device] as Array<any>;
             if (layoutList.some((candidate) => candidate.instanceId === moduleId)) return false;
-            (next.instances as Array<any>).push({instanceId: moduleId, moduleId, config: {}, enabled: true});
+            if (!(next.instances as Array<any>).some((inst) => inst.instanceId === moduleId)) {
+                (next.instances as Array<any>).push({instanceId: moduleId, moduleId, config: {}, enabled: true});
+            }
             layoutList.push({instanceId: moduleId, x: 0, y: 0, w: preset.w, h: preset.h, collapsed: false, size: sizeKey});
-            next.layouts[device] = layoutList;
-            this.saveHomeState(next);
+            if (!pendingBatchState) this.saveHomeState(next);
             return true;
         };
         // T-6967 S2：详情窗格元信息四行明文——数据来源 / 刷新 / 隐私 / 缓存。
@@ -1468,6 +1487,8 @@ const tabs: Array<{key: string; label: string; category?: string; availability?:
             const builtinGroupLabels = orderedGroups.filter((label) => !extraGroupLabels.includes(label));
             const majorExtraGroups = extraGroupLabels.filter((label) => (readyGroups.get(label)?.length || 0) >= 2);
             const singleExtraGroups = extraGroupLabels.filter((label) => (readyGroups.get(label)?.length || 0) < 2);
+            const pending = resolveWidgetCatalogState([...activeIds], [...instanceByModule.keys()], [...instanceByModule.keys()])
+                .filter((item: any) => item.status !== "ready");
             if (orderedGroups.length > 1) {
                 const categoryNav = document.createElement("div");
                 categoryNav.className = "sw-home-store__category-nav";
@@ -1497,7 +1518,7 @@ const tabs: Array<{key: string; label: string; category?: string; availability?:
                     });
                     return pill;
                 };
-                categoryNav.appendChild(makeCatPill("", this.i18n.homeStoreTabAll || "全部场景", ready.length));
+                categoryNav.appendChild(makeCatPill("", this.i18n.homeStoreTabAll || "全部场景", ready.length + pending.length));
                 [...builtinGroupLabels, ...majorExtraGroups].forEach((label) => {
                     categoryNav.appendChild(makeCatPill(label, label, readyGroups.get(label)!.length));
                 });
@@ -1602,8 +1623,6 @@ const tabs: Array<{key: string; label: string; category?: string; availability?:
             // —— 分区二：需安装插件后可用（目录中登记、来源插件未就位） ——
             // T-7071：第三参传入全部已配置 moduleId——目录未登记的孤儿实例
             // （提供方卸载，ADR 0103）同样进"当前不可用+清理"分区。
-            const pending = resolveWidgetCatalogState([...activeIds], [...instanceByModule.keys()], [...instanceByModule.keys()])
-                .filter((item: any) => item.status !== "ready");
             root.dataset.pendingCount = String(pending.length);
             if (pending.length > 0) {
                 const pendingHeading = document.createElement("h3");
@@ -1904,14 +1923,23 @@ const tabs: Array<{key: string; label: string; category?: string; availability?:
                 batchAddButton.textContent = this.i18n.homeStoreBatchAdd;
                 batchAddButton.disabled = selectedStoreModules.length === 0;
                 bindRenderListener(batchAddButton, "click", () => {
+                    const batchState = this.getHomeState();
+                    pendingBatchState = batchState;
                     let addedCount = 0;
-                    selectedStoreModules.forEach((moduleId) => {
-                        const def = defs.get(moduleId);
-                        if (def && addModuleWithPreferredSize(moduleId, def)) addedCount += 1;
-                    });
+                    try {
+                        selectedStoreModules.forEach((moduleId) => {
+                            const def = defs.get(moduleId);
+                            if (def && addModuleWithPreferredSize(moduleId, def)) addedCount += 1;
+                        });
+                    } finally {
+                        pendingBatchState = null;
+                    }
+                    if (addedCount > 0) {
+                        this.saveHomeState(batchState);
+                        showMessage(`${this.i18n.homeStoreAdd} ${addedCount}`);
+                    }
                     selectedStoreModules = [];
                     storeBatchMode = false;
-                    if (addedCount > 0) showMessage(`${this.i18n.homeStoreAdd} ${addedCount}`);
                     renderStore();
                     onChanged();
                 });
@@ -1956,6 +1984,8 @@ const tabs: Array<{key: string; label: string; category?: string; availability?:
         disposeStore = () => {
             if (storeReleased) return;
             storeReleased = true;
+            (this as any).activeDialogs?.delete(storeDialog);
+            releaseFab();
             window.clearTimeout(rescanTimer);
             disposeRenderListeners();
             disposeInlinePreview();

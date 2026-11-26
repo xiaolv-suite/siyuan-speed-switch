@@ -76,8 +76,8 @@ function formatPreviewCapability(capability, names = {}, boundary = {}) {
         ? `${names.width || capability.viewport.id} · ${capability.viewport.appliedWidth}px`
         : `${names.width || capability.viewport.id}（${text("singleView", "容器不足，单视图")}）`;
     const probeLabel = capability.probe.on
-        ? text("probeOn", "探针：命中 {n} 项").replace("{n}", String(capability.probe.count))
-        : text("probeOff", "探针：关（基线对照）");
+        ? text("probeOn", "样式命中 {n} 项").replace("{n}", String(capability.probe.count))
+        : text("probeOff", "基线对照（原样预览）");
     // T-7022：脚本边界恒为 blocked，标签统一走 scriptCss 通道（不再区分 js 分支）
     const scriptLabel = text("scriptCss", "脚本：禁用");
     const tokenLabel = capability.tokenSource === "none"
@@ -350,8 +350,8 @@ function buildProbeSection(features, text, targetOnly = false) {
     const hasHeadings = features.some((f) => ["h1", "h2", "h3", "h4", "h5", "h6", "heading"].includes(f));
     if (hasHeadings) {
         if (!targetOnly) {
-            parts.push(`<div class="h1"${nid(cursor++)} data-type="NodeHeading" data-subtype="h1"><div contenteditable="true">${text("probeH1", "一级标题探针 · 特征置顶")}</div></div>`);
-            parts.push(`<div class="h2"${nid(cursor++)} data-type="NodeHeading" data-subtype="h2"><div contenteditable="true">${text("probeH2", "二级标题探针 · 特征置顶")}</div></div>`);
+            parts.push(`<div class="h1"${nid(cursor++)} data-type="NodeHeading" data-subtype="h1"><div contenteditable="true">${text("probeH1", "一级标题示例 · 样式置顶")}</div></div>`);
+            parts.push(`<div class="h2"${nid(cursor++)} data-type="NodeHeading" data-subtype="h2"><div contenteditable="true">${text("probeH2", "二级标题示例 · 样式置顶")}</div></div>`);
         } else {
             parts.push(`<div class="p" style="margin:8px 0 6px;font-size:12px;color:var(--b3-theme-primary);font-weight:600;">📑 标题层级与序号效果演示：</div>`
                 + `<div class="h1"${nid(cursor++)} data-type="NodeHeading" data-subtype="h1"><div contenteditable="true">一级标题：知识管理的核心方法论</div></div>`
@@ -483,8 +483,8 @@ function buildProbeSection(features, text, targetOnly = false) {
     }
     if (!parts.length) return "";
     if (targetOnly) return parts.join("");
-    const probeHeading = `<div class="h2"${nid(cursor++)} data-type="NodeHeading" data-subtype="h2"><div contenteditable="true">${text("probeTitle", "按当前 CSS 追加的探针内容")}</div></div>`;
-    const probeNote = `<div class="p"${nid(cursor++)} data-type="NodeParagraph"><div contenteditable="true" class="studio-probe-note">${text("probeNote", "以下元素由你的片段选择器命中，用于观察对应样式。")}</div></div>`;
+    const probeHeading = `<div class="h2"${nid(cursor++)} data-type="NodeHeading" data-subtype="h2"><div contenteditable="true">${text("probeTitle", "按当前 CSS 匹配的示例内容")}</div></div>`;
+    const probeNote = `<div class="p"${nid(cursor++)} data-type="NodeParagraph"><div contenteditable="true" class="studio-probe-note">${text("probeNote", "以下示例元素匹配了当前样式规则，便于直接观察效果。")}</div></div>`;
     return probeHeading + probeNote + parts.join("");
 }
 

@@ -14,6 +14,7 @@ const {formatWithCursor} = require("./snippet-formatter.js");
 const {planSnippetImport} = require("./snippet-import-plan.js");
 const {mountSnippetStackView} = require("./snippet-stack-ui.js");
 const {pushSnippetStackItem, assembleSnippetStackMarkdown} = require("./snippet-stack-model.js");
+const {mountLvAiThinkingCard} = require("./libs/lv-notice-kit");
 
 // T-6978：预览样例与探针文案共用一份构造——主编辑器实时预览与商店预览同源，
 // 新增样例/探针文案只改这里（labels 缺键回落到 preview 模块的中文兜底）。
@@ -51,7 +52,7 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
     // gate while still allowing the UI to look up one of the fixed labels
     // below by key. There is no user-controlled key path here.
     const locale = {i18n};
-    /* Static i18n discovery: locale.i18n.snippetPreviewMaximize locale.i18n.snippetEditorMaximize locale.i18n.snippetSubmit locale.i18n.snippetSubmitTitle locale.i18n.snippetSubmitGuide locale.i18n.snippetAbout locale.i18n.snippetAI locale.i18n.snippetAIIncludeCode locale.i18n.snippetAIIncludeHistory locale.i18n.snippetAIProviderInfo locale.i18n.snippetAIContextSummary locale.i18n.snippetAIContextTooLarge locale.i18n.snippetAIPermissionDenied locale.i18n.snippetAIRetry locale.i18n.snippetAICopyCandidate locale.i18n.snippetAIExportCandidate locale.i18n.snippetAICandidateStale locale.i18n.snippetAIAccept locale.i18n.snippetAIAccepted locale.i18n.snippetAICancel locale.i18n.snippetAICandidate locale.i18n.snippetAIConsent locale.i18n.snippetAIDone locale.i18n.snippetAIDiscarded locale.i18n.snippetAIExplain locale.i18n.snippetAIGenerate locale.i18n.snippetAIGenerating locale.i18n.snippetAIHint locale.i18n.snippetAIIdle locale.i18n.snippetAIReady locale.i18n.snippetAIConsentRequired locale.i18n.snippetAIGenerateHint locale.i18n.snippetAIOptimizeHint locale.i18n.snippetAIExplainHint locale.i18n.snippetAIIterateHint locale.i18n.snippetAIResultHint locale.i18n.snippetAIIterate locale.i18n.snippetAIMode locale.i18n.snippetAIOptimize locale.i18n.snippetAIPrompt locale.i18n.snippetAISend locale.i18n.snippetAIStale locale.i18n.snippetAllCategories locale.i18n.snippetAllSources locale.i18n.snippetAllTypes locale.i18n.snippetBack locale.i18n.snippetBuiltins locale.i18n.snippetBuiltinCodeDescription locale.i18n.snippetBuiltinCodeName locale.i18n.snippetBuiltinFocusDescription locale.i18n.snippetBuiltinFocusName locale.i18n.snippetBuiltinFontDescription locale.i18n.snippetBuiltinFontName locale.i18n.snippetBuiltinTableDescription locale.i18n.snippetBuiltinTableName locale.i18n.snippetBuiltinTypographyDescription locale.i18n.snippetBuiltinQuoteName locale.i18n.snippetBuiltinQuoteDescription locale.i18n.snippetBuiltinImgName locale.i18n.snippetBuiltinImgDescription locale.i18n.snippetBuiltinHeadingName locale.i18n.snippetBuiltinHeadingDescription locale.i18n.snippetBuiltinListName locale.i18n.snippetBuiltinListDescription locale.i18n.snippetBuiltinDividerName locale.i18n.snippetBuiltinDividerDescription locale.i18n.snippetBuiltinTagName locale.i18n.snippetBuiltinEyecareName locale.i18n.snippetBuiltinEyecareDescription locale.i18n.snippetBuiltinLineheightName locale.i18n.snippetBuiltinLineheightDescription locale.i18n.snippetBuiltinHiconName locale.i18n.snippetBuiltinHiconDescription locale.i18n.snippetBuiltinCardparaName locale.i18n.snippetBuiltinCardparaDescription locale.i18n.snippetBuiltinCodeThemeName locale.i18n.snippetBuiltinCodeThemeDescription locale.i18n.snippetBuiltinInlinecodeName locale.i18n.snippetBuiltinInlinecodeDescription locale.i18n.snippetBuiltinLinkName locale.i18n.snippetBuiltinLinkDescription locale.i18n.snippetBuiltinTaskName locale.i18n.snippetBuiltinTaskDescription locale.i18n.snippetBuiltinZebraName locale.i18n.snippetBuiltinZebraDescription locale.i18n.snippetBuiltinMarkName locale.i18n.snippetBuiltinMarkDescription locale.i18n.snippetBuiltinKbdName locale.i18n.snippetBuiltinKbdDescription locale.i18n.snippetBuiltinImgzoomName locale.i18n.snippetBuiltinImgzoomDescription locale.i18n.snippetBuiltinTaskdoneName locale.i18n.snippetBuiltinTaskdoneDescription locale.i18n.snippetBuiltinTheadName locale.i18n.snippetBuiltinTheadDescription locale.i18n.snippetBuiltinScrollbarName locale.i18n.snippetBuiltinScrollbarDescription locale.i18n.snippetBuiltinTagDescription locale.i18n.snippetBuiltinTypographyName locale.i18n.snippetCancelled locale.i18n.snippetCapabilities locale.i18n.snippetCapabilityAI locale.i18n.snippetCapabilityCSS locale.i18n.snippetCapabilityJS locale.i18n.snippetCapabilityScope locale.i18n.snippetCapabilityStorage locale.i18n.snippetCategory locale.i18n.snippetCategoryCode locale.i18n.snippetCategoryCustom locale.i18n.snippetCategoryFeatured locale.i18n.snippetCategoryCommunity locale.i18n.snippetCategoryFocus locale.i18n.snippetCategoryFont locale.i18n.snippetCategoryQuote locale.i18n.snippetCategoryImage locale.i18n.snippetCategoryHeading locale.i18n.snippetCategoryList locale.i18n.snippetCategoryDivider locale.i18n.snippetCategoryTag locale.i18n.snippetCategoryTheme locale.i18n.snippetCategoryLayout locale.i18n.snippetCategoryTable locale.i18n.snippetCategoryTypography locale.i18n.snippetChoose locale.i18n.snippetRecent locale.i18n.snippetClose locale.i18n.snippetCode locale.i18n.snippetBytes locale.i18n.snippetCompare locale.i18n.snippetCompareUnavailable locale.i18n.snippetConfirmDelete locale.i18n.snippetConfirmJS locale.i18n.snippetConflict locale.i18n.snippetCSS locale.i18n.snippetDarkPreview locale.i18n.snippetDelete locale.i18n.snippetDescription locale.i18n.snippetDiffDegraded locale.i18n.snippetDiffFindings locale.i18n.snippetDiffHunkToggle locale.i18n.snippetDiffMore locale.i18n.snippetDiffRoundBase locale.i18n.snippetDiffSummary locale.i18n.snippetDisable locale.i18n.snippetDisabled locale.i18n.snippetDiscard locale.i18n.snippetLeaveTitle locale.i18n.snippetLeaveMessage locale.i18n.snippetLeaveSave locale.i18n.snippetLeaveDiscard locale.i18n.snippetLeaveSaveFailed locale.i18n.snippetUndo locale.i18n.snippetRedo locale.i18n.snippetFindBar locale.i18n.snippetFindQuery locale.i18n.snippetFindReplaceTo locale.i18n.snippetFindPrev locale.i18n.snippetFindNext locale.i18n.snippetFindReplaceAll locale.i18n.snippetFindConfirm locale.i18n.snippetFindNone locale.i18n.snippetFindDone locale.i18n.snippetFormat locale.i18n.snippetFormatOnlyCss locale.i18n.snippetFormatted locale.i18n.snippetAlreadyFormatted locale.i18n.snippetImportMerge locale.i18n.snippetImportFork locale.i18n.snippetImportOverwrite locale.i18n.snippetScene locale.i18n.snippetSceneReading locale.i18n.snippetSceneTable locale.i18n.snippetSceneControls locale.i18n.snippetPreviewWidth locale.i18n.snippetWidthAuto locale.i18n.snippetWidthNarrow locale.i18n.snippetWidthMedium locale.i18n.snippetWidthWide locale.i18n.snippetConflictTitle locale.i18n.snippetConflictMessage locale.i18n.snippetConflictContinue locale.i18n.snippetConflictCopy locale.i18n.snippetConflictReload locale.i18n.snippetConflictGone locale.i18n.snippetConflictAdded locale.i18n.snippetConflictRemoved locale.i18n.snippetDraft locale.i18n.snippetUnsaved locale.i18n.snippetEnable locale.i18n.snippetEnabled locale.i18n.snippetExperimental locale.i18n.snippetExport locale.i18n.snippetBackup locale.i18n.snippetBackupHint locale.i18n.snippetFailed locale.i18n.snippetImport locale.i18n.snippetImportPackage locale.i18n.snippetImportPackageHint locale.i18n.snippetPackageImported locale.i18n.snippetImportInvalid locale.i18n.snippetImported locale.i18n.snippetInvalid locale.i18n.snippetJS locale.i18n.snippetJSPreviewUnavailable locale.i18n.snippetJSReload locale.i18n.snippetLoaded locale.i18n.snippetLoading locale.i18n.snippetMasterOff locale.i18n.snippetMasterTitle locale.i18n.snippetMasterCSS locale.i18n.snippetMasterJS locale.i18n.snippetMasterEnabled locale.i18n.snippetMasterDisabled locale.i18n.snippetMasterUnavailable locale.i18n.snippetMasterSaved locale.i18n.snippetMasterFailed locale.i18n.snippetDisabledInPublish locale.i18n.snippetDisabledInPublishHint locale.i18n.snippetOrderHint locale.i18n.snippetCascadeHint locale.i18n.snippetJSCascadeHint locale.i18n.snippetMine locale.i18n.snippetGroupNew locale.i18n.snippetMetadata locale.i18n.snippetStore locale.i18n.snippetStoreDraft locale.i18n.snippetStoreBuiltinInfo locale.i18n.snippetStoreNativeInfo locale.i18n.snippetStoreCommunity locale.i18n.snippetAlias locale.i18n.snippetTags locale.i18n.snippetSummary locale.i18n.snippetPinned locale.i18n.snippetCatalogSort locale.i18n.snippetCatalogNativeOrder locale.i18n.snippetCatalogModified locale.i18n.snippetGroupRename locale.i18n.snippetGroupDelete locale.i18n.snippetGroupView locale.i18n.snippetGroupTree locale.i18n.snippetGroupFlat locale.i18n.snippetGroupUngrouped locale.i18n.snippetGroupNamePrompt locale.i18n.snippetGroupNameInvalid locale.i18n.snippetGroupDeleteConfirm locale.i18n.snippetGroupDropHint locale.i18n.snippetGist locale.i18n.snippetGistHint locale.i18n.snippetGistToken locale.i18n.snippetGistTokenSet locale.i18n.snippetGistTokenPlaceholder locale.i18n.snippetGistSaveToken locale.i18n.snippetGistClearToken locale.i18n.snippetGistDescription locale.i18n.snippetGistUrl locale.i18n.snippetGistPublish locale.i18n.snippetGistPublishUpdate locale.i18n.snippetGistImportPreview locale.i18n.snippetGistImport locale.i18n.snippetGistPreviewLoading locale.i18n.snippetGistPreviewEmpty locale.i18n.snippetGistParseable locale.i18n.snippetGistUnparseable locale.i18n.snippetGistDiff locale.i18n.snippetGistLink locale.i18n.snippetGistPublished locale.i18n.snippetGistImported locale.i18n.snippetGistTokenRequired locale.i18n.snippetGistReplaceToken locale.i18n.snippetGistPrepareUpdate locale.i18n.snippetGistStale locale.i18n.snippetGistFailed locale.i18n.snippetGistPending locale.i18n.snippetGistUnknownNotice locale.i18n.snippetGistRecovery locale.i18n.snippetGistRecoveryTitle locale.i18n.snippetGistRecoveryMessage locale.i18n.snippetGistRecoveryConfirm locale.i18n.snippetGistRecoveryCancel locale.i18n.snippetGistRecoveryUnlocked locale.i18n.snippetMore locale.i18n.snippetName locale.i18n.snippetNew locale.i18n.snippetCopy locale.i18n.snippetCopied locale.i18n.snippetCopyEmpty locale.i18n.snippetCopyFailed locale.i18n.snippetNoResults locale.i18n.snippetPaneDraft locale.i18n.snippetPendingConfirm locale.i18n.snippetPendingUnverified locale.i18n.snippetPaneSaved locale.i18n.snippetPaneSavedEmpty locale.i18n.snippetRecycle locale.i18n.snippetRecycleClear locale.i18n.snippetRecycleClearConfirm locale.i18n.snippetRecycleEmpty locale.i18n.snippetRecycleOriginConflict locale.i18n.snippetRecycleOriginDelete locale.i18n.snippetRecycleOriginOverwrite locale.i18n.snippetRecyclePurge locale.i18n.snippetRecyclePurgeConfirm locale.i18n.snippetRecycleRestore locale.i18n.snippetRecycleRestored locale.i18n.snippetRestore locale.i18n.snippetRestoreAdd locale.i18n.snippetRestoreCancel locale.i18n.snippetRestoreConfirm locale.i18n.snippetRestoreConflict locale.i18n.snippetRestoreDelete locale.i18n.snippetRestoreDone locale.i18n.snippetRestoreEmpty locale.i18n.snippetRestoreInvalid locale.i18n.snippetRestoreKeep locale.i18n.snippetRestoreNoSelection locale.i18n.snippetRestoreOneShot locale.i18n.snippetRestorePending locale.i18n.snippetRestorePreview locale.i18n.snippetRestoreReplace locale.i18n.snippetRestoreSettings locale.i18n.snippetRestoreUndo locale.i18n.snippetRefreshExternal locale.i18n.snippetPreview locale.i18n.snippetPreviewError locale.i18n.snippetPreviewHint locale.i18n.snippetPreviewLoading locale.i18n.snippetPreviewReady locale.i18n.snippetPreviewLang locale.i18n.snippetCapabilitySceneLabel locale.i18n.snippetCapabilityWidthLabel locale.i18n.snippetCapabilityThemeLabel locale.i18n.snippetCapabilityProbeOn locale.i18n.snippetCapabilityProbeOff locale.i18n.snippetCapabilityScriptCss locale.i18n.snippetCapabilityNetwork locale.i18n.snippetCapabilitySemantics locale.i18n.snippetCapabilitySingleView locale.i18n.snippetDiagnostics locale.i18n.snippetDiagnosticsHit locale.i18n.snippetDiagnosticsMiss locale.i18n.snippetDiagnosticsUnknown locale.i18n.snippetDiagnosticsError locale.i18n.snippetDiagnosticsEmpty locale.i18n.snippetDiagnosticsTruncated locale.i18n.snippetProbeDocTitle locale.i18n.snippetProbeCallout locale.i18n.snippetProbeColumnA locale.i18n.snippetProbeColumnB locale.i18n.snippetProbeFormula locale.i18n.snippetProbeAttrsLead locale.i18n.snippetProbeAttrsValue locale.i18n.snippetProbeDbColA locale.i18n.snippetProbeDbColB locale.i18n.snippetProbeDbRowA locale.i18n.snippetProbeDbRowB locale.i18n.snippetProbeMediaBlocked locale.i18n.snippetCapabilityTokenProfile locale.i18n.snippetCapabilityTokenBaseline locale.i18n.snippetRefresh locale.i18n.snippetResetPreview locale.i18n.snippetSample locale.i18n.snippetSampleButton locale.i18n.snippetSampleCode locale.i18n.snippetSampleDraft locale.i18n.snippetSampleItem locale.i18n.snippetSampleParagraph locale.i18n.snippetSampleProgress locale.i18n.snippetSampleQuote locale.i18n.snippetSampleReading locale.i18n.snippetSampleReady locale.i18n.snippetSampleSection locale.i18n.snippetSampleState locale.i18n.snippetSampleTitle locale.i18n.snippetSampleWriting locale.i18n.snippetProbeTitle locale.i18n.snippetProbeNote locale.i18n.snippetProbeH3 locale.i18n.snippetProbeH4 locale.i18n.snippetProbeH5 locale.i18n.snippetProbeH6 locale.i18n.snippetProbeLinksLead locale.i18n.snippetProbeLinksAnchor locale.i18n.snippetProbeListItem locale.i18n.snippetProbeListItem2 locale.i18n.snippetProbeTaskDone locale.i18n.snippetProbeTaskTodo locale.i18n.snippetProbeImageAlt locale.i18n.snippetProbeStrong locale.i18n.snippetProbeEm locale.i18n.snippetProbeMark locale.i18n.snippetProbeDel locale.i18n.snippetProbeU locale.i18n.snippetProbeKbd locale.i18n.snippetProbeTagA locale.i18n.snippetProbeTagB locale.i18n.snippetProbeTagC locale.i18n.snippetSave locale.i18n.snippetSaveDisabled locale.i18n.snippetSaveFirst locale.i18n.snippetSaved locale.i18n.snippetSearch locale.i18n.snippetSelect locale.i18n.snippetSource locale.i18n.snippetStudioTitle locale.i18n.snippetSubmission locale.i18n.snippetSubmissionHint locale.i18n.snippetLines locale.i18n.snippetTimeout locale.i18n.snippetTooLarge locale.i18n.snippetType locale.i18n.snippetTypeLocked locale.i18n.snippetUnavailable locale.i18n.snippetUsercssVars locale.i18n.snippetStackTitle locale.i18n.snippetStackCaptureSelection locale.i18n.snippetStackFoldToggle locale.i18n.snippetStackClearUnpinned locale.i18n.snippetStackUndo locale.i18n.snippetStackUndoRestored locale.i18n.snippetStackPinnedSuffix locale.i18n.snippetStackTabRaw locale.i18n.snippetStackTabKey locale.i18n.snippetStackTabAction locale.i18n.snippetStackEmptyHint locale.i18n.snippetStackAssembleJournal locale.i18n.snippetStackAssembleCurrent locale.i18n.snippetStackAssembleNewDoc locale.i18n.snippetStackAssembleCopy locale.i18n.snippetStackAssembleFailed locale.i18n.snippetDuplicate */
+    /* Static i18n discovery: locale.i18n.snippetPreviewMaximize locale.i18n.snippetEditorMaximize locale.i18n.snippetSubmit locale.i18n.snippetSubmitTitle locale.i18n.snippetSubmitGuide locale.i18n.snippetAbout locale.i18n.snippetAI locale.i18n.snippetAIIncludeCode locale.i18n.snippetAIIncludeHistory locale.i18n.snippetAIProviderInfo locale.i18n.snippetAIContextSummary locale.i18n.snippetAIContextTooLarge locale.i18n.snippetAIPermissionDenied locale.i18n.snippetAIUnavailable locale.i18n.snippetAIEndpointUnsupported locale.i18n.snippetAIGuideSelectCode locale.i18n.snippetAIGuideEmptyCode locale.i18n.snippetAIEnableCodeBtn locale.i18n.snippetAIRetry locale.i18n.snippetAICopyCandidate locale.i18n.snippetAIExportCandidate locale.i18n.snippetAICandidateStale locale.i18n.snippetAIAccept locale.i18n.snippetAIAccepted locale.i18n.snippetAICancel locale.i18n.snippetAICandidate locale.i18n.snippetAIConsent locale.i18n.snippetAIDone locale.i18n.snippetAIDiscarded locale.i18n.snippetAIExplain locale.i18n.snippetAIGenerate locale.i18n.snippetAIGenerating locale.i18n.snippetAIHint locale.i18n.snippetAIIdle locale.i18n.snippetAIReady locale.i18n.snippetAIConsentRequired locale.i18n.snippetAIGenerateHint locale.i18n.snippetAIOptimizeHint locale.i18n.snippetAIExplainHint locale.i18n.snippetAIIterateHint locale.i18n.snippetAIResultHint locale.i18n.snippetAIIterate locale.i18n.snippetAIMode locale.i18n.snippetAIOptimize locale.i18n.snippetAIPrompt locale.i18n.snippetAISend locale.i18n.snippetAIStale locale.i18n.snippetAllCategories locale.i18n.snippetAllSources locale.i18n.snippetAllTypes locale.i18n.snippetBack locale.i18n.snippetBuiltins locale.i18n.snippetBuiltinCodeDescription locale.i18n.snippetBuiltinCodeName locale.i18n.snippetBuiltinFocusDescription locale.i18n.snippetBuiltinFocusName locale.i18n.snippetBuiltinFontDescription locale.i18n.snippetBuiltinFontName locale.i18n.snippetBuiltinTableDescription locale.i18n.snippetBuiltinTableName locale.i18n.snippetBuiltinTypographyDescription locale.i18n.snippetBuiltinQuoteName locale.i18n.snippetBuiltinQuoteDescription locale.i18n.snippetBuiltinImgName locale.i18n.snippetBuiltinImgDescription locale.i18n.snippetBuiltinHeadingName locale.i18n.snippetBuiltinHeadingDescription locale.i18n.snippetBuiltinListName locale.i18n.snippetBuiltinListDescription locale.i18n.snippetBuiltinDividerName locale.i18n.snippetBuiltinDividerDescription locale.i18n.snippetBuiltinTagName locale.i18n.snippetBuiltinEyecareName locale.i18n.snippetBuiltinEyecareDescription locale.i18n.snippetBuiltinLineheightName locale.i18n.snippetBuiltinLineheightDescription locale.i18n.snippetBuiltinHiconName locale.i18n.snippetBuiltinHiconDescription locale.i18n.snippetBuiltinCardparaName locale.i18n.snippetBuiltinCardparaDescription locale.i18n.snippetBuiltinCodeThemeName locale.i18n.snippetBuiltinCodeThemeDescription locale.i18n.snippetBuiltinInlinecodeName locale.i18n.snippetBuiltinInlinecodeDescription locale.i18n.snippetBuiltinLinkName locale.i18n.snippetBuiltinLinkDescription locale.i18n.snippetBuiltinTaskName locale.i18n.snippetBuiltinTaskDescription locale.i18n.snippetBuiltinZebraName locale.i18n.snippetBuiltinZebraDescription locale.i18n.snippetBuiltinMarkName locale.i18n.snippetBuiltinMarkDescription locale.i18n.snippetBuiltinKbdName locale.i18n.snippetBuiltinKbdDescription locale.i18n.snippetBuiltinImgzoomName locale.i18n.snippetBuiltinImgzoomDescription locale.i18n.snippetBuiltinTaskdoneName locale.i18n.snippetBuiltinTaskdoneDescription locale.i18n.snippetBuiltinTheadName locale.i18n.snippetBuiltinTheadDescription locale.i18n.snippetBuiltinScrollbarName locale.i18n.snippetBuiltinScrollbarDescription locale.i18n.snippetBuiltinTagDescription locale.i18n.snippetBuiltinTypographyName locale.i18n.snippetCancelled locale.i18n.snippetCapabilities locale.i18n.snippetCapabilityAI locale.i18n.snippetCapabilityCSS locale.i18n.snippetCapabilityJS locale.i18n.snippetCapabilityScope locale.i18n.snippetCapabilityStorage locale.i18n.snippetCategory locale.i18n.snippetCategoryCode locale.i18n.snippetCategoryCustom locale.i18n.snippetCategoryFeatured locale.i18n.snippetCategoryCommunity locale.i18n.snippetCategoryFocus locale.i18n.snippetCategoryFont locale.i18n.snippetCategoryQuote locale.i18n.snippetCategoryImage locale.i18n.snippetCategoryHeading locale.i18n.snippetCategoryList locale.i18n.snippetCategoryDivider locale.i18n.snippetCategoryTag locale.i18n.snippetCategoryTheme locale.i18n.snippetCategoryLayout locale.i18n.snippetCategoryTable locale.i18n.snippetCategoryTypography locale.i18n.snippetChoose locale.i18n.snippetRecent locale.i18n.snippetClose locale.i18n.snippetCode locale.i18n.snippetBytes locale.i18n.snippetCompare locale.i18n.snippetCompareUnavailable locale.i18n.snippetConfirmDelete locale.i18n.snippetConfirmJS locale.i18n.snippetConflict locale.i18n.snippetCSS locale.i18n.snippetDarkPreview locale.i18n.snippetDelete locale.i18n.snippetDescription locale.i18n.snippetDiffDegraded locale.i18n.snippetDiffFindings locale.i18n.snippetDiffHunkToggle locale.i18n.snippetDiffMore locale.i18n.snippetDiffRoundBase locale.i18n.snippetDiffSummary locale.i18n.snippetDisable locale.i18n.snippetDisabled locale.i18n.snippetDiscard locale.i18n.snippetLeaveTitle locale.i18n.snippetLeaveMessage locale.i18n.snippetLeaveSave locale.i18n.snippetLeaveDiscard locale.i18n.snippetLeaveSaveFailed locale.i18n.snippetUndo locale.i18n.snippetRedo locale.i18n.snippetFindBar locale.i18n.snippetFindQuery locale.i18n.snippetFindReplaceTo locale.i18n.snippetFindPrev locale.i18n.snippetFindNext locale.i18n.snippetFindReplaceAll locale.i18n.snippetFindConfirm locale.i18n.snippetFindNone locale.i18n.snippetFindDone locale.i18n.snippetFormat locale.i18n.snippetFormatOnlyCss locale.i18n.snippetFormatted locale.i18n.snippetAlreadyFormatted locale.i18n.snippetImportMerge locale.i18n.snippetImportFork locale.i18n.snippetImportOverwrite locale.i18n.snippetScene locale.i18n.snippetSceneReading locale.i18n.snippetSceneTable locale.i18n.snippetSceneControls locale.i18n.snippetPreviewWidth locale.i18n.snippetWidthAuto locale.i18n.snippetWidthNarrow locale.i18n.snippetWidthMedium locale.i18n.snippetWidthWide locale.i18n.snippetConflictTitle locale.i18n.snippetConflictMessage locale.i18n.snippetConflictContinue locale.i18n.snippetConflictCopy locale.i18n.snippetConflictReload locale.i18n.snippetConflictGone locale.i18n.snippetConflictAdded locale.i18n.snippetConflictRemoved locale.i18n.snippetDraft locale.i18n.snippetUnsaved locale.i18n.snippetEnable locale.i18n.snippetEnabled locale.i18n.snippetExperimental locale.i18n.snippetExport locale.i18n.snippetBackup locale.i18n.snippetBackupHint locale.i18n.snippetFailed locale.i18n.snippetImport locale.i18n.snippetImportPackage locale.i18n.snippetImportPackageHint locale.i18n.snippetPackageImported locale.i18n.snippetImportInvalid locale.i18n.snippetImported locale.i18n.snippetInvalid locale.i18n.snippetJS locale.i18n.snippetJSPreviewUnavailable locale.i18n.snippetJSReload locale.i18n.snippetLoaded locale.i18n.snippetLoading locale.i18n.snippetMasterOff locale.i18n.snippetMasterTitle locale.i18n.snippetMasterCSS locale.i18n.snippetMasterJS locale.i18n.snippetMasterEnabled locale.i18n.snippetMasterDisabled locale.i18n.snippetMasterUnavailable locale.i18n.snippetMasterSaved locale.i18n.snippetMasterFailed locale.i18n.snippetDisabledInPublish locale.i18n.snippetDisabledInPublishHint locale.i18n.snippetOrderHint locale.i18n.snippetCascadeHint locale.i18n.snippetJSCascadeHint locale.i18n.snippetMine locale.i18n.snippetGroupNew locale.i18n.snippetMetadata locale.i18n.snippetStore locale.i18n.snippetStoreDraft locale.i18n.snippetStoreBuiltinInfo locale.i18n.snippetStoreNativeInfo locale.i18n.snippetStoreCommunity locale.i18n.snippetAlias locale.i18n.snippetTags locale.i18n.snippetSummary locale.i18n.snippetPinned locale.i18n.snippetCatalogSort locale.i18n.snippetCatalogNativeOrder locale.i18n.snippetCatalogModified locale.i18n.snippetGroupRename locale.i18n.snippetGroupDelete locale.i18n.snippetGroupView locale.i18n.snippetGroupTree locale.i18n.snippetGroupFlat locale.i18n.snippetGroupUngrouped locale.i18n.snippetGroupNamePrompt locale.i18n.snippetGroupNameInvalid locale.i18n.snippetGroupDeleteConfirm locale.i18n.snippetGroupDropHint locale.i18n.snippetGist locale.i18n.snippetGistHint locale.i18n.snippetGistToken locale.i18n.snippetGistTokenSet locale.i18n.snippetGistTokenPlaceholder locale.i18n.snippetGistSaveToken locale.i18n.snippetGistClearToken locale.i18n.snippetGistDescription locale.i18n.snippetGistUrl locale.i18n.snippetGistPublish locale.i18n.snippetGistPublishUpdate locale.i18n.snippetGistImportPreview locale.i18n.snippetGistImport locale.i18n.snippetGistPreviewLoading locale.i18n.snippetGistPreviewEmpty locale.i18n.snippetGistParseable locale.i18n.snippetGistUnparseable locale.i18n.snippetGistDiff locale.i18n.snippetGistLink locale.i18n.snippetGistPublished locale.i18n.snippetGistImported locale.i18n.snippetGistTokenRequired locale.i18n.snippetGistReplaceToken locale.i18n.snippetGistPrepareUpdate locale.i18n.snippetGistStale locale.i18n.snippetGistFailed locale.i18n.snippetGistPending locale.i18n.snippetGistUnknownNotice locale.i18n.snippetGistRecovery locale.i18n.snippetGistRecoveryTitle locale.i18n.snippetGistRecoveryMessage locale.i18n.snippetGistRecoveryConfirm locale.i18n.snippetGistRecoveryCancel locale.i18n.snippetGistRecoveryUnlocked locale.i18n.snippetMore locale.i18n.snippetName locale.i18n.snippetNew locale.i18n.snippetCopy locale.i18n.snippetCopied locale.i18n.snippetCopyEmpty locale.i18n.snippetCopyFailed locale.i18n.snippetNoResults locale.i18n.snippetPaneDraft locale.i18n.snippetPendingConfirm locale.i18n.snippetPendingUnverified locale.i18n.snippetPaneSaved locale.i18n.snippetPaneSavedEmpty locale.i18n.snippetRecycle locale.i18n.snippetRecycleClear locale.i18n.snippetRecycleClearConfirm locale.i18n.snippetRecycleEmpty locale.i18n.snippetRecycleOriginConflict locale.i18n.snippetRecycleOriginDelete locale.i18n.snippetRecycleOriginOverwrite locale.i18n.snippetRecyclePurge locale.i18n.snippetRecyclePurgeConfirm locale.i18n.snippetRecycleRestore locale.i18n.snippetRecycleRestored locale.i18n.snippetRestore locale.i18n.snippetRestoreAdd locale.i18n.snippetRestoreCancel locale.i18n.snippetRestoreConfirm locale.i18n.snippetRestoreConflict locale.i18n.snippetRestoreDelete locale.i18n.snippetRestoreDone locale.i18n.snippetRestoreEmpty locale.i18n.snippetRestoreInvalid locale.i18n.snippetRestoreKeep locale.i18n.snippetRestoreNoSelection locale.i18n.snippetRestoreOneShot locale.i18n.snippetRestorePending locale.i18n.snippetRestorePreview locale.i18n.snippetRestoreReplace locale.i18n.snippetRestoreSettings locale.i18n.snippetRestoreUndo locale.i18n.snippetRefreshExternal locale.i18n.snippetPreview locale.i18n.snippetPreviewError locale.i18n.snippetPreviewHint locale.i18n.snippetPreviewLoading locale.i18n.snippetPreviewReady locale.i18n.snippetPreviewLang locale.i18n.snippetCapabilitySceneLabel locale.i18n.snippetCapabilityWidthLabel locale.i18n.snippetCapabilityThemeLabel locale.i18n.snippetCapabilityProbeOn locale.i18n.snippetCapabilityProbeOff locale.i18n.snippetCapabilityScriptCss locale.i18n.snippetCapabilityNetwork locale.i18n.snippetCapabilitySemantics locale.i18n.snippetCapabilitySingleView locale.i18n.snippetDiagnostics locale.i18n.snippetDiagnosticsHit locale.i18n.snippetDiagnosticsMiss locale.i18n.snippetDiagnosticsUnknown locale.i18n.snippetDiagnosticsError locale.i18n.snippetDiagnosticsEmpty locale.i18n.snippetDiagnosticsTruncated locale.i18n.snippetProbeDocTitle locale.i18n.snippetProbeCallout locale.i18n.snippetProbeColumnA locale.i18n.snippetProbeColumnB locale.i18n.snippetProbeFormula locale.i18n.snippetProbeAttrsLead locale.i18n.snippetProbeAttrsValue locale.i18n.snippetProbeDbColA locale.i18n.snippetProbeDbColB locale.i18n.snippetProbeDbRowA locale.i18n.snippetProbeDbRowB locale.i18n.snippetProbeMediaBlocked locale.i18n.snippetCapabilityTokenProfile locale.i18n.snippetCapabilityTokenBaseline locale.i18n.snippetRefresh locale.i18n.snippetResetPreview locale.i18n.snippetSample locale.i18n.snippetSampleButton locale.i18n.snippetSampleCode locale.i18n.snippetSampleDraft locale.i18n.snippetSampleItem locale.i18n.snippetSampleParagraph locale.i18n.snippetSampleProgress locale.i18n.snippetSampleQuote locale.i18n.snippetSampleReading locale.i18n.snippetSampleReady locale.i18n.snippetSampleSection locale.i18n.snippetSampleState locale.i18n.snippetSampleTitle locale.i18n.snippetSampleWriting locale.i18n.snippetProbeTitle locale.i18n.snippetProbeNote locale.i18n.snippetProbeH3 locale.i18n.snippetProbeH4 locale.i18n.snippetProbeH5 locale.i18n.snippetProbeH6 locale.i18n.snippetProbeLinksLead locale.i18n.snippetProbeLinksAnchor locale.i18n.snippetProbeListItem locale.i18n.snippetProbeListItem2 locale.i18n.snippetProbeTaskDone locale.i18n.snippetProbeTaskTodo locale.i18n.snippetProbeImageAlt locale.i18n.snippetProbeStrong locale.i18n.snippetProbeEm locale.i18n.snippetProbeMark locale.i18n.snippetProbeDel locale.i18n.snippetProbeU locale.i18n.snippetProbeKbd locale.i18n.snippetProbeTagA locale.i18n.snippetProbeTagB locale.i18n.snippetProbeTagC locale.i18n.snippetSave locale.i18n.snippetSaveDisabled locale.i18n.snippetSaveFirst locale.i18n.snippetSaved locale.i18n.snippetSearch locale.i18n.snippetSelect locale.i18n.snippetSource locale.i18n.snippetStudioTitle locale.i18n.snippetSubmission locale.i18n.snippetSubmissionHint locale.i18n.snippetLines locale.i18n.snippetTimeout locale.i18n.snippetTooLarge locale.i18n.snippetType locale.i18n.snippetTypeLocked locale.i18n.snippetUnavailable locale.i18n.snippetUsercssVars locale.i18n.snippetStackTitle locale.i18n.snippetStackCaptureSelection locale.i18n.snippetStackFoldToggle locale.i18n.snippetStackClearUnpinned locale.i18n.snippetStackUndo locale.i18n.snippetStackUndoRestored locale.i18n.snippetStackPinnedSuffix locale.i18n.snippetStackTabRaw locale.i18n.snippetStackTabKey locale.i18n.snippetStackTabAction locale.i18n.snippetStackEmptyHint locale.i18n.snippetStackAssembleJournal locale.i18n.snippetStackAssembleCurrent locale.i18n.snippetStackAssembleNewDoc locale.i18n.snippetStackAssembleCopy locale.i18n.snippetStackAssembleFailed locale.i18n.snippetDuplicate locale.i18n.snippetStatsTitle locale.i18n.snippetAlreadySaved locale.i18n.snippetRestoreUndone locale.i18n.snippetLoadFailed */
     const translations = locale.i18n || {};
     const t = (key) => translations[key] || key;
     let disposed = false;
@@ -806,7 +807,7 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
     stackContainer.hidden = true;
 
     const setAiElementsVisible = (visible) => {
-        [aiNote, aiProviderInfo, modeField, modeHint, contextOptions, contextSummary, prompt, aiConsent, aiActions, aiStatus].forEach((el) => {
+        [aiNote, aiProviderInfo, modeField, modeHint, contextOptions, contextSummary, aiContextGuide, prompt, aiConsent, aiActions, aiStatus].forEach((el) => {
             el.hidden = !visible;
         });
         if (!visible) {
@@ -896,10 +897,10 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
                 ? () => stack.fetchGleanFoldTree()
                 : undefined,
             onAiRefine: typeof stack?.onAiRefine === "function"
-                ? (item) => stack.onAiRefine(item)
+                ? (item, ctx) => stack.onAiRefine(item, ctx)
                 : undefined,
             onAiSynthesize: typeof stack?.onAiSynthesize === "function"
-                ? (items) => stack.onAiSynthesize(items)
+                ? (items, ctx) => stack.onAiSynthesize(items, ctx)
                 : undefined,
         });
     };
@@ -917,6 +918,16 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
         contextInputs[key] = input;
     }
     const contextSummary = node("p", "sw-studio__hint sw-studio__ai-context");
+    const aiContextGuide = node("div", "sw-studio__ai-context-guide");
+    const aiContextGuideText = node("span", "sw-studio__ai-context-guide-text");
+    const aiContextGuideBtn = node("button", "sw-studio__button is-quiet sw-studio__ai-context-guide-btn", t("snippetAIEnableCodeBtn"));
+    aiContextGuideBtn.type = "button";
+    aiContextGuideBtn.addEventListener("click", () => {
+        contextInputs.code.checked = true;
+        contextInputs.code.dispatchEvent(new (win.Event || Event)("change", {bubbles: true}));
+    });
+    aiContextGuide.append(aiContextGuideText, aiContextGuideBtn);
+    aiContextGuide.hidden = true;
     const modeSelect = select("snippetAIMode", [["generate", "snippetAIGenerate"], ["optimize", "snippetAIOptimize"], ["explain", "snippetAIExplain"], ["iterate", "snippetAIIterate"]]);
     const modeField = node("label", "sw-studio__ai-field", t("snippetAIMode"));
     modeField.appendChild(modeSelect);
@@ -930,8 +941,27 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
     aiConsentInput.type = "checkbox";
     aiConsent.append(aiConsentInput, doc.createTextNode(t("snippetAIConsent")));
     const aiActions = node("div", "sw-studio__ai-actions");
+    let aiThinkingController = null;
+    let activeAiThinkingHandle = null;
+    const aiThinkingHost = node("div", "sw-studio__ai-thinking");
+    aiThinkingHost.hidden = true;
+    const cleanupAIThinking = (restoreEmpty = false) => {
+        if (aiThinkingController) {
+            try { aiThinkingController.abort(); } catch (_) {}
+            aiThinkingController = null;
+        }
+        if (activeAiThinkingHandle) {
+            try { activeAiThinkingHandle.done(); } catch (_) {}
+            activeAiThinkingHandle = null;
+        }
+        aiThinkingHost.hidden = true;
+        if (restoreEmpty && !aiResult.value && !candidate) {
+            aiResult.hidden = true;
+            aiEmpty.hidden = false;
+        }
+    };
     const aiButton = action("snippetAISend", () => void generate(), "is-primary");
-    const cancelAIButton = action("snippetAICancel", () => { aiGeneration += 1; ai.cancel(); cancelAIButton.disabled = true; setAIStatus(t("snippetCancelled"), false, "cancelled"); updateAIActions(); });
+    const cancelAIButton = action("snippetAICancel", () => { aiGeneration += 1; ai.cancel(); cancelAIButton.disabled = true; setAIStatus(t("snippetCancelled"), false, "cancelled"); updateAIActions(); cleanupAIThinking(true); });
     cancelAIButton.disabled = true;
     aiButton.disabled = true;
     aiActions.append(aiButton, cancelAIButton);
@@ -998,7 +1028,7 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
             return;
         }
     });
-    aiResultPanel.append(aiResultHeader, aiDiffSummary, aiEmpty, aiResult, aiDiffPanel);
+    aiResultPanel.append(aiResultHeader, aiThinkingHost, aiDiffSummary, aiEmpty, aiResult, aiDiffPanel);
     const acceptButton = action("snippetAIAccept", () => {
         if (!candidate || candidate.mode === "explain" || busy) return;
         if (candidate.revision !== revision && !win.confirm(t("snippetAIStale"))) return;
@@ -1147,8 +1177,34 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
         const selectedCode = contextInputs.code.checked ? contextCode : "";
         const historyCount = modeSelect.value === "iterate" && contextInputs.history.checked ? aiHistory.slice(-6).length : 0;
         contextSummary.textContent = t("snippetAIContextSummary").replace("{bytes}", formatBytes(byteLength(selectedCode))).replace("{messages}", String(historyCount));
-        if (cancelAIButton.disabled) aiButton.disabled = busy || !aiConsentInput.checked || !prompt.value.trim()
-            || (requiresCode && !selectedCode.trim());
+        const missingCheckedCode = requiresCode && !contextInputs.code.checked;
+        const missingDraftCode = requiresCode && contextInputs.code.checked && !contextCode.trim();
+        const codeFieldLabel = contextInputs.code.closest(".sw-studio__consent");
+        codeFieldLabel?.classList.toggle("is-attention", missingCheckedCode);
+        if (!aside.contains(stackContainer) || stackContainer.hidden) {
+            if (missingCheckedCode) {
+                aiContextGuideText.textContent = t("snippetAIGuideSelectCode");
+                aiContextGuideBtn.hidden = false;
+                aiContextGuide.hidden = false;
+            } else if (missingDraftCode) {
+                aiContextGuideText.textContent = t("snippetAIGuideEmptyCode");
+                aiContextGuideBtn.hidden = true;
+                aiContextGuide.hidden = false;
+            } else {
+                aiContextGuide.hidden = true;
+            }
+        }
+        if (cancelAIButton.disabled) {
+            aiButton.disabled = busy || !aiConsentInput.checked || !prompt.value.trim()
+                || (requiresCode && !selectedCode.trim());
+            aiButton.title = missingCheckedCode
+                ? t("snippetAIGuideSelectCode")
+                : missingDraftCode
+                    ? t("snippetAIGuideEmptyCode")
+                    : !aiConsentInput.checked || !prompt.value.trim()
+                        ? t("snippetAIConsentRequired")
+                        : t("snippetAISend");
+        }
         candidateCopy.disabled = candidateExport.disabled = !candidate;
         candidateStale.hidden = !candidate || candidate.revision === revision;
     };
@@ -1166,7 +1222,7 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
     Object.values(contextInputs).forEach((input) => input.addEventListener("change", updateAIActions));
     aiConsentInput.addEventListener("change", updateAIActions);
     prompt.addEventListener("input", updateAIActions);
-    aside.append(aiHeader, stackContainer, aiNote, aiProviderInfo, modeField, modeHint, contextOptions, contextSummary, prompt, aiConsent, aiActions, aiStatus, aiResultPanel, candidateStale, candidateActions, acceptButton);
+    aside.append(aiHeader, stackContainer, aiNote, aiProviderInfo, modeField, modeHint, contextOptions, contextSummary, aiContextGuide, prompt, aiConsent, aiActions, aiStatus, aiResultPanel, candidateStale, candidateActions, acceptButton);
     const status = node("footer", "sw-studio__status", t("snippetLoading"));
     status.setAttribute("role", "status");
     status.setAttribute("aria-live", "polite");
@@ -1229,6 +1285,8 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
             return t("snippetGistFailed");
         }
         if (/restore-unverified/i.test(code)) return t("snippetRestorePending");
+        if (code === "ai_unavailable") return t("snippetAIUnavailable") || "思源 AI 未配置，请前往思源设置 → AI 配置。";
+        if (code === "ai_endpoint_unsupported") return t("snippetAIEndpointUnsupported") || t("snippetAIUnavailable");
         if (code === "permission_denied") return t("snippetAIPermissionDenied");
         if (code === "context_too_large") return t("snippetAIContextTooLarge");
         if (/backup|restore/i.test(code)) return t("snippetRestoreInvalid");
@@ -2367,6 +2425,7 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
         gistPreviewBox.replaceChildren();
         aiGeneration += 1;
         ai.cancel();
+        cleanupAIThinking(true);
         aiButton.disabled = true;
         cancelAIButton.disabled = true;
         candidate = null;
@@ -2991,18 +3050,53 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
         cancelAIButton.disabled = false;
         aiButton.textContent = t("snippetAISend");
         candidateCopy.disabled = candidateExport.disabled = true;
-        aiResult.hidden = false;
+        cleanupAIThinking(false);
+        aiResult.hidden = true;
         aiResultHeader.hidden = false;
         aiEmpty.hidden = true;
         aiResult.value = "";
         aiResultMeta.textContent = "";
         hideAIDiffPanel();
         setAIStatus(t("snippetAIGenerating"), false, "loading");
+        const thinkingCtrl = new AbortController();
+        aiThinkingController = thinkingCtrl;
+        aiThinkingHost.hidden = false;
+        activeAiThinkingHandle = mountLvAiThinkingCard(aiThinkingHost, {
+            scenario: "general",
+            compact: true,
+            title: t("snippetAIGenerating"),
+            cancelLabel: `⏹ ${t("snippetAICancel")}`,
+            signal: thinkingCtrl.signal,
+            onCancel: () => {
+                if (!cancelAIButton.disabled) cancelAIButton.click();
+            },
+        });
+        aiThinkingHost.scrollIntoView?.({block: "center", inline: "nearest"});
+        let firstTokenReceived = false;
         try {
-            const result = await ai.generate({type: captured.type, content: sourceContent, instruction, mode, history,
-                onToken: (token) => { if (!disposed && generation === aiGeneration) aiResult.value += token; },
+            const result = await ai.generate({type: captured.type, content: sourceContent, instruction, mode, history, signal: thinkingCtrl.signal,
+                onToken: (token) => {
+                    if (!disposed && generation === aiGeneration) {
+                        if (!firstTokenReceived) {
+                            firstTokenReceived = true;
+                            if (activeAiThinkingHandle) {
+                                try { activeAiThinkingHandle.done(); } catch (_) {}
+                                activeAiThinkingHandle = null;
+                            }
+                            aiThinkingHost.hidden = true;
+                            aiResult.hidden = false;
+                        }
+                        aiResult.value += token;
+                    }
+                },
             });
             if (disposed || generation !== aiGeneration) return;
+            if (activeAiThinkingHandle) {
+                try { activeAiThinkingHandle.done(); } catch (_) {}
+                activeAiThinkingHandle = null;
+            }
+            aiThinkingHost.hidden = true;
+            aiResult.hidden = false;
             candidate = {...result, mode, revision: startedRevision};
             aiResult.value = result.content;
             aiResultMeta.textContent = `${formatBytes(byteLength(result.content))} · ${lineLength(result.content)} ${t("snippetLines")}`;
@@ -3013,11 +3107,26 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
             renderAIDiff(iterateFromCandidate ? sourceContent : draft.content, iterateFromCandidate);
         } catch (error) {
             if (!disposed && generation === aiGeneration) {
+                cleanupAIThinking(!candidate);
+                if (error?.code === "unsupported") {
+                    error = Object.assign(new Error("ai_endpoint_unsupported"), {code: "ai_endpoint_unsupported"});
+                }
                 setAIStatus(errorText(error), false, "error");
                 aiButton.textContent = t("snippetAIRetry");
             }
         }
-        finally { if (!disposed && generation === aiGeneration) { cancelAIButton.disabled = true; updateAIActions(); } }
+        finally {
+            if (aiThinkingController === thinkingCtrl) aiThinkingController = null;
+            if (!disposed && generation === aiGeneration) {
+                if (activeAiThinkingHandle) {
+                    try { activeAiThinkingHandle.done(); } catch (_) {}
+                    activeAiThinkingHandle = null;
+                }
+                aiThinkingHost.hidden = true;
+                cancelAIButton.disabled = true;
+                updateAIActions();
+            }
+        }
     }
     function saveSnippetGroupStore(next) {
         const normalized = normalizeSnippetGroupStore(next);
@@ -4078,6 +4187,7 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
             importPlanDialog?.destroy?.();
             importPlanDialog = null;
             aiGeneration += 1;
+            cleanupAIThinking(false);
             session.draft = {...draft};
             session.baseline = baseline ? {...baseline} : null;
             clearTimeout(previewTimer);

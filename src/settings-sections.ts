@@ -7,8 +7,6 @@
 import {Dialog, getAllTabs, openTab} from "siyuan";
 import {showMessage, lvNotify, lvEcosystem, lvLaunchpad} from "./libs/lv-notice-kit";
 import {mountPlatformDialogCloseHint, mountPlatformDialogMobileClose, mountPlatformDialogTitleWrap} from "./platform-dom";
-// DL2 阶段0：生态统一「外观与动效」偏好分组（庆祝/吉祥物/光效可关）
-import {mountLvUiPrefsSection} from "./libs/lv-ui-prefs";
 import {logger} from "./logger";
 import {DIALOG_WIDTH_MIN_PX, DIALOG_WIDTH_MAX_PX, DIALOG_HEIGHT_MIN_PX, DIALOG_HEIGHT_MAX_PX, PANEL_SCALE_MIN, PANEL_SCALE_MAX, THUMB_HEIGHT_MIN_PX, THUMB_HEIGHT_MAX_PX, MOBILE_THUMB_HEIGHT_MIN_PX, MOBILE_THUMB_HEIGHT_MAX_PX, MOBILE_COLUMNS_SINGLE, MOBILE_COLUMNS_DOUBLE, MOBILE_COLUMNS_AUTO, DOCUMENT_SETS_KEY, DOCUMENT_SET_IMPORT_MAX_BYTES, QUICK_ACTIONS_MAX, MRU_KEY, HISTORY_KEY, CLOSED_HISTORY_KEY, PINNED_KEY, FAV_KEY, FAV_GROUPS_KEY, SETTINGS_KEY, QUICK_ACTIONS_KEY, QUICK_ACTIONS_DEFAULTS_KEY, HOME_STATE_KEY, THUMB_CACHE_KEY, FAV_COLLAPSED_KEY, RELATED_SWR_KEY, RSS_READ_KEY, SCHEMA_VERSION_KEY, SNIPPET_RECYCLE_KEY, SNIPPET_GROUPS_KEY, DEFAULT_HOTKEY, SECOND_PANEL_HOTKEY} from "./constants";
 import {formatStorageBytes, buildStorageUsageSummary} from "./settings-model";
@@ -20,7 +18,7 @@ import {createDefaultFloatingBallConfig, normalizeFloatingBallConfig, selectFloa
 import {selectFloatingBallMoreActions} from "./floating-ball-panel";
 import {FLOATING_BALL_SETTINGS_MAX_BYTES, buildFloatingBallSettingsRows, updateFloatingBallAction, moveFloatingBallAction, removeFloatingBallAction, restoreFloatingBallDefaults, serializeFloatingBallSettings, importFloatingBallSettings, checkFloatingBallSettingsBudget} from "./floating-ball-settings-model";
 import type {PanelSizeMode, HomeSizeMode, StudioSizeMode} from "./constants";
-import type {ISwSettings, IFavoriteItem, IQuickAction, IQuickActionPickerCandidate, QuickActionSupport, QuickActionTarget, SortBy, QuickActionDisplay, HomePalette, DockDisplay, SidebarLayout} from "./index";
+import type {ISwSettings, IFavoriteItem, IQuickAction, IQuickActionPickerCandidate, QuickActionSupport, QuickActionTarget, SortBy, QuickActionDisplay, HomePalette, DockDisplay, SidebarLayout} from "./runtime/plugin-types";
 declare module "./document-sets" {
     export function normalizeDocumentSets(value: unknown, max?: number): {schemaVersion: number; sets: unknown[]; changed: boolean};
     export function createDocumentSet(name: string, entries: unknown[], options?: Record<string, unknown>): any;
@@ -221,10 +219,6 @@ export function buildSettingsAppearance(this: SettingsSectionsHost, s: ISwSettin
                     })),
             ),
         );
-        // DL2 阶段0：生态「外观与动效」偏好（庆祝/吉祥物/光效，生态键唯一写入方）
-        const lvUiPrefsHost = makeSettingEl("div");
-        mountLvUiPrefsSection(lvUiPrefsHost);
-        wrapper.append(this.settingGroupCard(lvUiPrefsHost));
         return wrapper;
     }
 
@@ -911,6 +905,7 @@ export function buildFavGroupRowActions(this: SettingsSectionsHost, name: string
                     </div>`,
                     width: "min(400px, 92vw)"
                 });
+                dialog.element.classList.add("sw-dialog-host");
                 const input = dialog.element.querySelector("input") as HTMLInputElement;
                 const btns = dialog.element.querySelectorAll("button");
                 input?.focus();
@@ -1591,7 +1586,7 @@ export function buildSettingsDocumentSets(this: SettingsSectionsHost, ): HTMLEle
                         restore.removeAttribute("aria-busy");
                         return;
                     }
-                    const execution = await runDocumentSetRestore(orderDocumentSetRestoreEntries(candidates), async (rootId, entry) => {
+                    const execution = await runDocumentSetRestore(orderDocumentSetRestoreEntries(candidates), async (rootId: string, entry: unknown) => {
                         if (this.isUnloading || !restore.isConnected) return false;
                         return this.isMobile
                             ? await this.mobileOpenDoc(rootId)

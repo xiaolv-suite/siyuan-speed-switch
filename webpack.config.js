@@ -73,7 +73,7 @@ module.exports = (env, argv) => {
             __PLUGIN_VERSION__: JSON.stringify(pluginManifest.version),
         }),
         new MiniCssExtractPlugin({
-            filename: production ? "dist/index.css" : "index.css",
+            filename: "index.css",
         }),
     ];
     if (production) {
@@ -91,20 +91,20 @@ module.exports = (env, argv) => {
         plugins.push(
             new CopyPlugin({
                 patterns: [
-                    ...packageImagePatterns,
+                    ...packageImagePatterns.map((p) => ({...p, to: "./"})),
                     // Normalize documentation line endings at the copy boundary so
                     // Windows and Ubuntu release runners produce identical archives.
                     // ROADMAP.md stays a repo-only dev doc (D-219); the interface
                     // map SVG ships because the market renders it from README.
-                    {from: "README*.md", to: "./dist/", transform: (content) => content.toString().replace(/\r\n?/g, "\n")},
-                    {from: "docs/*.svg", to: "./dist/docs/[name][ext]"},
-                    {from: "docs/component-store-guide.md", to: "./dist/docs/component-store-guide.md", transform: (content) => content.toString().replace(/\r\n?/g, "\n")},
-                    {from: "docs/agent-document-context-m2.md", to: "./dist/docs/agent-document-context-m2.md", transform: (content) => content.toString().replace(/\r\n?/g, "\n")},
-                    {from: "plugin.json", to: "./dist/", transform: (content) => content.toString().replace(/\r\n?/g, "\n")},
+                    {from: "README*.md", to: "./", transform: (content) => content.toString().replace(/\r\n?/g, "\n")},
+                    {from: "docs/*.svg", to: "./docs/[name][ext]"},
+                    {from: "docs/component-store-guide.md", to: "./docs/component-store-guide.md", transform: (content) => content.toString().replace(/\r\n?/g, "\n")},
+                    {from: "docs/agent-document-context-m2.md", to: "./docs/agent-document-context-m2.md", transform: (content) => content.toString().replace(/\r\n?/g, "\n")},
+                    {from: "plugin.json", to: "./", transform: (content) => content.toString().replace(/\r\n?/g, "\n")},
                     // Ship locale files minified: sources stay pretty for diffs,
                     // the archive only needs JSON.parse-able content. This buys
                     // back real bytes against the 300 KiB hard cap.
-                    {from: "src/i18n/", to: "./dist/i18n/", transform: (content) => JSON.stringify(JSON.parse(content.toString("utf8")))},
+                    {from: "src/i18n/", to: "./i18n/", transform: (content) => JSON.stringify(JSON.parse(content.toString("utf8")))},
                 ],
             }),
         );
@@ -121,13 +121,21 @@ module.exports = (env, argv) => {
                     compressionLevel: 9,
                     forceZip64Format: false,
                 },
-                include: [/dist/],
-                pathMapper: (assetPath) => {
-                    if (assetPath === "dist/snippet-studio.js") return assetPath;
-                    return assetPath.replace("dist/", "");
-                },
+                exclude: [/package\.zip$/],
             }),
         );
+        plugins.push({
+            apply(compiler) {
+                compiler.hooks.afterEmit.tap("MovePackageZipToRoot", () => {
+                    const emittedZip = path.resolve(__dirname, "dist", "package.zip");
+                    const rootZip = path.resolve(__dirname, "package.zip");
+                    if (fs.existsSync(emittedZip)) {
+                        fs.copyFileSync(emittedZip, rootZip);
+                        fs.rmSync(emittedZip, {force: true});
+                    }
+                });
+            },
+        });
     } else {
         plugins.push(
             new CopyPlugin({
@@ -145,16 +153,11 @@ module.exports = (env, argv) => {
         devtool: production ? false : "eval-source-map",
         output: {
             filename: "[name].js",
-            // T-6861：工作室按需加载，但 chunk 名称必须稳定，才能被
-            // plugin.json 的发布资源契约精确登记并参与包体审计。这个 chunk
-            // 保留在发布包的 dist/ 子路径。思源以内联方式执行插件入口，
-            // document.currentScript 不可靠，须明确指定插件资源基址。
-            // T-7018：chunk 名由各动态导入的 webpackChunkName 魔法注释显式声明
-            //（tests/webpack-chunk-names.test.cjs 钉住唯一性与安全性）；
-            // 既有工作室 chunk 由 src/index.ts 的魔法注释钉住为 "snippet-studio"。
-            chunkFilename: "dist/[name].js",
+            // T-7018 / 布局统一：生产产物全部以 dist/ 为根相对落点，package.zip 与 dist/ 1:1 同构；
+            // chunkFilename 统一为 "[name].js"（由 webpackChunkName 魔法注释显式命名），避免直接挂载 dist/ 时 404。
+            chunkFilename: "[name].js",
             publicPath: `/plugins/${pluginManifest.name}/`,
-            path: path.resolve(__dirname),
+            path: production ? path.resolve(__dirname, "dist") : path.resolve(__dirname),
             libraryTarget: "commonjs2",
             library: {
                 type: "commonjs2",
@@ -164,7 +167,7 @@ module.exports = (env, argv) => {
             siyuan: "siyuan",
         },
         entry: {
-            [production ? "dist/index" : "index"]: "./src/index.ts",
+            index: "./src/index.ts",
         },
         optimization: {
             minimize: production,

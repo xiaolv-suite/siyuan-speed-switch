@@ -998,6 +998,7 @@ export class FloatingBallUi implements FloatingBallUiController {
             this.pointerInside = false;
         }
         this.root.classList.toggle("sw__fab--hidden", inert);
+        this.recovery?.classList.toggle("sw__fab--hidden", inert);
         this.root.setAttribute("aria-hidden", String(inert));
         this.root.toggleAttribute("inert", inert);
         this.root.inert = inert;

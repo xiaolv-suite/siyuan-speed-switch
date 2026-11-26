@@ -65,15 +65,22 @@ function applyWorkbenchScenePreset(state, presetId, device = "desktop") {
     const sourceState = state && typeof state === "object" ? state : {instances: [], layouts: {}};
     const matched = WORKBENCH_SCENE_PRESETS.find((p) => p.id === presetId) || WORKBENCH_SCENE_PRESETS[0];
 
+    const sourceInstances = Array.isArray(sourceState.instances) ? sourceState.instances : [];
+    const sourceInstanceMap = new Map(sourceInstances.map((inst) => [inst?.instanceId, inst]));
     const instances = [];
     const layoutEntries = [];
+    const presetIds = new Set();
     matched.widgets.forEach((item, index) => {
         const {moduleId, ...layout} = item;
+        presetIds.add(moduleId);
+        const existing = sourceInstanceMap.get(moduleId);
         instances.push({
             instanceId: moduleId,
             moduleId,
             enabled: true,
-            config: moduleId === "external-local-time" ? {showSeconds: "否"} : {},
+            config: existing && existing.config && typeof existing.config === "object"
+                ? {...existing.config}
+                : (moduleId === "external-local-time" ? {showSeconds: "否"} : {}),
         });
         layoutEntries.push({
             instanceId: moduleId,
@@ -81,6 +88,22 @@ function applyWorkbenchScenePreset(state, presetId, device = "desktop") {
             collapsed: false,
             ...(targetDevice === "mobile" ? {x: 0, y: index * 3, w: 12} : {}),
         });
+    });
+
+    // R9: 保留其他端（移动端/侧栏）独有布局引用的组件实例，防止 normalizeHomeState 误抹
+    const otherDeviceIds = new Set();
+    ["desktop", "sidebar", "mobile"].forEach((d) => {
+        if (d === targetDevice) return;
+        const entries = Array.isArray(sourceState.layouts?.[d]) ? sourceState.layouts[d] : [];
+        entries.forEach((entry) => {
+            if (entry && entry.instanceId) otherDeviceIds.add(entry.instanceId);
+        });
+    });
+    sourceInstances.forEach((inst) => {
+        if (inst && inst.instanceId && otherDeviceIds.has(inst.instanceId) && !presetIds.has(inst.instanceId)) {
+            presetIds.add(inst.instanceId);
+            instances.push(inst);
+        }
     });
 
     const nextLayouts = {...(sourceState.layouts || {})};
@@ -1161,5 +1184,82 @@ function resolveWidgetRefreshInterval(config, defaultMinutes = 15) {
     return {minutes: clamped, ms: clamped * 60 * 1000};
 }
 
+function getSecretConfigKeysByModule(definitions = []) {
+    const modules = registerModules(Array.isArray(definitions) ? definitions : []);
+    const map = new Map();
+    modules.forEach((mod) => {
+        if (!mod || !Array.isArray(mod.configSchema)) return;
+        const secretKeys = mod.configSchema
+            .filter((field) => field && field.type === "secret" && typeof field.key === "string" && field.key)
+            .map((field) => field.key);
+        if (secretKeys.length > 0) {
+            map.set(mod.moduleId, secretKeys);
+        }
+    });
+    return map;
+}
+
+function sanitizeHomeStateSecrets(homeState, definitions = []) {
+    if (!homeState || typeof homeState !== "object") return homeState ?? null;
+    const secretMap = getSecretConfigKeysByModule(definitions);
+    const cloned = {
+        ...homeState,
+        ...(Array.isArray(homeState.instances) ? {
+            instances: homeState.instances.map((inst) => {
+                if (!inst || typeof inst !== "object") return inst;
+                const config = inst.config && typeof inst.config === "object" && !Array.isArray(inst.config)
+                    ? {...inst.config}
+                    : {};
+                const secretKeys = secretMap.get(inst.moduleId) || [];
+                for (const key of secretKeys) {
+                    if (Object.prototype.hasOwnProperty.call(config, key)) {
+                        config[key] = "";
+                    }
+                }
+                return {...inst, config};
+            }),
+        } : {}),
+    };
+    return cloned;
+}
+
+function restoreHomeStateSecrets(incomingHomeState, existingHomeState, definitions = []) {
+    if (!incomingHomeState || typeof incomingHomeState !== "object") return incomingHomeState;
+    if (!existingHomeState || typeof existingHomeState !== "object" || !Array.isArray(existingHomeState.instances)) {
+        return incomingHomeState;
+    }
+    const secretMap = getSecretConfigKeysByModule(definitions);
+    const existingByInstanceId = new Map();
+    const existingByModuleId = new Map();
+    existingHomeState.instances.forEach((inst) => {
+        if (!inst || typeof inst !== "object") return;
+        if (inst.instanceId) existingByInstanceId.set(inst.instanceId, inst);
+        if (inst.moduleId && !existingByModuleId.has(inst.moduleId)) existingByModuleId.set(inst.moduleId, inst);
+    });
+    if (!Array.isArray(incomingHomeState.instances)) return incomingHomeState;
+    return {
+        ...incomingHomeState,
+        instances: incomingHomeState.instances.map((inst) => {
+            if (!inst || typeof inst !== "object") return inst;
+            const secretKeys = secretMap.get(inst.moduleId) || [];
+            if (secretKeys.length === 0) return inst;
+            const existing = existingByInstanceId.get(inst.instanceId) || existingByModuleId.get(inst.moduleId);
+            const existingConfig = existing?.config && typeof existing.config === "object" ? existing.config : null;
+            if (!existingConfig) return inst;
+            const config = inst.config && typeof inst.config === "object" && !Array.isArray(inst.config)
+                ? {...inst.config}
+                : {};
+            for (const key of secretKeys) {
+                const incomingVal = typeof config[key] === "string" ? config[key] : "";
+                const existingVal = typeof existingConfig[key] === "string" ? existingConfig[key] : "";
+                if (!incomingVal && existingVal) {
+                    config[key] = existingVal;
+                }
+            }
+            return {...inst, config};
+        }),
+    };
+}
+
 module.exports = {
-    LAYOUT_SIZES, REFRESH_INTERVAL_PRESETS, resolveWidgetRefreshInterval, LIFE_HEARTBEAT_MODULE_IDS, isLifeHeartbeatModule, HOME_TILE_MATERIALS, HOME_TILE_MATERIAL_FALLBACK, resolveHomeTileMaterial, HOME_TILE_DEFAULT_SIZES, resolveHomeTileDefaultSize, enforceHomeHeroConstraint, moveLayoutEntry, moveLayoutEntryByOffset, computeEdgeScrollDelta, HOME_SCHEMA_VERSION, HOME_DEFAULTS_VERSION, HOME_DEFAULT_WIDGETS, HOME_DEFAULT_MODULE_IDS, resolveHomeStarterSize, resolveHomeStarterLayout, normalizeHomeDefaultsVersion, prepareHomeDefaultState, DEVICES, DEFAULT_MODULES, BUILTIN_EXTENSION_MODULES, AVAILABILITY_LEVELS, MOBILE_HOME_SIZE, resolveMobileHomeSize, normalizeMobileLayout, normalizeProtocolVersion, normalizeClickCommand, normalizeHomepage, normalizeRefreshOn, normalizeIconId, normalizeIsoDate, normalizeConfigSchema, normalizeModuleDefinition, registerModules, modulesForDevice, getModuleDefinition, normalizeInstances, normalizeLayout, normalizeHomeState, migrateHomeState, resolveLayoutConflicts, QUICK_CAPTURE_ACTION_PREFIX, normalizeQuickCaptureConfig, buildQuickCaptureAction, parseQuickCaptureAction, buildQuickCaptureInitialText, normalizePluginCommandsConfig, buildPluginCommandsSnapshot, WORKBENCH_SCENE_PRESETS, applyWorkbenchScenePreset};
+    LAYOUT_SIZES, REFRESH_INTERVAL_PRESETS, resolveWidgetRefreshInterval, LIFE_HEARTBEAT_MODULE_IDS, isLifeHeartbeatModule, HOME_TILE_MATERIALS, HOME_TILE_MATERIAL_FALLBACK, resolveHomeTileMaterial, HOME_TILE_DEFAULT_SIZES, resolveHomeTileDefaultSize, enforceHomeHeroConstraint, moveLayoutEntry, moveLayoutEntryByOffset, computeEdgeScrollDelta, HOME_SCHEMA_VERSION, HOME_DEFAULTS_VERSION, HOME_DEFAULT_WIDGETS, HOME_DEFAULT_MODULE_IDS, resolveHomeStarterSize, resolveHomeStarterLayout, normalizeHomeDefaultsVersion, prepareHomeDefaultState, DEVICES, DEFAULT_MODULES, BUILTIN_EXTENSION_MODULES, AVAILABILITY_LEVELS, MOBILE_HOME_SIZE, resolveMobileHomeSize, normalizeMobileLayout, normalizeProtocolVersion, normalizeClickCommand, normalizeHomepage, normalizeRefreshOn, normalizeIconId, normalizeIsoDate, normalizeConfigSchema, normalizeModuleDefinition, registerModules, modulesForDevice, getModuleDefinition, normalizeInstances, normalizeLayout, normalizeHomeState, migrateHomeState, resolveLayoutConflicts, QUICK_CAPTURE_ACTION_PREFIX, normalizeQuickCaptureConfig, buildQuickCaptureAction, parseQuickCaptureAction, buildQuickCaptureInitialText, normalizePluginCommandsConfig, buildPluginCommandsSnapshot, WORKBENCH_SCENE_PRESETS, applyWorkbenchScenePreset, sanitizeHomeStateSecrets, restoreHomeStateSecrets};

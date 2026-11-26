@@ -610,9 +610,50 @@ function resolveActiveFragmentText(item, mode = "active") {
     return item.rawFragment || item.keyFragment || item.actionFragment;
 }
 
+function demoteDiaryZoneHeadings(text) {
+    if (typeof text !== "string" || !text) return "";
+    const lines = text.split("\n");
+    let inFence = false;
+    let fenceChar = "";
+    return lines
+        .map((line) => {
+            const fenceMatch = line.match(/^\s{0,3}(```+|~~~+)/);
+            if (fenceMatch) {
+                const tokenChar = fenceMatch[1][0];
+                if (!inFence) {
+                    inFence = true;
+                    fenceChar = tokenChar;
+                } else if (fenceChar === tokenChar) {
+                    inFence = false;
+                    fenceChar = "";
+                }
+                return line;
+            }
+            if (inFence) return line;
+            return line.replace(/^([ \t]{0,3})#{1,4}([ \t]+\S.*)$/, "$1#####$2");
+        })
+        .join("\n");
+}
+
+function packageSnippetStackForDiaryZone(assembled, lifeLogAttrs, attachIalFn) {
+    const rawMd = typeof assembled === "string"
+        ? assembled
+        : String(assembled?.markdown || "");
+    const safeInner = demoteDiaryZoneHeadings(rawMd)
+        .replace(/^([ \t]*)\}\}\}([ \t]*)$/gm, "$1\u200b}}}$2")
+        .trim();
+    if (!safeInner) return "";
+    const superblock = `{{{row\n${safeInner}\n}}}`;
+    return typeof attachIalFn === "function"
+        ? attachIalFn(superblock, lifeLogAttrs || {})
+        : superblock;
+}
+
 /**
  * 将暂存栈按序批量组装为带 `((sourceBlockId "来源锚点"))` 血缘反链与
  * `custom-lv-source-block` / `custom-lv-glean-id` 属性的思源结构化 Markdown。
+ * 当 `options.diaryZone === true` 时，自动降级章节标题至 `#####`（H5）以内，
+ * 绝不输出 `#`~`####` 破坏今日日记 `#### 🐴 小驴记录` 折叠区边界。
  */
 function assembleSnippetStackMarkdown(stack, options = {}) {
     const current = normalizeSnippetStack(stack);
@@ -629,6 +670,7 @@ function assembleSnippetStackMarkdown(stack, options = {}) {
 
     const mode = ["full", "active", "raw", "key", "action"].includes(options.mode) ? options.mode : "full";
     const includeBlockAttrs = options.includeBlockAttrs !== false;
+    const diaryZone = Boolean(options.diaryZone);
     const headingTitle = cleanSingleLine(options.headingTitle || "", SNIPPET_STACK_TITLE_MAX);
 
     let backlinkCount = 0;
@@ -636,7 +678,8 @@ function assembleSnippetStackMarkdown(stack, options = {}) {
     const blocks = [];
 
     if (headingTitle) {
-        blocks.push(`## ${headingTitle}`);
+        const cleanHeading = diaryZone ? headingTitle.replace(/^#+\s*/, "") : headingTitle;
+        blocks.push(`${diaryZone ? "#####" : "##"} ${cleanHeading}`);
     }
 
     selectedItems.forEach((item, idx) => {
@@ -651,9 +694,11 @@ function assembleSnippetStackMarkdown(stack, options = {}) {
         if (ial) blockAttrCount += 1;
 
         if (mode === "full") {
-            const sectionLines = [`### ${idx + 1}. ${item.title}`];
+            const sectionPrefix = diaryZone ? "#####" : "###";
+            const safeTitle = diaryZone ? item.title.replace(/^#+\s*/, "") : item.title;
+            const sectionLines = [`${sectionPrefix} ${idx + 1}. ${safeTitle}`];
             if (item.keyFragment && item.keyFragment !== item.rawFragment) {
-                sectionLines.push(item.keyFragment);
+                sectionLines.push(diaryZone ? demoteDiaryZoneHeadings(item.keyFragment) : item.keyFragment);
             }
             if (item.rawFragment) {
                 const quoteBody = item.rawFragment
@@ -665,7 +710,7 @@ function assembleSnippetStackMarkdown(stack, options = {}) {
                 sectionLines.push(`> 来源依据：${backlink}`);
             }
             if (item.actionFragment) {
-                sectionLines.push(item.actionFragment);
+                sectionLines.push(diaryZone ? demoteDiaryZoneHeadings(item.actionFragment) : item.actionFragment);
             }
             if (ial) {
                 sectionLines.push(ial);
@@ -674,7 +719,8 @@ function assembleSnippetStackMarkdown(stack, options = {}) {
             return;
         }
 
-        const body = resolveActiveFragmentText(item, mode);
+        const rawBody = resolveActiveFragmentText(item, mode);
+        const body = diaryZone ? demoteDiaryZoneHeadings(rawBody) : rawBody;
         const paragraph = backlink ? `${body} ${backlink}` : body;
         blocks.push(ial ? `${paragraph}\n${ial}` : paragraph);
     });
@@ -855,6 +901,8 @@ module.exports = {
     switchSnippetStackFragmentTab,
     removeSnippetStackItem,
     clearSnippetStack,
+    demoteDiaryZoneHeadings,
+    packageSnippetStackForDiaryZone,
     assembleSnippetStackMarkdown,
     analyzeSelectionContext,
     rankActionsBySelectionContext,

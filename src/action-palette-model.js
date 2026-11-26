@@ -78,10 +78,10 @@ function getBuiltinActionDefinitions(i18n) {
         return t[keyWithPrefix] || t[k] || defaultLabel || k;
     };
     return [
-        {id: "open-active", section: s.OPEN, label: lk("openActive"), icon: "iconFile", shortcut: "↵", supportedKinds: ALL_KINDS, platforms: ALL_PLATFORMS},
-        {id: "open-right", section: s.OPEN, label: lk("openRight"), icon: "iconLayoutRight", shortcut: "⌘↵", supportedKinds: ALL_KINDS, platforms: DESKTOP_ONLY},
-        {id: "open-bottom", section: s.OPEN, label: lk("openBottom"), icon: "iconLayoutBottom", shortcut: "⌥↵", supportedKinds: ALL_KINDS, platforms: DESKTOP_ONLY},
-        {id: "open-preview", section: s.OPEN, label: lk("openPreview"), icon: "iconEye", shortcut: "⇧↵", supportedKinds: ["doc", "favorite", "closed"], platforms: DESKTOP_ONLY},
+        {id: "open-active", section: s.OPEN, label: lk("openInActive", t.openActive), icon: "iconFile", shortcut: "↵", supportedKinds: ALL_KINDS, platforms: ALL_PLATFORMS},
+        {id: "open-right", section: s.OPEN, label: lk("openInRight", t.openRight), icon: "iconLayoutRight", shortcut: "⌘↵", supportedKinds: ALL_KINDS, platforms: DESKTOP_ONLY},
+        {id: "open-bottom", section: s.OPEN, label: lk("openInBottom", t.openBottom), icon: "iconLayoutBottom", shortcut: "⌥↵", supportedKinds: ALL_KINDS, platforms: DESKTOP_ONLY},
+        {id: "open-preview", section: s.OPEN, label: lk("openInPreview", t.openPreview), icon: "iconEye", shortcut: "⇧↵", supportedKinds: ["doc", "favorite", "closed"], platforms: DESKTOP_ONLY},
         {id: "open-in-reader", section: s.OPEN, label: lk("openInReader"), icon: "iconBook", shortcut: "⌥R", supportedKinds: ALL_KINDS, platforms: ALL_PLATFORMS},
         {id: "open-in-media", section: s.OPEN, label: lk("openInMedia"), icon: "iconVideo", shortcut: "⌥V", supportedKinds: ALL_KINDS, platforms: ALL_PLATFORMS},
         {id: "glean-clip", section: s.RECOMMENDED, label: lk("gleanClip"), icon: "iconBook", shortcut: "⌥G", supportedKinds: ALL_KINDS, platforms: ALL_PLATFORMS},

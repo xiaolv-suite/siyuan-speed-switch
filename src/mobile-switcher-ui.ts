@@ -12,13 +12,14 @@ import {logger} from "./logger";
 import {clampOversizedIcons} from "./util";
 import {bindDocSearchFilter, disposeDocSearchSession, hasDocSearchFilter} from "./doc-search-ui";
 import {groupTabsByMode} from "./util";
+import {getSiyuan} from "./types";
 import {resolveSearchNotebookId} from "./search-model";
 import {encodeSurfaceFocusSource} from "./platform-surface-model";
 import {FAB_HIDE_DELAY_MS, THUMB_BATCH_MOBILE} from "./constants";
 import type {
     IFavoriteItem, IGroupedTab, IOverlayClose, ISwSettings, PlatformSurface, PlatformSurfaceChromeOptions, PlatformSurfaceContext, PlatformSurfaceLabels,
     ITabGroupRenderCtx, SortBy,
-} from "./index";
+} from "./runtime/plugin-types";
 
 type Tab = ReturnType<typeof getAllTabs>[number];
 
@@ -93,6 +94,7 @@ export function openMobileSwitcherDialog(this: MobileSwitcherUiHost, tabs: Tab[]
         const releaseFab = this.suspendFABForDialog();
         switcherRelease.fn = () => { releaseFab(); };
         dialog.element.setAttribute("data-prevent-swipe", "true");
+        dialog.element.classList.add("sw-dialog-host", "sw-dialog-host--mobile-switcher");
         dialog.element.querySelector<HTMLElement>(".b3-dialog__container")?.classList.add("sw-mobile-switcher-dialog");
         const mobileBody = dialog.element.querySelector<HTMLElement>(".sw__mobile");
         if (mobileBody) mobileBody.setAttribute("data-prevent-swipe", "true");
@@ -327,33 +329,26 @@ export function openMobileSwitcherDialog(this: MobileSwitcherUiHost, tabs: Tab[]
             this.showMobileFavSheet(dialog, closeOverlay, () => renderMobileList(), event.currentTarget as HTMLElement);
         });
 
-        // 移动端底部主导航绑定（≤4项：切片库 / 搜索 / 收藏 / 设置，触控目标 ≥44px，带 haptic 反馈）
-        const navStack = dialog.element.querySelector<HTMLElement>(".sw__mobile-nav-stack");
-        navStack?.addEventListener("click", () => {
+        // 移动端单层合并底栏导航事件委托（refreshMobileSurface 重绘快捷栏后仍持续生效）
+        const bottomBar = dialog.element.querySelector<HTMLElement>(".sw__quick-actions");
+        bottomBar?.addEventListener("click", (event) => {
+            const target = (event.target as HTMLElement | null)?.closest<HTMLElement>(".sw__mobile-nav-item");
+            if (!target) return;
+            const nav = target.dataset.nav || "";
             lvLaunchpad.haptic(10);
-            dialog.destroy();
-            (this as any).openSnippetStackDialog?.();
-        });
-
-        const navSearch = dialog.element.querySelector<HTMLElement>(".sw__mobile-nav-search");
-        navSearch?.addEventListener("click", () => {
-            lvLaunchpad.haptic(10);
-            searchInput?.focus();
-            dialog.element.querySelectorAll(".sw__mobile-nav-item").forEach((el) => el.classList.remove("is-active"));
-            navSearch.classList.add("is-active");
-        });
-
-        const navFav = dialog.element.querySelector<HTMLElement>(".sw__mobile-nav-fav");
-        navFav?.addEventListener("click", (event) => {
-            lvLaunchpad.haptic(10);
-            this.showMobileFavSheet(dialog, closeOverlay, () => renderMobileList(), event.currentTarget as HTMLElement);
-        });
-
-        const navSettings = dialog.element.querySelector<HTMLElement>(".sw__mobile-nav-settings");
-        navSettings?.addEventListener("click", () => {
-            lvLaunchpad.haptic(10);
-            dialog.destroy();
-            this.openSetting(undefined, "switcher");
+            if (nav === "stack") {
+                dialog.destroy();
+                (this as any).openSnippetStackDialog?.();
+            } else if (nav === "search") {
+                searchInput?.focus();
+                bottomBar.querySelectorAll(".sw__mobile-nav-item").forEach((el) => el.classList.remove("is-active"));
+                target.classList.add("is-active");
+            } else if (nav === "favorites") {
+                this.showMobileFavSheet(dialog, closeOverlay, () => renderMobileList(), target);
+            } else if (nav === "settings") {
+                dialog.destroy();
+                this.openSetting(undefined, "switcher");
+            }
         });
         // 手机端不自动聚焦搜索框：避免一打开就弹出输入法，需要搜索时点击输入框
     }
@@ -507,6 +502,7 @@ export function bindMobileSwitcherToolbarActions(this: MobileSwitcherUiHost,
             groupList.setAttribute("aria-label", this.i18n.groupModeTitle);
             const groupOptions: Array<{value: TabGroupMode, label: string}> = [
                 {value: "notebook", label: this.i18n.groupNotebook},
+                {value: "path", label: this.i18n.groupPath || "按路径"},
                 {value: "favorites", label: this.i18n.groupFavorites},
                 {value: "createdMonth", label: this.i18n.groupCreatedMonth},
                 {value: "none", label: this.i18n.groupNone},
@@ -767,7 +763,12 @@ export function renderMobileList(this: MobileSwitcherUiHost, scrollElement: HTML
                 isFavorite: (key: string) => favorites.has(key),
                 favoriteGroupOf: (key: string) => favoriteGroupByKey.get(key) || "",
                 favoriteGroupOrder: this.getFavGroupRegistry(),
+                plugins: getSiyuan()?.ws?.app?.plugins,
                 notebookIdOf: (tab: Tab) => resolveSearchNotebookId(tab as unknown) || "",
+                pathOf: (tab: Tab) => {
+                    const t = tab as unknown as {path?: string; hPath?: string; model?: {path?: string; hPath?: string; editor?: {protyle?: {path?: string}}}};
+                    return t.path || t.hPath || t.model?.path || t.model?.hPath || t.model?.editor?.protyle?.path || "";
+                },
                 notebookNameOf: (id: string) => notebookMap.get(id) || "",
                 notebookOrder: (this.notebookListCache || []).map((nb) => nb.id),
                 createdOf: (key: string) => this.createdByIdCache[key] || "",
@@ -776,6 +777,8 @@ export function renderMobileList(this: MobileSwitcherUiHost, scrollElement: HTML
                     ungroupedFavorite: this.i18n.groupUngroupedFavorite,
                     unfavorited: this.i18n.groupUnfavorited,
                     unknownMonth: this.i18n.groupUnknownMonth,
+                    rootPath: this.i18n.groupRootPath || "根目录",
+                    pluginGroup: this.i18n.groupPluginPages,
                 },
             });
             defs.forEach((def) => {
@@ -823,8 +826,15 @@ export function renderMobileList(this: MobileSwitcherUiHost, scrollElement: HTML
 
     // 构造手机端分组卡片网格：根据 settings.mobileColumns 决定单列/双列/自适应
 
-/** body 级分组操作 sheet 的活跃关闭器注册表：切换器销毁（Esc/路由切换）时级联收敛（2026-11-21 走查修复） */
+/** body 级分组/收藏操作 sheet 的活跃关闭器注册表：切换器销毁（Esc/路由切换）时级联收敛（2026-11-21 走查修复） */
 const activeGroupSheetClosers = new Set<() => void>();
+
+export function registerMobileSheetCloser(closer: () => void): () => void {
+    activeGroupSheetClosers.add(closer);
+    return () => {
+        activeGroupSheetClosers.delete(closer);
+    };
+}
 
 export function openMobileGroupActions(this: MobileSwitcherUiHost, groupName: string, items: IFavoriteItem[], onChanged: () => void, returnFocus?: HTMLElement | null) {
         const overlay = document.createElement("div");
@@ -841,24 +851,29 @@ export function openMobileGroupActions(this: MobileSwitcherUiHost, groupName: st
     <div class="sw__mobile-sheet-body"></div>
 </div>`;
         document.body.appendChild(overlay);
+        let forceCloseSheet: () => void = () => { overlay.remove(); };
         const unregisterGroupSheet = () => {
-            if (typeof activeGroupSheetClosers !== "undefined") activeGroupSheetClosers.delete(unregisterGroupSheet);
+            if (typeof activeGroupSheetClosers !== "undefined") activeGroupSheetClosers.delete(forceCloseSheet);
         };
-        if (typeof activeGroupSheetClosers !== "undefined") activeGroupSheetClosers.add(unregisterGroupSheet);
 
         const sheet = overlay.querySelector<HTMLElement>(".sw__mobile-sheet");
         const body = overlay.querySelector<HTMLElement>(".sw__mobile-sheet-body");
         if (!sheet || !body) {
+            unregisterGroupSheet();
             overlay.remove();
             return;
         }
         overlay.tabIndex = -1;
 
-        // 与收藏弹窗一致的下滑收起动画
-        const closeSelf = () => {
+        // 与收藏弹窗一致的下滑收起动画；销毁切换器时走 immediate 立即摘除 DOM 防遮罩锁屏
+        const closeWithMode = (immediate: boolean) => {
             if (!overlay.isConnected || overlay.dataset.closing === "true") return;
             overlay.dataset.closing = "true";
             unregisterGroupSheet();
+            if (immediate) {
+                overlay.remove();
+                return;
+            }
             sheet.classList.remove("sw__mobile-sheet--open");
             overlay.style.opacity = "0";
             setTimeout(() => {
@@ -866,6 +881,9 @@ export function openMobileGroupActions(this: MobileSwitcherUiHost, groupName: st
                 if (returnFocus?.isConnected) returnFocus.focus({preventScroll: true});
             }, FAB_HIDE_DELAY_MS);
         };
+        const closeSelf = () => closeWithMode(false);
+        forceCloseSheet = () => closeWithMode(true);
+        if (typeof activeGroupSheetClosers !== "undefined") activeGroupSheetClosers.add(forceCloseSheet);
 
         const appendAction = (label: string, action: () => Promise<number>) => {
             const item = document.createElement("button");

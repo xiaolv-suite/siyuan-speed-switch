@@ -666,7 +666,7 @@ const COMMUNITY_SNIPPETS = Object.freeze([
         description: "压紧多层级无序/有序列表冗余上下边距，仿 Logseq 大纲紧凑节奏，小屏阅读效率翻倍",
         category: "list", type: "css", source: "builtin",
         author: "链滴 @svchord（AI 适配新版思源）", sourceUrl: "https://ld246.com/article/1764745304097",
-        content: "@media(max-width:768px){:is(.protyle-wysiwyg, .b3-typography) [data-type=\"NodeListItem\"]{margin:1px 0!important;padding:1px 0!important}}:is(.protyle-wysiwyg, .b3-typography) .li:has(.block-focus)>.protyle-action{color:var(--b3-theme-primary,#3575f0)!important;transform:scale(1.2)}",
+        content: "@media(max-width:768px){:is(.protyle-wysiwyg, .b3-typography) [data-type=\"NodeListItem\"]{margin:1px 0!important;padding:1px 0!important}}:is(.protyle-wysiwyg, .b3-typography) .li:is(:focus-within,.protyle-wysiwyg--select)>.protyle-action{color:var(--b3-theme-primary,#3575f0)!important;transform:scale(1.2)}",
     },
     {
         id: "swss-liandi-img-center-clean",
@@ -674,7 +674,7 @@ const COMMUNITY_SNIPPETS = Object.freeze([
         description: "解决思源插入图片后默认产生多余空白行的问题，并将图片块自动水平居中对齐",
         category: "image", type: "css", source: "builtin",
         author: "链滴 @solargen（AI 适配新版思源）", sourceUrl: "https://ld246.com/article/1692378977189",
-        content: ":is(.b3-typography, .protyle-wysiwyg) .img:not([style]){display:inline-block}:is(.b3-typography, .protyle-wysiwyg) .p:has(span.img){text-align:center}",
+        content: ":is(.b3-typography, .protyle-wysiwyg) .img:not([style]){display:block;width:fit-content;margin-inline:auto;text-align:center}:is(.b3-typography, .protyle-wysiwyg) .img:not([style]) img{display:block;margin-inline:auto}",
     },
     {
         id: "swss-liandi-img-trans-bg",

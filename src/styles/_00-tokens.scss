@@ -60,7 +60,13 @@ $sw-space-2xl: 24px;
 .sw-home-store-dialog,
 .sw-studio,
 .sw-platform-shell,
-.sw-platform-surface {
+.sw-platform-surface,
+.sw__mobile-sheet-overlay,
+.sw__mobile-sort-overlay,
+.sw__sort-menu,
+.sw__palette-backdrop,
+.sw-home__size-menu,
+.b3-menu.sw-home__presets-menu {
     --sw-font-2xs: 10px;  // 徽标/角标下限（10px 以下仅限登记豁免）
     --sw-font-xs: 11px;   // 元信息/时间戳/识别行
     --sw-font-sm: 12px;   // 辅助说明/状态行
@@ -108,14 +114,13 @@ $sw-space-2xl: 24px;
     --sw-control-h: 34px;     // 主输入/标准按钮
 
     // T-7209：面板玻璃模糊五档（模态遮罩另有 --sw-overlay-blur；皮肤 saturate
-    // 组合为皮肤专属材质不入档）。T-7857 增补 Liquid Glass 3.0 高透档：
-    // xl = 16px 收纳芯片，2xl = 28px Bento 瓷贴，3xl = 40px 商店画廊/英雄玻璃。
+    // 组合为皮肤专属材质不入档）。高透档统一收敛 <= 12px 满足性能静态门禁。
     --sw-blur-sm: blur(4px);   // 小浮件（回顶钮）
     --sw-blur-md: blur(8px);   // 粘性条/芯片
-    --sw-blur-lg: blur(20px);  // 大玻璃面板（拖拽浮卡）
-    --sw-blur-xl: blur(16px);  // 轻玻璃芯片（T-7857：工作台收纳胶囊/商店指南药丸）
-    --sw-blur-2xl: blur(28px); // Liquid Glass 瓷贴（T-7857：工作台卡片/商店目录卡）
-    --sw-blur-3xl: blur(40px); // Liquid Glass 英雄玻璃（T-7857：商店弹窗容器/实时预览）
+    --sw-blur-lg: blur(10px);  // 大玻璃面板（拖拽浮卡）
+    --sw-blur-xl: blur(12px);  // 轻玻璃芯片（T-7857：工作台收纳胶囊/商店指南药丸）
+    --sw-blur-2xl: blur(12px); // Liquid Glass 瓷贴（T-7857：工作台卡片/商店目录卡）
+    --sw-blur-3xl: blur(12px); // Liquid Glass 英雄玻璃（T-7857：商店弹窗容器/实时预览）
 
     // T-7204：图标尺寸三档（24/20/16px——跨表面 icon box 统一档位）。
     --sw-icon-xs: 14px;  // 紧凑内联图标（搜索框/组头箭头）
@@ -146,52 +151,52 @@ $sw-space-2xl: 24px;
     // 宿主 --b3-* 全局值不再直接进入插件；_10-skins.scss 的皮肤以更高
     // 优先级覆盖同名变量，皮肤机制不受影响。
     // ------------------------------------------------------------
-    --b3-theme-background: #f5f5fa;
+    --b3-theme-background: #f6f7f9;
     --b3-theme-surface: #ffffff;
-    --b3-theme-surface-lighter: #edeff6;
-    --b3-theme-primary: #6A6EE0; /* DL2 柔雾紫 */
+    --b3-theme-surface-lighter: #f1f3f6;
+    --b3-theme-primary: #2c5580; /* doc#22 v2 克制深海蓝单主色 */
     --b3-theme-on-primary: #ffffff;
-    --b3-theme-on-background: #23222e;
-    --b3-theme-on-surface: #4c4a5e;
-    --b3-theme-on-surface-light: #65627a;
-    --b3-border-color: rgba(35, 34, 46, 0.1);
-    --b3-theme-background-light: #eef0f7;
-    --b3-theme-surface-light: #eef0f7;
-    --b3-theme-primary-light: rgba(106, 110, 224, 0.12);
-    --b3-theme-primary-lightest: rgba(106, 110, 224, 0.06);
-    --b3-theme-success: #2d9865;
-    --b3-theme-warning: #b7761d;
-    --b3-theme-error: #c7515b;
-    --b3-list-hover: rgba(106, 110, 224, 0.08);
+    --b3-theme-on-background: #181a1f;
+    --b3-theme-on-surface: #4b5563;
+    --b3-theme-on-surface-light: #717885;
+    --b3-border-color: rgba(15, 23, 42, 0.08);
+    --b3-theme-background-light: #eef1f5;
+    --b3-theme-surface-light: #eef1f5;
+    --b3-theme-primary-light: rgba(44, 85, 128, 0.09);
+    --b3-theme-primary-lightest: rgba(44, 85, 128, 0.05);
+    --b3-theme-success: #166534;
+    --b3-theme-warning: #a15c07;
+    --b3-theme-error: #b91c1c;
+    --b3-list-hover: rgba(44, 85, 128, 0.07);
     color-scheme: light;
 
     // 统一步调语义色彩令牌（由上方插件作用域色板派生，零宿主依赖）
     --sw-color-accent: var(--b3-theme-primary);
-    --sw-color-accent-soft: color-mix(in srgb, var(--sw-color-accent) 12%, transparent);
-    --sw-color-accent-faint: color-mix(in srgb, var(--sw-color-accent) 6%, transparent);
-    --sw-color-hover: rgba(106, 110, 224, 0.08);
+    --sw-color-accent-soft: color-mix(in srgb, var(--sw-color-accent) 10%, transparent);
+    --sw-color-accent-faint: color-mix(in srgb, var(--sw-color-accent) 5%, transparent);
+    --sw-color-hover: rgba(44, 85, 128, 0.07);
     --sw-color-bg-soft: var(--b3-theme-background-light);
-    --sw-color-accent-hover: color-mix(in srgb, var(--sw-color-accent) 88%, #000 12%);
-    --sw-color-accent-pressed: color-mix(in srgb, var(--sw-color-accent) 78%, #000 22%);
+    --sw-color-accent-hover: #214366;
+    --sw-color-accent-pressed: color-mix(in srgb, var(--sw-color-accent) 82%, #000 18%);
     --sw-color-on-accent: var(--b3-theme-on-primary, #ffffff);
 
     --sw-color-bg: var(--b3-theme-background);
     --sw-color-surface: var(--b3-theme-surface);
     --sw-color-surface-muted: var(--b3-theme-surface-lighter, color-mix(in srgb, var(--sw-color-bg) 60%, var(--sw-color-surface)));
-    --sw-color-surface-raised: color-mix(in srgb, var(--sw-color-surface) 92%, var(--sw-color-accent-soft));
+    --sw-color-surface-raised: color-mix(in srgb, var(--sw-color-surface) 96%, var(--sw-color-accent-soft));
     --sw-color-line: var(--b3-border-color, color-mix(in srgb, var(--sw-color-text) 14%, transparent));
-    --sw-color-line-soft: color-mix(in srgb, var(--sw-color-line) 55%, transparent);
+    --sw-color-line-soft: color-mix(in srgb, var(--sw-color-line) 75%, transparent);
 
     --sw-color-text: var(--b3-theme-on-background);
-    --sw-color-text-subtle: var(--b3-theme-on-surface, #3c4048);
-    --sw-color-text-muted: var(--b3-theme-on-surface-light, #767b8a);
+    --sw-color-text-subtle: var(--b3-theme-on-surface, #4b5563);
+    --sw-color-text-muted: var(--b3-theme-on-surface-light, #717885);
 
-    --sw-color-success: var(--b3-theme-success, #2d9865);
-    --sw-color-warning: var(--b3-theme-warning, #b7761d);
-    --sw-color-error: var(--b3-theme-error, #c7515b);
+    --sw-color-success: var(--b3-theme-success, #166534);
+    --sw-color-warning: var(--b3-theme-warning, #a15c07);
+    --sw-color-error: var(--b3-theme-error, #b91c1c);
 
     // 小驴全生态品牌与午夜黑金卡 Token (Epoch 6 联邦规范)
-    --lv-brand: #6A6EE0; /* DL2 柔雾紫（原星际电光紫） */
+    --lv-brand: #6A6EE0; /* DL2 柔雾紫（契约保留） */
     --lv-brand-soft: color-mix(in srgb, var(--lv-brand) 12%, transparent);
     --lv-accent-gold: #FACC15; /* 钛金雷刃黄 */
     --lv-midnight-card: #1B1E2E; /* 参考图午夜深空黑金卡底色 */
@@ -210,9 +215,9 @@ $sw-space-2xl: 24px;
     --sw-card-accent-dark-text: #f8fafc;
     --sw-card-accent-dark-muted: #94a3b8;
 
-    // 4. 近距小模糊 + 远距大模糊双层复合柔影
-    --sw-shadow-bento: 0 1px 3px rgb(35 42 75 / 4%), 0 8px 24px rgb(35 42 75 / 6%);
-    --sw-shadow-bento-hover: 0 2px 6px rgb(35 42 75 / 6%), 0 14px 32px rgb(35 42 75 / 10%);
+    // 4. 近距小模糊 + 远距大模糊双层复合柔影（doc#22 v2 克制层次）
+    --sw-shadow-bento: 0 1px 2px rgb(15 23 42 / 4%), 0 2px 8px rgb(15 23 42 / 4%);
+    --sw-shadow-bento-hover: 0 2px 8px rgb(15 23 42 / 6%), 0 8px 20px rgb(15 23 42 / 6%);
 
     // 5. 4倍大落差英雄位主数据字号
     --sw-font-stat-hero: 36px;
@@ -223,26 +228,29 @@ $sw-space-2xl: 24px;
 // 特异性与 _10-skins.scss 的皮肤块持平且位置在前，显式选择的皮肤照常覆盖。
 // ------------------------------------------------------------
 :is(html[data-theme-mode="dark"], [data-theme-mode="dark"], body.body--dark, .b3-theme-dark)
-    :is(.speed-switch, .sw-fab-root, .sw-settings, .sw-settings-dialog, .sw-home, .sw-home-store-dialog, .sw-studio, .sw-platform-shell, .sw-platform-surface) {
-    --b3-theme-background: #17171f;
-    --b3-theme-surface: #20202b;
-    --b3-theme-surface-lighter: #2a2a38;
-    --b3-theme-primary: #9B9EF0; /* DL2 深色提亮 */
-    --b3-theme-on-primary: #17171f;
-    --b3-theme-on-background: #ecebf4;
-    --b3-theme-on-surface: #b8b6c9;
-    --b3-theme-on-surface-light: #9b98b0;
-    --b3-border-color: rgba(236, 235, 244, 0.12);
-    --b3-theme-background-light: #23232f;
-    --b3-theme-surface-light: #23232f;
-    --b3-theme-primary-light: rgba(155, 158, 240, 0.14);
-    --b3-theme-primary-lightest: rgba(155, 158, 240, 0.07);
-    --b3-theme-success: #34d399;
-    --b3-theme-warning: #f0b45c;
-    --b3-theme-error: #ff7a76;
-    --b3-list-hover: rgba(155, 158, 240, 0.1);
-    --sw-color-accent-faint: color-mix(in srgb, var(--sw-color-accent) 7%, transparent);
-    --sw-color-hover: rgba(155, 158, 240, 0.1);
-    --sw-color-bg-soft: #23232f;
+    :is(.speed-switch, .sw-fab-root, .sw-settings, .sw-settings-dialog, .sw-home, .sw-home-store-dialog, .sw-studio, .sw-platform-shell, .sw-platform-surface, .sw__mobile-sheet-overlay, .sw__mobile-sort-overlay, .sw__sort-menu, .sw__palette-backdrop, .sw-home__size-menu, .b3-menu.sw-home__presets-menu) {
+    --b3-theme-background: #14161a;
+    --b3-theme-surface: #1c1f25;
+    --b3-theme-surface-lighter: #23272f;
+    --b3-theme-primary: #7aa7d6; /* doc#22 v2 护眼柔蓝 */
+    --b3-theme-on-primary: #0f1722;
+    --b3-theme-on-background: #eceff4;
+    --b3-theme-on-surface: #b4bac5;
+    --b3-theme-on-surface-light: #838a97;
+    --b3-border-color: rgba(255, 255, 255, 0.08);
+    --b3-theme-background-light: #2a2f38;
+    --b3-theme-surface-light: #23272f;
+    --b3-theme-primary-light: rgba(122, 167, 214, 0.15);
+    --b3-theme-primary-lightest: rgba(122, 167, 214, 0.08);
+    --b3-theme-success: #6ee7b7;
+    --b3-theme-warning: #eab364;
+    --b3-theme-error: #f87171;
+    --b3-list-hover: rgba(122, 167, 214, 0.10);
+    --sw-color-accent-hover: #93b9e2;
+    --sw-color-accent-faint: color-mix(in srgb, var(--sw-color-accent) 8%, transparent);
+    --sw-color-hover: rgba(122, 167, 214, 0.10);
+    --sw-color-bg-soft: #23272f;
+    --sw-shadow-bento: 0 2px 10px rgb(0 0 0 / 28%);
+    --sw-shadow-bento-hover: 0 6px 20px rgb(0 0 0 / 36%);
     color-scheme: dark;
 }

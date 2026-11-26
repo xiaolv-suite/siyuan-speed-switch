@@ -1,13 +1,13 @@
 # Lv Speed Switch (小驴雷切)
 
-[![Version](https://img.shields.io/badge/version-0.48.93-blue)](./plugin.json) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE) [![SiYuan](https://img.shields.io/badge/SiYuan-SiYuan_Note-ff5c67)](https://b3log.org/siyuan)
+[![Version](https://img.shields.io/badge/version-0.48.94-blue)](./plugin.json) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE) [![SiYuan](https://img.shields.io/badge/SiYuan-SiYuan_Note-ff5c67)](https://b3log.org/siyuan)
 
 **What problem does Lv Speed Switch solve?**
 When working with dozens of opened tabs and multiple projects in SiYuan Note, heavy knowledge workers face five constant pain points: **losing track of open tabs, struggling to recover accidentally closed workspace contexts, lacking a glanceable dashboard, scattering cross-document excerpts, and risking host stability when tweaking custom CSS/JS**.
 
 **Lv Speed Switch** is a **local-first unified switcher and work-context platform** for SiYuan Note ([Interface Map](docs/interface-map.svg) · [Architecture Diagram](docs/architecture.svg)). It connects **core productivity surfaces**—the Switcher (Surface 1), Bento Widget Workbench (Surface 2), Snippet Studio (Surface 3), and an intelligent Floating Action Button (FAB)—so you can find, preview, switch, capture, and restore your work context in under a second.
 
-> **Latest stable release: v0.48.93 (2026-11-23)** · [中文文档](./README.md)<br>
+> **Latest stable release: v0.48.94 (2026-11-26)** · [中文文档](./README.md)<br>
 > Minimum Supported Host Version: **SiYuan Note v3.8.4+** (Desktop, Sidebar Dock & Mobile)
 
 <div align="center">
@@ -16,22 +16,19 @@ When working with dozens of opened tabs and multiple projects in SiYuan Note, he
 
 ---
 
-## What's New In v0.48.93 (2026-11-23)
+## What's New In v0.48.94 (2026-11-26)
 
-- **Launchpad Topbar Convergence & Anti-jitter**: Full alignment with ecosystem Launchpad topbar without icon oscillation or interference from SiYuan 3.8.x reflows; Launchpad remains available even with a single plugin;
-- **Ecosystem Notification Overhaul**: High-visibility upgrade capsule alerts, in-place duplicate folding (×N), and persistent multi-day snooze;
-- **Journal Actions Sync Conflict Prevention**: Hardened daily journal queries with double conflict file filtering (`content` and `hpath`);
-- **Observer & Scroll Listener Scoping**: Purged unnecessary body-level mutation observers in floating ball and fav dropdowns, standardizing synchronous scroll states;
-- **Widget Store & Floating Ball Polish**: Modernized settings layouts, focus states, and touch targets across dark and light themes;
-- **Lightweight Sentinel Timers**: Extended background sentinel timers to 30s for minimal idle battery and CPU consumption.
-
-- **SiYuan 3.8.10+ Native Adaptations**: Switcher document hits support Shift+right-click / Shift+F10 to open native document tree context menus with SQL notebook resolution fallback; search card titles preserve slashes safely (`safeDocTitleFromHPath`); Action Palette supports toggling native SiYuan docks.
-- **Input Method & Clipboard Resilience**: Settings name creation, dialogs, and rename inputs yield during IME composition (contract-tested); Snippet Stack copy failure accurately reports `copyFailed`; Launchpad keyboard navigation yields to IME (ECO-015).
-- **Responsive Layout & Accessibility Polish**: Module action labels enforce `overflow: hidden` and `white-space: nowrap` for working ellipsis; desktop hover affordances wrapped in `@media (hover: hover)`; smooth-scroll reduced-motion, i18n parity, and clipboard error-handling contracts enforced.
-- **Budget & Token Conformance**: ADR 0559 archive 784 KiB / compressed 418 KiB recalibration with font/radius token alignment.
+- **Plugin Tab Grouping with Source Badges**: Opened ecosystem and third-party plugin pages are automatically grouped under `🧩 Plugin Pages` with clear source plugin badges instead of cluttering document tabs;
+- **Shared Ecosystem Hubs Integration**: Integrated Xiaolv Launchpad (anti-jitter topbar, duplicate alert folding `×N`, persistent multi-day snooze), unified AI Router, Block Assistant 1–8 native base + custom double-click, Activity Stream, and Backup/Restore;
+- **Sub-50ms First-Open Startup**: Sync startup storage loading narrowed to 5 core keys while Tier 2 history, Floating Ball, and selection observers initialize lazily for instant first-open response;
+- **Unified AI Thinking Experience & Real Cancellation**: Snippet Studio AI assistant (hiding blank readonly textarea until first token) and Snippet Stack (single-card refine & smart note synthesis) render unified `.lv-ai-thinking` cards with `AbortSignal` cancellation;
+- **Structured `#### 🐴 小驴记录` Diary Zone**: Snippet Stack journal assembly writes cleanly into a collapsible H4/H5/superblock diary zone with multi-level daily note probing and conflict-file filtering;
+- **Zero `:has()` & Tightened Blur 60fps Performance**: Purged all CSS `:has()` backtracking selectors from both the plugin bundle and all built-in curated snippets, capped blur tokens at `<=12px`, and refined penetration search & Studio AI panel layout alignment.
 
 <details>
-<summary>View Previous Release Highlights (v0.48.88 and earlier · Full history in <a href="./CHANGELOG.md">CHANGELOG.md</a>)</summary>
+<summary>View Previous Release Highlights (v0.48.93 and earlier · Full history in <a href="./CHANGELOG.md">CHANGELOG.md</a>)</summary>
+
+- **v0.48.93 (2026-11-23)**: Startup storage staging (18 keys narrowed to 5 core keys), slow-read latch & external sync guard.
 
 - **v0.48.88 (2026-11-04)**: Integrated all 7 Lv ecosystem pillars, Surface 1 Activity Stream toolbar & footer status pill, modal Escape focus-stack hardening, Snippet Stack AI synthesis, and 30 real-host isolated E2E tests.
 - **v0.48.87 (2026-11-01)**: Second Panel Apple Bento 3.0 / Liquid Glass 3.0 Overhaul, Organic WidgetKit Composition, Widget Store 100% Visually Unified with golden size recommendations, 9 host linkages and 12 ecosystem bridges verified.
@@ -154,4 +151,4 @@ The project enforces strict local-first verification and a comprehensive Release
 - Host compatibility verification across desktop and mobile platforms (browser emulation is a structural smoke test, not Android acceptance);
 - Formal published candidate builds must satisfy all offline gating tests and retain the previous rollback archive before sealing.
 
-> The current version is `v0.48.93`
+> The current version is `v0.48.94`

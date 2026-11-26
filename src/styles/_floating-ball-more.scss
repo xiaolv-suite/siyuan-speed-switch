@@ -10,7 +10,6 @@
     inset: 0;
     z-index: 1;
     background: var(--b3-mask-background, rgba(15, 23, 42, 0.35));
-    backdrop-filter: var(--sw-overlay-blur);
     pointer-events: auto;
     touch-action: none;
 }
@@ -24,8 +23,8 @@
     border-radius: var(--sw-radius-panel, 18px);
     box-shadow: var(--sw-shadow-bento), var(--sw-rim-light, inset 0 1px 0 0 rgba(255, 255, 255, 0.1));
     background: color-mix(in srgb, var(--sw-color-surface) 92%, transparent);
-    backdrop-filter: var(--sw-blur-lg);
-    -webkit-backdrop-filter: var(--sw-blur-lg);
+    backdrop-filter: var(--sw-blur-md);
+    -webkit-backdrop-filter: var(--sw-blur-md);
 
     @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
         background: var(--sw-color-surface);

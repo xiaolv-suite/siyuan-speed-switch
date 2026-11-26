@@ -15,6 +15,7 @@ const {
     assembleSnippetStackMarkdown,
     formatBlockRefBacklink,
 } = require("./snippet-stack-model.js");
+const {mountLvAiThinkingCard} = require("./libs/lv-notice-kit");
 
 const DEFAULT_STACK_LABELS = Object.freeze({
     title: "连续切片暂存栈",
@@ -148,6 +149,8 @@ function mountSnippetStackView(container, options = {}) {
 
     let disposed = false;
     let asyncBusy = false;
+    let activeAiController = null;
+    let activeAiThinkingHandle = null;
     let editingItemId = "";
     let foldPanelOpen = Boolean(options.initialFoldOpen);
     let assembleMode = "full";
@@ -470,6 +473,22 @@ function mountSnippetStackView(container, options = {}) {
     const assembleActions = doc.createElement("div");
     assembleActions.className = "sw-snippet-stack__assemble-actions";
 
+    const aiWaitHost = doc.createElement("div");
+    aiWaitHost.className = "sw-snippet-stack__ai-wait";
+    aiWaitHost.hidden = true;
+
+    const cleanupAiWait = () => {
+        if (activeAiController) {
+            try { activeAiController.abort(); } catch (_) {}
+            activeAiController = null;
+        }
+        if (activeAiThinkingHandle) {
+            try { activeAiThinkingHandle.done(); } catch (_) {}
+            activeAiThinkingHandle = null;
+        }
+        aiWaitHost.hidden = true;
+    };
+
     const runAssemble = async (target) => {
         if (asyncBusy || disposed) return;
         if (stackState.items.length === 0) {
@@ -478,18 +497,43 @@ function mountSnippetStackView(container, options = {}) {
         }
         if (target === "ai-synthesize") {
             if (typeof options.onAiSynthesize === "function") {
+                cleanupAiWait();
+                const ctrl = new AbortController();
+                activeAiController = ctrl;
+                aiWaitHost.hidden = false;
+                activeAiThinkingHandle = mountLvAiThinkingCard(aiWaitHost, {
+                    scenario: "general",
+                    compact: true,
+                    title: "AI 智能编织专题笔记",
+                    subtitle: `正在融合 ${stackState.items.length} 段原子切片并提炼洞察`,
+                    cancelLabel: "⏹ 取消编织",
+                    signal: ctrl.signal,
+                    onCancel: () => {
+                        ctrl.abort();
+                    },
+                });
                 setBusy(true);
                 try {
-                    const res = await Promise.resolve(options.onAiSynthesize(stackState.items));
+                    const res = await Promise.resolve(options.onAiSynthesize(stackState.items, {signal: ctrl.signal, inlineWait: true}));
                     if (disposed) return;
-                    if (res && res.ok) {
+                    if (ctrl.signal.aborted) {
+                        setStatus("已取消 AI 智能编织", "ready");
+                    } else if (res && res.ok) {
                         setStatus(`AI 智能编织完成：「${res.title || "专题笔记"}」已生成`, "ready");
                     } else if (res && res.message) {
                         setStatus(res.message, "error");
                     }
                 } catch (_) {
-                    if (!disposed) setStatus(labels.operationFailed, "error");
+                    if (!disposed) {
+                        setStatus(ctrl.signal.aborted ? "已取消 AI 智能编织" : labels.operationFailed, ctrl.signal.aborted ? "ready" : "error");
+                    }
                 } finally {
+                    if (activeAiThinkingHandle) {
+                        try { activeAiThinkingHandle.done(); } catch (_) {}
+                        activeAiThinkingHandle = null;
+                    }
+                    if (activeAiController === ctrl) activeAiController = null;
+                    aiWaitHost.hidden = true;
                     if (!disposed) setBusy(false);
                 }
             } else {
@@ -501,7 +545,10 @@ function mountSnippetStackView(container, options = {}) {
             mode: assembleMode,
             includeBlockAttrs: true,
         };
-        const assembled = assembleSnippetStackMarkdown(stackState, assembleOpts);
+        const assembled = assembleSnippetStackMarkdown(stackState, {
+            ...assembleOpts,
+            ...(target === "journal" ? { diaryZone: true } : {}),
+        });
         if (typeof options.onAssemble === "function") {
             setBusy(true);
             try {
@@ -567,7 +614,7 @@ function mountSnippetStackView(container, options = {}) {
 
     statusRow.append(statusEl, undoBtn);
     footer.append(assembleActions, statusRow);
-    root.append(header, foldPanel, listEl, footer);
+    root.append(header, foldPanel, aiWaitHost, listEl, footer);
 
     function setStatus(text, state = "ready") {
         statusEl.textContent = text;
@@ -753,24 +800,64 @@ function mountSnippetStackView(container, options = {}) {
             e.stopPropagation();
             if (asyncBusy || disposed) return;
             if (typeof options.onAiRefine === "function") {
+                cleanupAiWait();
+                const ctrl = new AbortController();
+                activeAiController = ctrl;
+                aiWaitHost.hidden = false;
+                activeAiThinkingHandle = mountLvAiThinkingCard(aiWaitHost, {
+                    scenario: "transform",
+                    compact: true,
+                    title: `AI 精炼 · ${item.title || "原子切片"}`,
+                    subtitle: "正在提炼核心要点与行动建议",
+                    cancelLabel: "⏹ 取消精炼",
+                    signal: ctrl.signal,
+                    onCancel: () => {
+                        ctrl.abort();
+                    },
+                });
                 setBusy(true);
                 try {
-                    const result = await Promise.resolve(options.onAiRefine(item));
+                    const result = await Promise.resolve(options.onAiRefine(item, {signal: ctrl.signal, inlineWait: true}));
                     if (disposed) return;
+                    if (ctrl.signal.aborted) {
+                        setStatus("已取消 AI 精炼", "ready");
+                        return;
+                    }
+                    let refined = false;
                     if (result && typeof result === "object") {
-                        if (result.key) item.keyFragment = result.key;
-                        if (result.action) item.actionFragment = result.action;
-                        item.activeTab = "key";
+                        const keyText = typeof result.key === "string" ? result.key.trim() : "";
+                        const actionText = typeof result.action === "string" ? result.action.trim() : "";
+                        if (keyText) {
+                            item.keyFragment = keyText;
+                            refined = true;
+                        }
+                        if (actionText) {
+                            item.actionFragment = actionText;
+                            refined = true;
+                        }
                     } else if (typeof result === "string" && result.trim()) {
                         item.keyFragment = result.trim();
-                        item.activeTab = "key";
+                        refined = true;
                     }
+                    if (!refined) {
+                        setStatus("AI 精炼未返回有效内容，请检查配置或重试", "error");
+                        return;
+                    }
+                    item.activeTab = "key";
                     persistStack(stackState);
                     setStatus(`切片「${item.title}」已完成 AI 精炼`, "ready");
                     render();
                 } catch (_) {
-                    if (!disposed) setStatus("AI 精炼失败，请检查配置或网络", "error");
+                    if (!disposed) {
+                        setStatus(ctrl.signal.aborted ? "已取消 AI 精炼" : "AI 精炼失败，请检查配置或网络", ctrl.signal.aborted ? "ready" : "error");
+                    }
                 } finally {
+                    if (activeAiThinkingHandle) {
+                        try { activeAiThinkingHandle.done(); } catch (_) {}
+                        activeAiThinkingHandle = null;
+                    }
+                    if (activeAiController === ctrl) activeAiController = null;
+                    aiWaitHost.hidden = true;
                     if (!disposed) setBusy(false);
                 }
             } else {
@@ -976,6 +1063,7 @@ function mountSnippetStackView(container, options = {}) {
         btnCurrent.disabled = !hasItems || asyncBusy;
         btnNewDoc.disabled = !hasItems || asyncBusy;
         btnCopy.disabled = !hasItems || asyncBusy;
+        btnAiSynthesize.disabled = !hasItems || asyncBusy;
         clearBtn.disabled = asyncBusy || stackState.items.every((item) => item.pinned);
 
         while (listEl.firstChild) listEl.removeChild(listEl.firstChild);
@@ -1024,6 +1112,7 @@ function mountSnippetStackView(container, options = {}) {
         dispose: () => {
             if (disposed) return;
             disposed = true;
+            cleanupAiWait();
             if (root.parentElement) root.parentElement.removeChild(root);
         },
     };

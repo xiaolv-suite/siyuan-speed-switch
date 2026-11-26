@@ -155,7 +155,7 @@ function normalizeSettings(saved, options = {}) {    const defaults = options.de
         ? source.panelSizeMode
         : (source.panelSizeMode === undefined && source.fullscreen === true ? "fullscreen" : (defaults.panelSizeMode || "adaptive"));
     const groupBy = source.groupBy === "none" || source.groupBy === "notebook"
-        || source.groupBy === "favorites" || source.groupBy === "createdMonth"
+        || source.groupBy === "path" || source.groupBy === "favorites" || source.groupBy === "createdMonth"
         ? source.groupBy
         : (defaults.groupBy || "notebook");
     const homePalette = source.homePalette === "auto" || source.homePalette === "soft" || source.homePalette === "mono"

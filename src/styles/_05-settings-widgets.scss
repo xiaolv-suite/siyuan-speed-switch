@@ -36,7 +36,8 @@
         }
     }
 
-    .sw-settings__panels { padding: 18px 22px 22px; }
+    .sw-settings__panels { padding: 0 22px 22px; }
+    .sw-settings__search { margin: 0 -22px var(--sw-space-lg, 12px); padding: var(--sw-space-lg, 12px) 22px; }
 
     .sw-settings__item {
         margin-inline: -10px;
@@ -78,7 +79,8 @@
 
     .sw-settings {
         .sw-settings__tabs { padding: var(--sw-space-md, 8px) var(--sw-space-sm, 6px); }
-        .sw-settings__panels { padding: var(--sw-space-lg, 12px) 14px calc(18px + env(safe-area-inset-bottom, 0px)); }
+        .sw-settings__panels { padding: 0 14px calc(18px + env(safe-area-inset-bottom, 0px)); }
+        .sw-settings__search { margin: 0 -14px var(--sw-space-md, 8px); padding: var(--sw-space-md, 8px) 14px; }
         .sw-settings__item { margin-inline: -6px; padding-inline: var(--sw-space-md, 8px); }
     }
 }
@@ -122,7 +124,6 @@
     align-items: flex-end;
     justify-content: center;
     background: var(--sw-overlay-scrim, rgba(0, 0, 0, 0.32));
-    backdrop-filter: var(--sw-overlay-blur, blur(2px));
     transition: opacity $sw-dur-panel $sw-ease;
     -webkit-tap-highlight-color: transparent;
 
@@ -142,7 +143,6 @@
     align-items: flex-end;
     justify-content: center;
     background: var(--sw-overlay-scrim, rgba(0, 0, 0, .32));
-    backdrop-filter: var(--sw-overlay-blur, blur(2px));
     pointer-events: auto;
 
     @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -500,8 +500,8 @@
     border-top: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--sw-color-line) 45%, transparent));
     background: var(--sw-card-float-bg, var(--sw-color-surface));
     box-shadow: var(--sw-rim-light, inset 0 1px 0 0 rgba(255, 255, 255, 0.12)), var(--sw-shadow-bento);
-    backdrop-filter: var(--sw-blur-lg);
-    -webkit-backdrop-filter: var(--sw-blur-lg);
+    backdrop-filter: var(--sw-blur-md);
+    -webkit-backdrop-filter: var(--sw-blur-md);
 
     .sw__mobile-sheet-handle {
         width: 36px;
@@ -749,7 +749,7 @@
 
 // T-6925：移动端工作台已提供平台头部关闭按钮（T-6899），外层 Dialog 自带的
 // 关闭 ✕ 与之重复且分居两处，收敛为单一关闭入口。
-.b3-dialog__container:has(.sw-home--mobile) .b3-dialog__close {
+.b3-dialog__container.sw-home-dialog--mobile .b3-dialog__close {
     display: none;
 }
 
@@ -986,10 +986,8 @@
     background:
         radial-gradient(circle at 92% 4%, color-mix(in srgb, var(--sw-home-accent, var(--sw-color-accent)) 12%, transparent), transparent 48%),
         linear-gradient(150deg, color-mix(in srgb, var(--sw-home-accent, var(--sw-color-accent)) 6%, var(--sw-color-surface)), var(--sw-color-surface));
-    backdrop-filter: var(--sw-blur-lg);
     // T-7068：触屏保纵向滚动原生；长按按压态收紧手势尽量让拖位移交（引擎支持度有差异）
     touch-action: pan-y;
-    -webkit-backdrop-filter: var(--sw-blur-lg);
     box-shadow: var(--sw-shadow-bento, var(--sw-shadow-xs));
     transition: transform $sw-dur-base $sw-ease, box-shadow $sw-dur-base $sw-ease, background-color $sw-dur-base $sw-ease;
 
@@ -1998,6 +1996,49 @@
     margin: 0;
     font-size: var(--sw-font-sm, 12px);
     color: var(--sw-color-text-subtle);
+}
+
+.sw-home .sw-home__empty-rec {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sw-space-sm, 6px);
+}
+
+.sw-home .sw-home__empty-rec-title {
+    font-weight: var(--sw-weight-medium, 500);
+    color: inherit;
+}
+
+.sw-home .sw-home__empty-rec-state {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px var(--sw-space-sm, 6px);
+    border-radius: var(--sw-platform-radius-pill, 999px);
+    font-size: var(--sw-font-xs, 11px);
+    line-height: 1.4;
+    font-weight: var(--sw-weight-medium, 500);
+    background: color-mix(in srgb, var(--sw-color-text-muted) 14%, transparent);
+    color: var(--sw-color-text-muted);
+    border: 1px solid color-mix(in srgb, var(--sw-color-line) 60%, transparent);
+
+    &--ready {
+        background: color-mix(in srgb, var(--sw-platform-success, var(--sw-color-success)) 16%, transparent);
+        color: var(--sw-platform-success, var(--sw-color-success));
+        border-color: color-mix(in srgb, var(--sw-platform-success, var(--sw-color-success)) 36%, transparent);
+    }
+
+    &--conditional {
+        background: color-mix(in srgb, var(--sw-platform-warning, var(--sw-color-warning)) 16%, transparent);
+        color: var(--sw-platform-warning, var(--sw-color-warning));
+        border-color: color-mix(in srgb, var(--sw-platform-warning, var(--sw-color-warning)) 36%, transparent);
+    }
+
+    &--external {
+        background: color-mix(in srgb, var(--sw-color-accent) 16%, transparent);
+        color: var(--sw-color-accent);
+        border-color: color-mix(in srgb, var(--sw-color-accent) 36%, transparent);
+    }
 }
 
 // ==================== T-7054 A 批次：时钟/时间家族视觉增强 ====================

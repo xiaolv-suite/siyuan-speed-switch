@@ -47,8 +47,8 @@ body[data-sw-skin="apple"] {
     .speed-switch .sw__doc-item,
     .sw-home__cell,
     .speed-switch .sw__search {
-        backdrop-filter: blur(18px) saturate(1.6);
-        -webkit-backdrop-filter: blur(18px) saturate(1.6);
+        background: rgba(255, 255, 255, .90);
+        border: 1px solid rgba(0, 0, 0, .08);
         border-radius: 16px;
         box-shadow: 0 1px 2px rgba(0, 0, 0, .05), 0 10px 28px rgba(29, 35, 60, .10);
     }
@@ -56,7 +56,8 @@ body[data-sw-skin="apple"] {
     .sw-fab-trigger { box-shadow: 0 4px 16px rgba(10, 90, 220, .38); }
 
     .sw__floating-ball-action {
-        backdrop-filter: blur(18px) saturate(1.6);
+        background: rgba(255, 255, 255, .94);
+        border: 1px solid rgba(0, 0, 0, .08);
         border-radius: 14px;
         box-shadow: 0 8px 22px rgba(29, 35, 60, .14);
     }
@@ -109,8 +110,8 @@ body[data-sw-skin="midnight"] {
     .speed-switch .sw__doc-item,
     .sw-home__cell,
     .speed-switch .sw__search {
-        backdrop-filter: blur(20px) saturate(1.3);
-        -webkit-backdrop-filter: blur(20px) saturate(1.3);
+        background: rgba(24, 29, 42, .92);
+        border: 1px solid rgba(255, 255, 255, .10);
         border-radius: 16px;
         box-shadow: 0 10px 30px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(255, 255, 255, .06);
     }
@@ -118,8 +119,8 @@ body[data-sw-skin="midnight"] {
     .sw-fab-trigger { box-shadow: 0 4px 18px rgba(139, 157, 255, .45); }
 
     .sw__floating-ball-action {
-        backdrop-filter: blur(20px) saturate(1.3);
-        background: rgba(28, 34, 50, .88);
+        background: rgba(28, 34, 50, .94);
+        border: 1px solid rgba(255, 255, 255, .10);
         border-radius: 14px;
         box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
         color: #e8eaf4;

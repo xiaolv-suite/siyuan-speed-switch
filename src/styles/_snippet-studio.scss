@@ -176,7 +176,7 @@
     // all three in one row on desktop; a two-column grid auto-places the AI rail
     // on a second row, leaving the library stretched across the first row and
     // making the preview/editor appear squeezed into the right edge.
-    &__layout { display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 4fr) minmax(280px, 1.2fr); min-height: 0; flex: 1; }
+    &__layout { display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 4fr) minmax(280px, 1.2fr); grid-template-rows: minmax(0, 1fr); min-height: 0; flex: 1; }
     &__layout[data-ai-collapsed="true"] {
         grid-template-columns: minmax(280px, 330px) minmax(0, 1fr) 48px;
 
@@ -702,13 +702,30 @@
     &__ai {
         display: flex;
         flex-direction: column;
-        gap: var(--sw-space-lg, 12px);
+        gap: var(--sw-space-md, 8px);
+        height: 100%;
+        max-height: 100%;
         min-height: 0;
-        overflow: auto;
-        padding: 18px 14px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: var(--sw-space-xl, 16px) 14px;
         border-left: 1px solid var(--sw-color-line-soft, var(--studio-line));
         background: var(--sw-bg-tinted, color-mix(in srgb, var(--studio-surface) 78%, var(--sw-color-bg)));
         box-shadow: var(--sw-rim-light, none);
+
+        > .sw-studio__button.is-primary {
+            flex: 0 0 auto;
+            position: sticky;
+            bottom: 0;
+            z-index: 2;
+
+            &:disabled {
+                opacity: 1;
+                background: color-mix(in srgb, var(--studio-accent) 28%, var(--studio-surface));
+                color: color-mix(in srgb, var(--studio-on-surface) 72%, var(--studio-surface));
+                border-color: color-mix(in srgb, var(--studio-accent) 24%, var(--studio-line));
+            }
+        }
     }
     &__ai-collapse-toggle {
         min-width: 28px;
@@ -817,10 +834,52 @@
             box-shadow: var(--sw-focus-glow);
         }
     }
-    &__consent { display: flex; align-items: flex-start; gap: var(--sw-space-md, 8px); color: var(--studio-on-surface); font-size: var(--sw-font-xs, 11px); line-height: var(--sw-leading-reading, 1.6); }
+    &__consent {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--sw-space-md, 8px);
+        color: var(--studio-on-surface);
+        font-size: var(--sw-font-xs, 11px);
+        line-height: var(--sw-leading-reading, 1.6);
+
+        &.is-attention {
+            padding: var(--sw-space-xs, 4px) var(--sw-space-sm, 6px);
+            border-radius: var(--studio-radius-sm, 8px);
+            border: 1px solid color-mix(in srgb, var(--studio-warning) 42%, var(--studio-line));
+            background: color-mix(in srgb, var(--studio-warning) 10%, transparent);
+            color: var(--sw-color-text);
+        }
+    }
     &__consent input { flex: 0 0 auto; margin-top: var(--sw-space-xs, 4px); }
-    &__ai-actions { display: flex; gap: var(--sw-space-md, 8px); flex-wrap: wrap; }
-    &__ai-result-panel { display: flex; flex-direction: column; gap: var(--sw-space-md, 8px); min-height: 0; flex: 1 0 auto; }
+    &__ai-context-guide {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--sw-space-sm, 6px);
+        flex-wrap: wrap;
+        padding: var(--sw-space-xs, 4px) var(--sw-space-sm, 6px);
+        border: 1px solid color-mix(in srgb, var(--studio-warning) 40%, var(--studio-line));
+        border-radius: var(--studio-radius-sm, 8px);
+        background: color-mix(in srgb, var(--studio-warning) 10%, var(--studio-surface));
+        color: var(--sw-color-text);
+        font-size: var(--sw-font-xs, 11px);
+        line-height: 1.45;
+    }
+    &__ai-context-guide-btn {
+        min-height: var(--sw-control-h-md, 26px);
+        padding: 2px var(--sw-space-sm, 6px);
+        font-size: var(--sw-font-xs, 11px);
+        color: var(--studio-accent);
+        flex: 0 0 auto;
+    }
+    &__ai-actions { display: flex; gap: var(--sw-space-md, 8px); flex-wrap: wrap; flex: 0 0 auto; }
+    &__ai-result-panel { display: flex; flex-direction: column; gap: var(--sw-space-md, 8px); min-height: fit-content; flex: 1 1 auto; }
+    &__ai-thinking {
+        border: 1px solid var(--sw-color-line-soft, var(--studio-line));
+        border-radius: var(--sw-radius-control, 10px);
+        background: var(--sw-card-float-bg, var(--sw-color-bg));
+        box-shadow: var(--sw-shadow-xs);
+    }
     &__ai-empty {
         padding: var(--sw-space-lg, 12px);
         border: 1px dashed var(--sw-color-line-soft, var(--studio-line));
@@ -833,8 +892,9 @@
     }
     &__ai-result {
         width: 100%;
-        min-height: 160px;
-        flex: 1;
+        min-height: 110px;
+        max-height: 240px;
+        flex: 1 1 auto;
         border: 1px solid var(--sw-color-line-soft, var(--studio-line));
         border-radius: var(--sw-radius-control, 10px);
         background: var(--sw-card-float-bg, var(--sw-color-bg));
@@ -850,7 +910,7 @@
     // T-6915（ADR 0083 D1）：候选 diff 面板——本地摘要行 + 行级对比。
     &__diff { display: flex; flex-direction: column; gap: var(--sw-space-sm, 6px); min-height: 0; flex: 1; }
     &__diff-summary { margin: 0; color: var(--studio-on-surface); font-size: var(--sw-font-xs, 11px); }
-    &__diff-scroll { flex: 1; min-height: 120px; overflow: auto; border: 1px solid var(--sw-color-line-soft, var(--studio-line)); border-radius: var(--sw-radius-card, 14px); background: var(--sw-card-float-bg, var(--sw-color-bg)); box-shadow: var(--sw-shadow-xs); padding: var(--sw-space-sm, 6px) 0; }
+    &__diff-scroll { flex: 1 1 auto; min-height: 96px; max-height: 240px; overflow: auto; border: 1px solid var(--sw-color-line-soft, var(--studio-line)); border-radius: var(--sw-radius-card, 14px); background: var(--sw-card-float-bg, var(--sw-color-bg)); box-shadow: var(--sw-shadow-xs); padding: var(--sw-space-sm, 6px) 0; }
     &__diff-hunk + &__diff-hunk { border-top: 1px dashed var(--studio-line); margin-top: var(--sw-space-sm, 6px); padding-top: var(--sw-space-sm, 6px); }
     &__diff-hunk-head {
         display: inline-flex;
@@ -1568,6 +1628,14 @@
             border-color: var(--studio-accent);
             box-shadow: var(--sw-focus-glow);
         }
+    }
+
+    &__ai-wait {
+        flex-shrink: 0;
+        border: 1px solid var(--sw-color-line-soft, var(--studio-line));
+        border-radius: var(--sw-radius-control, 10px);
+        background: var(--sw-card-float-bg, var(--sw-color-bg));
+        box-shadow: var(--sw-shadow-xs);
     }
 
     &__list {

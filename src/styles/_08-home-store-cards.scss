@@ -9,7 +9,7 @@
 }
 
 // ==================== 快速记录（Flomo 式随手记） ====================
-.b3-dialog__container:has(.sw-quick-capture) {
+.b3-dialog__container.sw-quick-capture-dialog {
     height: auto !important;
     min-height: 260px;
     max-height: 85vh;
@@ -790,11 +790,15 @@
 // 左目录（搜索 + chips + 行列表）+ 右详情窗格。既有卡片 DOM 复用：目录窗格作用域
 // 把选择钮/来源 chips/预览/尺寸瓦片 display:none —— 行 = 图标 + 名称 + 描述 + 状态
 //（G3：列表行零按钮，主色「添加」胶囊唯一出现在详情窗格）。
-.sw-home-store:has(.sw-home-store__layout) {
+.sw-home-store.sw-home-store--with-layout {
     display: flex;
     flex-direction: column;
     overflow: hidden;
     padding: 0;
+}
+
+.b3-dialog__container.sw-home-store-dialog > .b3-dialog__header .b3-dialog__close {
+    display: none !important;
 }
 
 .sw-home-store__close-bar {

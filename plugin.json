@@ -2,7 +2,7 @@
   "name": "siyuan-speed-switch",
   "author": "xiaolv-suite",
   "url": "https://github.com/xiaolv-suite/siyuan-speed-switch",
-  "version": "0.48.93",
+  "version": "0.48.94",
   "minAppVersion": "3.8.4",
   "settingsWindow": true,
   "disabledInPublish": false,
@@ -40,7 +40,9 @@
       "docs/architecture.svg",
       "docs/component-store-guide.md",
       "docs/interface-map.svg",
-      "dist/snippet-studio.js"
+      "snippet-studio.js",
+      "workbench.js",
+      "store.js"
     ]
   },
   "keywords": [

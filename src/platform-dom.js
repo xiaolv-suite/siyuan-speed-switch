@@ -108,9 +108,28 @@ function createPlatformPillAction(doc, options = {}) {
  * Dialog 自带关闭按钮与 Escape 行为，这个助手只补可发现性，不接管销毁流程。
  * 重复调用保持幂等，便于不同宿主在 Dialog 初始化后统一挂载。
  */
+function markSwDialogHostElement(root) {
+    if (!root || !root.classList) return;
+    if (root.classList.contains("b3-dialog")) {
+        root.classList.add("sw-dialog-host");
+        return;
+    }
+    const dialogRoot = root.closest ? root.closest(".b3-dialog") : null;
+    if (dialogRoot && dialogRoot.classList) dialogRoot.classList.add("sw-dialog-host");
+}
+
+function markSwMobileCloseContainers(root, header) {
+    if (header && header.classList) header.classList.add("sw-dialog--has-mobile-close");
+    const container = (header && header.closest ? header.closest(".b3-dialog__container") : null)
+        || (root && root.closest ? root.closest(".b3-dialog__container") : null)
+        || (root && root.querySelector ? root.querySelector(".b3-dialog__container") : null);
+    if (container && container.classList) container.classList.add("sw-dialog--has-mobile-close");
+}
+
 function mountPlatformDialogCloseHint(dialogElement, label = "to close", doc) {
     const root = dialogElement && typeof dialogElement.querySelector === "function" ? dialogElement : null;
     if (!root) return null;
+    markSwDialogHostElement(root);
     const header = root.querySelector(".b3-dialog__header");
     const close = header && header.querySelector(".b3-dialog__close");
     if (!header || !close) return null;
@@ -232,6 +251,7 @@ function checkIsMobileFrontend(doc) {
 function mountPlatformDialogMobileClose(dialogElement, onClose, doc) {
     const root = dialogElement && typeof dialogElement.querySelector === "function" ? dialogElement : null;
     if (!root) return null;
+    markSwDialogHostElement(root);
     const header = root.querySelector(".b3-dialog__header");
     if (!header) return null;
     let btn = header.querySelector(".sw-dialog__mobile-close-btn");
@@ -244,6 +264,7 @@ function mountPlatformDialogMobileClose(dialogElement, onClose, doc) {
         btn.innerHTML = '<svg width="18" height="18" aria-hidden="true"><use xlink:href="#iconClose"></use></svg>';
         header.appendChild(btn);
     }
+    markSwMobileCloseContainers(root, header);
     if (typeof onClose === "function") {
         btn.onclick = (e) => {
             e.preventDefault();
@@ -261,11 +282,17 @@ function mountPlatformDialogMobileClose(dialogElement, onClose, doc) {
 function mountPlatformDialogTitleWrap(dialogElement, titleText, badgeText, iconName = "iconLvSpeedSwitch", doc) {
     const root = dialogElement && typeof dialogElement.querySelector === "function" ? dialogElement : null;
     if (!root) return null;
+    markSwDialogHostElement(root);
     const header = root.querySelector(".b3-dialog__header");
     const titleEl = header && (header.querySelector(".b3-dialog__title") || (header.textContent && header.textContent.trim() ? header : null));
     if (!header || !titleEl) return null;
     const existing = header.querySelector(".lv-dialog-title-wrap");
-    if (existing) return existing;
+    if (existing) {
+        if (header.querySelector(".sw-dialog__mobile-close-btn")) {
+            markSwMobileCloseContainers(root, header);
+        }
+        return existing;
+    }
     const container = root.closest ? root.closest(".b3-dialog__container") || root : root;
     if (container && container.classList) container.classList.add("sw-platform-dialog");
     if (container && typeof container.setAttribute === "function") {
@@ -335,6 +362,7 @@ function mountPlatformDialogTitleWrap(dialogElement, titleText, badgeText, iconN
         });
         header.appendChild(mobileClose);
     }
+    markSwMobileCloseContainers(root, header);
     return wrap;
 }
 

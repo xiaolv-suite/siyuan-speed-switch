@@ -14,14 +14,26 @@ import {resolveMobileHomeSize, resolveHomeTileMaterial, enforceHomeHeroConstrain
 import {createHomeRuntime} from "./home-runtime";
 import {createLayoutHistory, layoutSnapshotOf, pushLayoutHistory, undoLayoutHistory, redoLayoutHistory, canUndoLayoutHistory, canRedoLayoutHistory, peekUndoLabel, peekRedoLabel, reconcileLayoutSnapshot} from "./home-layout-history";
 import {openHomeConfigForm} from "./home-config-form";
-import {openHomeWidgetStore} from "./home-store-ui";
+import {loadChunkWithRetry} from "./core/chunk-loader";
+import {logger} from "./logger";
+async function loadHomeWidgetStore(host: any, device: any, renderPanel: any) {
+    try {
+        const mod = await loadChunkWithRetry(
+            () => import(/* webpackChunkName: "store" */ "./home-store-ui"),
+        );
+        return mod.openHomeWidgetStore.call(host, device, renderPanel);
+    } catch (err) {
+        logger.warn("store chunk import failed", err);
+        showMessage(host?.i18n?.homeStoreLoadFailed || "组件商店加载失败，请重试", 5000, "error");
+    }
+}
 import {millisecondsToNextMinute, millisecondsToNextSecond} from "./local-time-model";
 import {encodeSurfaceFocusSource, projectWidgetObject} from "./platform-surface-model";
 import {resolvePanelSize} from "./settings-model";
 import {clampOversizedIcons} from "./util";
 import {mountPlatformDialogCloseHint, mountPlatformDialogTitleWrap, mountPlatformDialogMobileClose} from "./platform-dom";
 import {getSiyuan} from "./types";
-import type {ISwSettings, PlatformSurface, PlatformSurfaceChromeOptions, PlatformSurfaceContext, PlatformSurfaceLabels} from "./index";
+import type {ISwSettings, PlatformSurface, PlatformSurfaceChromeOptions, PlatformSurfaceContext, PlatformSurfaceLabels} from "./runtime/plugin-types";
 
 declare const __PLUGIN_VERSION__: string;
 
@@ -36,7 +48,8 @@ export interface SecondPanelUiHost {
     fetchKernelJson: (url: string, options?: Record<string, unknown>) => Promise<{data?: Array<Record<string, unknown>>} | null>;
     // 类静态 HOME_ACCENTS 不进入 this 参数模式，由宿主以实例字段转发
     homeAccents: readonly string[];
-    homeRuntime: ReturnType<typeof createHomeRuntime>;
+    workbench?: any;
+    homeRuntime?: ReturnType<typeof createHomeRuntime>;
     homePanelSnapshots: Map<string, {snapshot: any; at: number}>;
     eventBus: EventBus;
     homeModuleChangeListeners: Set<() => void>;
@@ -106,7 +119,8 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
         const applyLayoutSnapshot = (snapshot: any) => {
             const current = this.getHomeState();
             const next = reconcileLayoutSnapshot(snapshot, current);
-            const known = new Set(this.homeRuntime.listModules(device).map((m: any) => m.moduleId));
+            const runtime = this.workbench || this.homeRuntime;
+            const known = new Set((runtime?.listModules ? runtime.listModules(device) : []).map((m: any) => m.moduleId));
             const gone = (next.instances as Array<any>).filter((inst: any) => !known.has(inst.moduleId));
             if (gone.length > 0) {
                 const goneIds = new Set(gone.map((inst: any) => inst.instanceId));
@@ -158,6 +172,7 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
         this.workbenchDialog = dialog;
         // T-7575: 移动端手势隔离，阻止触控滑动误触发思源宿主侧栏
         dialog.element.setAttribute("data-prevent-swipe", "true");
+        dialog.element.classList.add("sw-dialog-host");
         dialog.element.querySelector<HTMLElement>(".b3-dialog__container")?.classList.add("sw-platform-dialog", "sw-platform-dialog--workbench");
         mountPlatformDialogTitleWrap(dialog.element, this.i18n.dialogWorkbenchTitle || "工作台", "", "iconLayoutHome");
         mountPlatformDialogCloseHint(dialog.element, this.i18n.platformCloseHint || "to close");
@@ -261,6 +276,7 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                 // T-6869 编辑现场：经表面导航离开时记录编辑态，返回工作台时恢复。
                 this.workbenchResumeEditing = editing;
                 dialog.destroy();
+                dialog.element?.remove();
                 this.openPlatformSurface?.(surface, "workbench", {
                     entry: "surface-nav",
                     ...(focusedWidgetId ? {objectKind: "widget", objectId: focusedWidgetId} : {}),
@@ -282,6 +298,7 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
         root.classList.add(`sw-home--palette-${homePalette}`);
         // 移动端使用 R54 容器布局：xs 微卡双列，其余尺寸按可用宽度展开。
         if (this.isMobile) root.classList.add("sw-home--mobile");
+        if (this.isMobile) dialogContainer?.classList.add("sw-home-dialog--mobile");
         const device = this.isMobile ? "mobile" : "desktop";
         // 面板闭包持有当前渲染的控制器列表，工具栏"刷新全部"可跨渲染访问
         // T-6954：健康详情——控制器附带实例 ID 与可取得的成功/尝试时间（内存态，未知即缺省）
@@ -442,9 +459,11 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                 onClose: () => dialog.destroy(),
             });
             const defs = new Map<string, any>();
-            this.homeRuntime.listModules("desktop").concat(this.homeRuntime.listModules("mobile"))
-                .concat(this.homeRuntime.listModules("sidebar"))
-                .forEach((def: any) => defs.set(def.moduleId, def));
+            const runtime = this.workbench || this.homeRuntime;
+            const allModules = runtime?.listModules
+                ? runtime.listModules("desktop").concat(runtime.listModules("mobile")).concat(runtime.listModules("sidebar"))
+                : [];
+            allModules.forEach((def: any) => defs.set(def.moduleId, def));
             const catalogIds = new Set<string>();
             defs.forEach((_def, moduleId) => {
                 if (this.homeBuiltinAdapterIds.has(moduleId) || this.homeThirdPartyIds.has(moduleId)) catalogIds.add(moduleId);
@@ -789,7 +808,7 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                 addButton.title = this.i18n.homeStoreTitle;
                 addButton.innerHTML = '<svg><use xlink:href="#iconAdd"></use></svg><span>' + this.i18n.homeStoreTitle + '</span>';
                 addButton.addEventListener("click", () => {
-                    openHomeWidgetStore.call(this, device, renderPanel);
+                    void loadHomeWidgetStore(this, device, renderPanel);
                 });
                 bar.appendChild(addButton);
             }
@@ -918,7 +937,7 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                 openStore.type = "button";
                 openStore.className = "b3-button b3-button--primary sw-home__empty-store";
                 openStore.textContent = this.i18n.homeEmptyOpenStore;
-                openStore.addEventListener("click", () => openHomeWidgetStore.call(this, device, renderPanel));
+                openStore.addEventListener("click", () => void loadHomeWidgetStore(this, device, renderPanel));
                 unavailableActions.appendChild(openStore);
                 if (!editing) {
                     const editLayout = document.createElement("button");
@@ -934,6 +953,7 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
             // T-6969 Slice 3：编辑态抖动 chrome 的作用域类
             grid.classList.toggle("sw-home__grid--editing", editing);
             if (cells.length === 0) {
+                grid.classList.add("sw-home__grid--empty");
                 const empty = document.createElement("div");
                 empty.className = "sw-home__empty";
                 empty.setAttribute("role", "status");
@@ -1013,7 +1033,7 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                 openStore.type = "button";
                 openStore.className = "b3-button b3-button--outline sw-home__empty-store";
                 openStore.textContent = this.i18n.homeEmptyOpenStore;
-                openStore.addEventListener("click", () => openHomeWidgetStore.call(this, device, renderPanel));
+                openStore.addEventListener("click", () => void loadHomeWidgetStore(this, device, renderPanel));
                 empty.append(openStore);
                 empty.addEventListener("keydown", (event: KeyboardEvent) => {
                     if (event.target !== empty) return;
@@ -1023,7 +1043,7 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                         if (primaryBtn) {
                             primaryBtn.click();
                         } else {
-                            openHomeWidgetStore.call(this, device, renderPanel);
+                            void loadHomeWidgetStore(this, device, renderPanel);
                         }
                         return;
                     }
@@ -1229,11 +1249,12 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                             rootId: this.rootIdOf?.(activeTab) || "",
                             title: this.titleOf?.(activeTab) || "",
                         } : null;
-                        const result = this.homeRuntime.read(inst.moduleId, device, inst.config || {}, {
+                        const runtime = this.workbench || this.homeRuntime;
+                        const result = runtime?.read ? runtime.read(inst.moduleId, device, inst.config || {}, {
                             ...readOptions,
                             size: sizeKey,
                             activeDocContext,
-                        });
+                        }) : Promise.resolve({ok: false, reason: "unavailable"});
                         // 秒开快照（D-382）：捕获最后一次好数据，面板重开时直出"缓存"态内容
                         void Promise.resolve(result).then((r: any) => {
                             const items = r?.snapshot?.items;
@@ -1586,13 +1607,17 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                         toolsChildren.push(configButton);
                     }
                     const colorBtn = tool(this.i18n.homeChangeColor || "🎨 变色", () => {
-                        const curAccent = cell.style.getPropertyValue("--sw-home-accent");
+                        const curAccent = cell.style.getPropertyValue("--sw-home-accent").trim();
                         const curIdx = this.homeAccents.indexOf(curAccent);
                         const nextAccent = this.homeAccents[(curIdx + 1) % this.homeAccents.length];
                         inst.config = inst.config || {};
                         (inst.config as any).accent = nextAccent;
                         cell.style.setProperty("--sw-home-accent", nextAccent);
                         const nextState = this.getHomeState();
+                        const targetInst = (nextState.instances || []).find((candidate: any) => candidate.instanceId === inst.instanceId);
+                        if (targetInst) {
+                            targetInst.config = {...(targetInst.config || {}), accent: nextAccent};
+                        }
                         this.saveHomeState(nextState);
                     });
                     toolsChildren.push(colorBtn);
@@ -2174,6 +2199,7 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                 content: '<div class="sw-home-health"></div>',
                 width: "min(520px, 94vw)",
                 destroyCallback: () => {
+                    (this as any).activeDialogs?.delete(dialog);
                     if (returnFocus?.isConnected) {
                         try {
                             returnFocus.focus({preventScroll: true});
@@ -2183,6 +2209,7 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                     }
                 },
             });
+            (this as any).activeDialogs?.add(dialog);
             mountPlatformDialogTitleWrap(dialog.element, this.i18n.homeHealthDetailsTitle || "小组件健康监控", "", "iconHeart");
             mountPlatformDialogCloseHint(dialog.element, this.i18n.platformCloseHint || "to close");
             dialog.element.addEventListener("keydown", (event: KeyboardEvent) => {
@@ -2469,6 +2496,14 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
             this.homeModuleChangeListeners.delete(handleModuleChange);
         };
         renderPanel();
+        if (typeof (this as any).ensureTier2Loaded === "function" && !(this as any).tier2Ready) {
+            const prevHomeState = (this as any).data?.sw_home_state;
+            void (this as any).ensureTier2Loaded().then(() => {
+                if (root.isConnected && !(this as any).isUnloading && (this as any).data?.sw_home_state !== prevHomeState) {
+                    renderPanel();
+                }
+            }).catch(() => {});
+        }
         scheduleIconClamp();
         // T-7012：widget 对象与 focusSource 的 object:<id> 形式都可作为回跳目标。
         const targetWidget = focusObjectId

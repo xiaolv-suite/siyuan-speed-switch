@@ -1247,82 +1247,186 @@ function normalizeThumbCache(values, options = {}) {
  * }
  * 返回 Array<{key, label, icon, items}>，key 稳定可作折叠状态键。
  */
+const SPECIAL_SYSTEM_TYPES = Object.freeze({
+    graph: { label: "🌐 全局关系图", icon: "iconGraph", badge: "关系图" },
+    globalgraph: { label: "🌐 全局关系图", icon: "iconGraph", badge: "关系图" },
+    search: { label: "🔍 全局搜索", icon: "iconSearch", badge: "搜索" },
+    riffcard: { label: "🎴 闪卡复习", icon: "iconRiffCard", badge: "闪卡" },
+    browser: { label: "🌍 网页浏览", icon: "iconBrowser", badge: "网页" },
+    pdf: { label: "📑 PDF 阅读器", icon: "iconFile", badge: "PDF" },
+    asset: { label: "📑 资源预览", icon: "iconFile", badge: "资源" },
+    backlink: { label: "🔗 反向链接", icon: "iconLink", badge: "反链" },
+    outline: { label: "📋 文档大纲", icon: "iconAlignLeft", badge: "大纲" },
+});
+
+const tabInitDataCache = typeof WeakMap === "function" ? new WeakMap() : null;
+
+function readTabInitData(tab, head) {
+    const raw = head?.getAttribute?.("data-initdata") || head?.dataset?.initdata || "";
+    if (!raw || typeof raw !== "string" || !raw.startsWith("{")) return null;
+    if (tabInitDataCache && tab && typeof tab === "object") {
+        const cached = tabInitDataCache.get(tab);
+        if (cached && cached.raw === raw) return cached.data;
+    }
+    let parsed = null;
+    try { parsed = JSON.parse(raw); } catch { parsed = null; }
+    if (tabInitDataCache && tab && typeof tab === "object") {
+        tabInitDataCache.set(tab, {raw, data: parsed});
+    }
+    return parsed;
+}
+
+function resolveFriendlyPluginName(rawId, explicitDisplay, iconHref, tabTitle, pluginsList) {
+    const idLower = String(rawId || "").toLowerCase();
+    const iconLower = String(iconHref || "").toLowerCase();
+    const titleStr = String(tabTitle || "");
+
+    // 1. 若宿主提供了已注册插件表，按 plugin.name 精确/前缀匹配（优先匹配最长 name）
+    if (Array.isArray(pluginsList) && pluginsList.length > 0 && rawId) {
+        let bestPlugin = null;
+        let bestLen = -1;
+        for (let i = 0; i < pluginsList.length; i += 1) {
+            const p = pluginsList[i];
+            const pName = typeof p?.name === "string" ? p.name : "";
+            if (!pName) continue;
+            if ((rawId === pName || rawId.startsWith(pName)) && pName.length > bestLen) {
+                bestPlugin = p;
+                bestLen = pName.length;
+            }
+        }
+        if (bestPlugin) {
+            const regDisplay = String(bestPlugin.displayName || bestPlugin.i18n?.pluginName || bestPlugin.i18n?.title || "").trim();
+            if (regDisplay && !/^(siyuan-plugin-|sy-|siyuan-)/i.test(regDisplay)) {
+                return regDisplay;
+            }
+        }
+    }
+
+    // 2. 显式 displayName（非原始 kebab ID）
+    const cleanExplicit = String(explicitDisplay || "").trim();
+    if (cleanExplicit && !/^(siyuan-plugin-|sy-|siyuan-)/i.test(cleanExplicit)) {
+        return cleanExplicit;
+    }
+
+    // 3. 小驴生态 8 插件 + 常见第三方思源插件语义归属映射
+    const combined = `${idLower} ${iconLower} ${titleStr}`;
+    if (/siyuan-cards|小驴闪卡|闪卡/.test(combined) && !/riffcard/.test(idLower)) return "小驴闪卡";
+    if (/siyuan-home|butler|小驴管家|管家/.test(combined)) return "小驴管家";
+    if (/siyuan-checkin|checkin|小驴打卡|打卡/.test(combined)) return "小驴打卡";
+    if (/siyuan-exam|exam|小驴考试|考试/.test(combined)) return "小驴考试";
+    if (/siyuan-contacts|contacts|小驴人脉|人脉/.test(combined)) return "小驴人脉";
+    if (/siyuan-glean|glean|小驴拾遗|拾遗/.test(combined)) return "小驴拾遗";
+    if (/siyuan-common|小驴常用|常用/.test(combined)) return "小驴常用";
+    if (/siyuan-speed-switch|speed-switch|小驴雷切|雷切/.test(combined)) return "小驴雷切";
+    if (/siyuan-compass|小驴罗盘|罗盘/.test(combined)) return "小驴罗盘";
+    if (/task-manager|task_manager|任务管理器/.test(combined)) return "任务管理器";
+    if (/whale|鲸鱼/.test(combined)) return /鲸鱼/.test(titleStr) ? (titleStr.match(/鲸鱼[^\s·-]*/)?.[0] || "鲸鱼") : "鲸鱼";
+    if (/yegui|叶归/.test(combined)) return "叶归";
+    if (/mindmap|思维导图/.test(combined)) return "思维导图";
+    if (/kanban|看板/.test(combined)) return "看板";
+    if (/calendar|日历/.test(combined)) return "日历";
+    if (/图片工具箱/.test(titleStr)) return "图片工具箱";
+
+    // 4. 其余第三方插件：清洗前缀后展示注册名或标题
+    if (rawId) {
+        const stripped = String(rawId).replace(/^(?:siyuan-plugin-|siyuan-|sy-|plugin-)/i, "").trim();
+        if (stripped && stripped !== "custom") return stripped;
+    }
+    const matchedTitle = titleStr.match(/^(小驴[闪管打考人拾常用雷][^\s·-]*)/)?.[0];
+    if (matchedTitle) return matchedTitle;
+    return titleStr || "插件页面";
+}
+
 /**
  * 智能识别页签是否属于插件自定义页面或系统功能页（非笔记本 Markdown 文档）
  */
-function detectSpecialTabKind(tab) {
-    if (!tab) return { isSpecial: false, category: "doc" };
-    const head = tab.headElement;
-    const type = head?.getAttribute?.("data-type") || tab.type || "";
-    const initDataStr = head?.getAttribute?.("data-initdata") || head?.dataset?.initdata || "";
-    let initData = null;
-    if (initDataStr && typeof initDataStr === "string" && initDataStr.startsWith("{")) {
-        try { initData = JSON.parse(initDataStr); } catch {}
+function detectSpecialTabKind(tab, ctx) {
+    if (!tab || typeof tab !== "object") return { isSpecial: false, category: "doc" };
+    // 快速路径：纯合成文档页签（含 rootId/notebookId 且无任何自定义插件标记）直接短路
+    const model = tab.model;
+    const modelType = typeof model?.type === "string" ? model.type : "";
+    const explicitPluginFlag = tab.type === "custom"
+        || modelType === "custom"
+        || Boolean(tab.customType)
+        || Boolean(model?.plugin);
+    if (!explicitPluginFlag && !tab.headElement && (tab.rootId || tab.rootID || tab.notebookId)) {
+        return { isSpecial: false, category: "doc" };
     }
 
-    const pluginId = initData?.plugin || tab.model?.plugin?.name || "";
-    const pluginTitle = tab.model?.plugin?.displayName || "";
+    const head = tab.headElement;
+    const rawHeadType = head?.getAttribute?.("data-type") || "";
+    const rawTabType = tab.type || "";
+    const type = rawHeadType && rawHeadType !== "tab-header" ? rawHeadType : rawTabType;
+    const initData = readTabInitData(tab, head);
+    const hasDocMarker = Boolean(
+        tab.rootId
+        || tab.rootID
+        || tab.notebookId
+        || model?.editor
+        || model?.protyle
+        || model?.rootID
+        || model?.block
+        || initData?.instance === "Editor"
+        || initData?.rootId
+        || initData?.blockId
+    );
+    if (hasDocMarker && !explicitPluginFlag && initData?.instance !== "Custom" && !initData?.custom && !initData?.plugin) {
+        return { isSpecial: false, category: "doc" };
+    }
+
+    const rawId = initData?.plugin
+        || model?.plugin?.name
+        || initData?.customModelType
+        || initData?.custom?.id
+        || initData?.custom?.type
+        || tab.customType
+        || (modelType && modelType !== "custom" ? modelType : "")
+        || "";
+    const explicitDisplay = model?.plugin?.displayName || initData?.pluginDisplayName || "";
+    const iconHref = head?.querySelector?.(".item__graphic use")?.getAttribute?.("xlink:href") || tab.icon || "";
     const tabTitle = head?.querySelector?.(".item__text")?.textContent?.trim() || tab.title || "";
 
-    // 1. 明确标记为 custom 的插件自定义页签
-    if (type === "custom" || pluginId || tab.model?.plugin) {
-        let name = pluginTitle || pluginId;
-        if (!name || /siyuan-plugin-|sy-/i.test(name)) {
-            if (/闪卡|riff/i.test(tabTitle)) name = "小驴闪卡";
-            else if (/管家|home/i.test(tabTitle)) name = "小驴管家";
-            else if (/打卡|checkin/i.test(tabTitle)) name = "小驴打卡";
-            else if (/考试|exam/i.test(tabTitle)) name = "小驴考试";
-            else if (/人脉|contacts/i.test(tabTitle)) name = "小驴人脉";
-            else if (/拾遗|glean/i.test(tabTitle)) name = "小驴拾遗";
-            else if (/常用|common/i.test(tabTitle)) name = "小驴常用";
-            else if (/雷切|speed/i.test(tabTitle)) name = "小驴雷切";
-            else name = "插件工作台";
+    const isExplicitPlugin = explicitPluginFlag
+        || Boolean(initData?.plugin)
+        || initData?.instance === "Custom"
+        || Boolean(initData?.custom)
+        || Boolean(initData?.customModelType)
+        || model?.constructor?.name === "Custom";
+
+    // 1. 思源系统内置虚拟页签（非插件自定义页签时命中）
+    if (!isExplicitPlugin) {
+        const sysCandidate = String(type || initData?.instance || modelType || "").toLowerCase();
+        if (sysCandidate && SPECIAL_SYSTEM_TYPES[sysCandidate]) {
+            const sys = SPECIAL_SYSTEM_TYPES[sysCandidate];
+            return {
+                isSpecial: true,
+                isPlugin: false,
+                category: "system",
+                groupKey: `sys:${sysCandidate}`,
+                groupLabel: sys.label,
+                icon: sys.icon,
+                badgeText: sys.badge,
+            };
         }
+    }
+
+    // 2. 插件自定义页签（覆盖小驴 8 插件及任意第三方思源插件）
+    const isNonEditorModel = Boolean(model && typeof model === "object" && !hasDocMarker && (modelType || model.element));
+    const isPluginHeaderWithoutDoc = Boolean(head && rawHeadType === "tab-header" && !hasDocMarker && !initData?.instance);
+    const isKnownPluginTitle = !hasDocMarker && /^(小驴[闪管打考人拾常用雷]|拾遗工作台|任务管理器|鲸鱼|叶归|思维导图|看板|日历|图片工具箱)/.test(tabTitle);
+
+    if (isExplicitPlugin || isNonEditorModel || isPluginHeaderWithoutDoc || isKnownPluginTitle) {
+        const pluginsList = ctx?.plugins || (typeof window !== "undefined" ? window?.siyuan?.ws?.app?.plugins : undefined);
+        const name = resolveFriendlyPluginName(rawId, explicitDisplay, iconHref, tabTitle, pluginsList);
+        const groupLabel = (ctx && ctx.labels && ctx.labels.pluginGroup) || "🧩 插件页面";
         return {
             isSpecial: true,
             isPlugin: true,
             category: "plugin",
-            groupKey: `plugin:${name}`,
-            groupLabel: `🧩 ${name}`,
+            groupKey: "plugins",
+            groupLabel,
             icon: "iconSparkles",
             badgeText: name,
-        };
-    }
-
-    // 2. 思源系统内置虚拟页签
-    const SYSTEM_TYPES = {
-        graph: { label: "🌐 全局关系图", icon: "iconGraph", badge: "关系图" },
-        search: { label: "🔍 全局搜索", icon: "iconSearch", badge: "搜索" },
-        riffCard: { label: "🎴 闪卡复习", icon: "iconRiffCard", badge: "闪卡" },
-        browser: { label: "🌍 网页浏览", icon: "iconBrowser", badge: "网页" },
-        pdf: { label: "📑 PDF 阅读器", icon: "iconFile", badge: "PDF" },
-        backlink: { label: "🔗 反向链接", icon: "iconLink", badge: "反链" },
-        outline: { label: "📋 文档大纲", icon: "iconAlignLeft", badge: "大纲" },
-    };
-    if (type && SYSTEM_TYPES[type]) {
-        const sys = SYSTEM_TYPES[type];
-        return {
-            isSpecial: true,
-            isPlugin: false,
-            category: "system",
-            groupKey: `sys:${type}`,
-            groupLabel: sys.label,
-            icon: sys.icon,
-            badgeText: sys.badge,
-        };
-    }
-
-    // 3. 兜底标题推导（某些插件没有设置 data-type="custom"，但带有插件名称）
-    if (/^(小驴[闪管打考人拾常用雷]|思维导图|看板|日历|图片工具箱)/.test(tabTitle)) {
-        const matchedName = tabTitle.match(/^(小驴[闪管打考人拾常用雷][^\s·-]*|思维导图|看板|日历|图片工具箱)/)?.[0] || "插件页面";
-        return {
-            isSpecial: true,
-            isPlugin: true,
-            category: "plugin",
-            groupKey: `plugin:${matchedName}`,
-            groupLabel: `🧩 ${matchedName}`,
-            icon: "iconSparkles",
-            badgeText: matchedName,
         };
     }
 
@@ -1348,7 +1452,7 @@ function groupTabsByMode(tabs, mode, ctx) {
     if (mode === "notebook") {
         const groups = new Map();
         tabs.forEach((tab) => {
-            const special = detectSpecialTabKind(tab);
+            const special = detectSpecialTabKind(tab, ctx);
             if (special.isSpecial) {
                 if (!groups.has(special.groupKey)) {
                     groups.set(special.groupKey, {
@@ -1381,10 +1485,14 @@ function groupTabsByMode(tabs, mode, ctx) {
         const order = new Map((ctx.notebookOrder || []).map((id, index) => [id, index]));
         return [...groups.values()]
             .sort((a, b) => {
-                // 特殊插件与系统页面统一排在真实笔记本后面，保持笔记本列表有序
+                // 特殊插件与系统页面统一排在真实笔记本后面，保持笔记本列表有序；统一插件组优先于系统组
                 if (a.isSpecial && !b.isSpecial) return 1;
                 if (!a.isSpecial && b.isSpecial) return -1;
-                if (a.isSpecial && b.isSpecial) return compareText(a.label, b.label);
+                if (a.isSpecial && b.isSpecial) {
+                    if (a.key === "plugins" && b.key !== "plugins") return -1;
+                    if (b.key === "plugins" && a.key !== "plugins") return 1;
+                    return compareText(a.label, b.label);
+                }
 
                 const ia = order.has(a.id) ? order.get(a.id) : Number.MAX_SAFE_INTEGER;
                 const ib = order.has(b.id) ? order.get(b.id) : Number.MAX_SAFE_INTEGER;
@@ -1479,6 +1587,11 @@ function clampOversizedIcons(root) {
     for (let i = 0; i < svgs.length; i++) {
         const svg = svgs[i];
         if (svg.dataset && svg.dataset.swIconClamped === "true") continue;
+        // 跳过缩略图与预览正文内的文档 SVG，避免无意义的 getBoundingClientRect 强制回流
+        if (typeof svg.closest === "function" && svg.closest(".sw__thumb-content, .sw__doc-preview-body")) {
+            if (svg.dataset) svg.dataset.swIconClamped = "true";
+            continue;
+        }
         // 快速短路：若 svg 已显式定义且符合阈值的属性，直接免除 getBoundingClientRect 昂贵回流
         const attrW = typeof svg.getAttribute === "function" ? parseFloat(svg.getAttribute("width") || "") : NaN;
         const attrH = typeof svg.getAttribute === "function" ? parseFloat(svg.getAttribute("height") || "") : NaN;

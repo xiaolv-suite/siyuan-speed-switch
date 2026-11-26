@@ -54,7 +54,7 @@
     max-height: var(--sw-visual-viewport-h, 100dvh) !important;
 
     // T-7702: 软键盘输入态自动收起底部操作栏，释放垂直浏览空间
-    :is(.sw__quick-actions, .sw-home__quick-actions, .sw__mobile-bottom-nav) {
+    :is(.sw__quick-actions, .sw-home__quick-actions, .sw__mobile-bottom-bar) {
         display: none !important;
     }
 }
@@ -62,7 +62,7 @@
 .speed-switch {
     .sw__scroll { container-type: size; }
 
-    @container (max-width: 679px) {
+    @container (max-width: 630px) {
         .sw--with-preview {
             grid-template-columns: minmax(0, 1fr) !important;
             .sw__doc-preview { display: none !important; }
@@ -1387,14 +1387,21 @@
         &.sw--with-preview {
             display: grid;
             grid-template-columns: minmax(0, 1fr) clamp(280px, 34%, 480px);
-            grid-template-rows: 1fr;
+            grid-template-rows: auto minmax(0, 1fr);
             column-gap: 14px;
             align-items: stretch;
             flex: 1;
             min-height: calc(100cqh - var(--sw-space-md, 8px));
 
             .sw__window-label {
-                grid-column: 1 / -1;
+                grid-column: 1;
+                grid-row: 1;
+            }
+
+            .sw__doc-grid {
+                grid-column: 1;
+                min-width: 0;
+                align-self: start;
             }
 
             .sw__doc-load-more,
@@ -1402,7 +1409,7 @@
                 grid-column: 1;
             }
 
-            .sw__tab-content { grid-column: 1; min-width: 0; }
+            .sw__tab-content { grid-column: 1; grid-row: 1 / -1; min-width: 0; }
 
             .sw__doc-preview {
                 grid-column: 2;
@@ -2264,23 +2271,23 @@
     }
 
     .sw__quick-actions--icons {
-        .sw__quick-action {
+        .sw__quick-action:not(.sw__mobile-nav-item) {
             min-width: 32px;
             width: 32px;
             padding: 0;
             justify-content: center;
         }
 
-        .sw__quick-action-label {
+        .sw__quick-action:not(.sw__mobile-nav-item) .sw__quick-action-label {
             display: none;
         }
     }
 
-    .sw__quick-actions--hidden {
+    .sw__quick-actions--hidden:not(.sw__mobile-bottom-bar) {
         display: none !important;
     }
 
-    .sw__quick-actions--collapsed {
+    .sw__quick-actions--collapsed:not(.sw__mobile-bottom-bar) {
         min-height: 30px;
         padding-block: var(--sw-space-2xs, 2px);
         justify-content: flex-end;
@@ -2949,7 +2956,7 @@
                     height: var(--sw-thumb-height, 80px);
                     border-bottom: 1px solid var(--sw-color-line);
 
-                    &:has(.sw__thumb-placeholder, .sw__thumb-loading) {
+                    &.sw__thumb--compact {
                         height: 32px;
                     }
 
@@ -3105,44 +3112,31 @@
   .sw__doc-status-skeleton-line { animation: none; }
 }
 
-// ==================== 移动端底部主导航（Mobile Bottom Nav ≤4项，触控 ≥44px） ====================
-.sw__mobile-bottom-nav {
+// ==================== 移动端单层合并底栏（统一主导航 + 快捷动作，触控 ≥44px） ====================
+.sw__mobile-bottom-bar {
     display: flex;
     align-items: center;
-    justify-content: space-around;
-    min-height: 50px;
-    padding-top: var(--sw-space-2xs, 2px);
-    padding-bottom: max(4px, env(safe-area-inset-bottom, 0px));
-    background: var(--sw-color-surface);
-    border-top: 1px solid var(--sw-color-surface-muted, rgba(0, 0, 0, 0.08));
-    flex-shrink: 0;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
     z-index: 10;
+
+    &::-webkit-scrollbar {
+        display: none;
+    }
 }
 .sw__mobile-nav-item {
-    display: inline-flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-width: 44px;
-    min-height: 44px;
-    padding: var(--sw-space-xs, 4px) 10px;
-    background: transparent;
-    border: none;
-    color: var(--sw-color-text-subtle);
-    opacity: 0.72;
-    font-size: var(--sw-font-2xs, 10px);
-    touch-action: manipulation;
-    cursor: pointer;
-    transition: opacity $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease;
+    flex-shrink: 0;
 
-    svg {
-        width: 20px;
-        height: 20px;
-        margin-bottom: var(--sw-space-2xs, 2px);
+    .sw__mobile-nav-label {
+        display: inline-block;
     }
 
-    &.is-active, &:hover, &:active {
-        opacity: 1;
+    &.is-active {
         color: var(--sw-color-accent);
+        border-color: color-mix(in srgb, var(--sw-color-accent) 42%, transparent);
+        background: var(--sw-accent-soft);
     }
 }

@@ -531,7 +531,8 @@
 .sw-fab-root.sw__fab.sw__fab--hidden,
 .sw-fab-root[data-state="suspended"],
 .sw-fab-root[data-state="hidden"],
-body:has(.b3-dialog--open, .sw-mobile-switcher-dialog, .sw-settings-dialog) :is(.sw-fab-root, .sw-fab-recovery) {
+.sw-fab-recovery.sw__fab--hidden,
+.sw-fab-recovery[hidden] {
     display: none !important;
     opacity: 0 !important;
     pointer-events: none !important;

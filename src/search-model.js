@@ -871,7 +871,8 @@ function parseSearchTerms(query, maxTerms = 16) {
     const tokens = raw.match(/"[^"]*"|\S+/g) || [];
     for (const token of tokens.slice(0, maxTerms)) {
         if (token.startsWith('"')) {
-            const phrase = token.slice(1, -1).trim().toLowerCase();
+            const unquoted = token.endsWith('"') && token.length >= 2 ? token.slice(1, -1) : token.slice(1);
+            const phrase = unquoted.trim().toLowerCase();
             if (phrase) includes.push(phrase);
             continue;
         }
@@ -1666,10 +1667,16 @@ function buildUnifiedSections(options = {}) {
 
 function parseSearchQuery(raw) {
     const query = typeof raw === "string" ? raw : "";
+    const trimmed = query.trim();
     const phrases = [];
     const excludes = [];
     const terms = [];
     const tokens = query.match(/"([^"]*)"|(\S+)/g) || [];
+    // R9: 以 - / － 开头且并非「-排除词 正向词」布尔排除语法时，属于待办穿透模式
+    // （如 "-任务"、"-待办"、"- 待办"、"-"），formatCleanQuery 必须保留查询而不能吞成 ""。
+    const isTaskPenetration = (trimmed.startsWith("-") || trimmed.startsWith("－"))
+        && !(tokens.length > 1 && !trimmed.startsWith("- ") && !trimmed.startsWith("－ ")
+            && tokens.some((t, idx) => idx > 0 && !t.startsWith("-") && !t.startsWith("－")));
     for (const token of tokens) {
         const quoted = token.match(/^"([^"]*)"$/);
         if (quoted) {
@@ -1677,13 +1684,13 @@ function parseSearchQuery(raw) {
             if (phrase) phrases.push(phrase);
             continue;
         }
-        if (token.length > 1 && token.startsWith("-")) {
+        if (token.length > 1 && (token.startsWith("-") || token.startsWith("－"))) {
             excludes.push(token.slice(1).toLowerCase());
             continue;
         }
         terms.push(token.toLowerCase());
     }
-    return {phrases, excludes, terms};
+    return {phrases, excludes, terms, taskQuery: isTaskPenetration ? trimmed : ""};
 }
 
 function formatCleanQuery(parsed) {
@@ -1691,7 +1698,8 @@ function formatCleanQuery(parsed) {
     const phrases = Array.isArray(safe.phrases) ? safe.phrases : [];
     const terms = Array.isArray(safe.terms) ? safe.terms : [];
     const parts = phrases.map((phrase) => `"${phrase}"`).concat(terms);
-    return parts.join(" ");
+    if (parts.length > 0) return parts.join(" ");
+    return typeof safe.taskQuery === "string" ? safe.taskQuery : "";
 }
 
 function matchesParsedQuery(title, parsed) {
@@ -1773,7 +1781,10 @@ function flattenPreviewOutline(nodes, depth, out, limit) {
                     ? Number(shape[1])
                     : Math.min(6, Math.max(1, depth + 1));
             }
-            out.push({name, level});
+            const entry = {name, level};
+            const blockId = typeof node.id === "string" ? node.id.trim() : "";
+            Object.defineProperty(entry, "blockId", {value: blockId, enumerable: false, configurable: true});
+            out.push(entry);
         }
         flattenPreviewOutline(node.blocks || node.children, depth + 1, out, limit);
     }

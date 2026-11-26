@@ -12,6 +12,7 @@ import {runNotebookLoad} from "./notebook-load-ui";
 export interface HomeConfigFormHost {
     i18n: Record<string, string>;
     isMobile: boolean;
+    workbench?: any;
     homeRuntime: {listModules(device: string): Array<Record<string, any>>};
     getHomeState(): {schemaVersion: number; instances: unknown[]; layouts: Record<string, unknown[]>};
     saveHomeState(state: {schemaVersion: number; instances: unknown[]; layouts: Record<string, unknown[]>}): void;
@@ -32,7 +33,8 @@ export function openHomeConfigForm(this: HomeConfigFormHost,
         schema: Array<{ key: string; label: string; type: string; min?: number; max?: number; defaults?: unknown; options?: string[] }>,
         onSaved: () => void,
     ) {
-        const definitions = this.homeRuntime.listModules("desktop").concat(this.homeRuntime.listModules("mobile"), this.homeRuntime.listModules("sidebar")) as any[];
+        const runtime = this.workbench || this.homeRuntime;
+        const definitions = runtime.listModules("desktop").concat(runtime.listModules("mobile"), runtime.listModules("sidebar")) as any[];
         const def = definitions.find((item) => item?.moduleId === inst.moduleId) || {moduleId: inst.moduleId, title: inst.moduleId, category: "plugin"};
         const sourceInfo = resolveHomeStoreSourceInfo(inst.moduleId);
         const configKind = resolveHomeConfigKind(inst.moduleId, def.category);

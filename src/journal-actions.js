@@ -139,4 +139,25 @@ async function findTodayJournal({notebook, fetchImpl = globalThis.fetch, logger,
     return result.ok ? result.id : null;
 }
 
-module.exports = {normalizeJournalDocumentId, ensureTodayJournal, ensureTodayJournalOutcome, findTodayJournal, findTodayJournalOutcome};
+function escapeLifeLogIalValue(value) {
+    return String(value ?? "").replace(/[\r\n]+/g, " ").replace(/"/g, "&quot;");
+}
+
+function attachXiaolvLifeLogIal(markdown, attrs) {
+    const clean = String(markdown || "").trimEnd();
+    if (!clean) return "";
+    const entries = Object.entries(attrs || {}).filter(([, v]) => v !== undefined && v !== null && String(v) !== "");
+    if (entries.length === 0) return clean;
+    const ialPairs = entries
+        .map(([k, v]) => `${k}="${escapeLifeLogIalValue(v)}"`)
+        .join(" ");
+    if (/\{:[^}]*\}\s*$/.test(clean)) {
+        return clean.replace(/\{:([^}]*)\}\s*$/, (_match, existing) => {
+            const body = String(existing || "").trim();
+            return body ? `{: ${body} ${ialPairs} }` : `{: ${ialPairs} }`;
+        });
+    }
+    return `${clean}\n{: ${ialPairs} }`;
+}
+
+module.exports = {normalizeJournalDocumentId, ensureTodayJournal, ensureTodayJournalOutcome, findTodayJournal, findTodayJournalOutcome, attachXiaolvLifeLogIal};

@@ -104,6 +104,15 @@ export interface ISiyuanGlobal {
     config?: ISiyuanConfig;
     layout?: ISiyuanLayout;
     mobile?: ISiyuanMobile;
+    ws?: {
+        app?: {
+            plugins?: Array<{
+                name?: string;
+                displayName?: string;
+                i18n?: Record<string, string>;
+            }>;
+        };
+    };
 }
 
 // ── 懒挂在 window 上的 ElementStorage，给 dock 回调使用 ──

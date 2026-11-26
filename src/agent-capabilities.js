@@ -1200,10 +1200,9 @@ function flipTaskMarkdown(markdown, done) {
     if (!match) return "";
     const target = done ? "x" : " ";
     if (match[2] === target) return "";
-    // 输出自净化：清控制字符并钳制 64KB，写回内核前不携带任何越界载荷
+    // 仅翻转首行复选框并清除控制字符 \u0000，原样保留全部尾部正文（严禁按 64KiB 截断毁损长任务块）
     return (source.slice(0, match.index) + match[1] + target + match[3] + source.slice(match.index + match[0].length))
-        .replace(/\u0000/g, "")
-        .slice(0, 65536);
+        .replace(/\u0000/g, "");
 }
 
 

@@ -14,7 +14,7 @@ import {applyPreviewFind, clampScrollTop, clearPreviewFind, HIT_CLASS, nextHitIn
 import {logger} from "./logger";
 import {createPlatformStatus, mountPlatformDialogCloseHint, mountPlatformDialogTitleWrap} from "./platform-dom";
 import type {DocSearchState} from "./doc-search-state";
-import type {IDocSearchFilters, IDocSearchResult, IPenetrationSearchPlan, ISearchSession, DocSearchRenderState, IOverlayClose} from "./index";
+import type {IDocSearchFilters, IDocSearchResult, IPenetrationSearchPlan, ISearchSession, DocSearchRenderState, IOverlayClose} from "./runtime/plugin-types";
 
 type Tab = ReturnType<typeof getAllTabs>[number];
 
@@ -531,7 +531,11 @@ export function openSavedSearchEditor(this: DocSearchUiHost, id: string): void {
             title: this.i18n.searchSavedEditTitle,
             content: '<div class="sw-saved-search-editor"></div>',
             width: this.isMobile ? "min(480px, 92vw)" : "420px",
+            destroyCallback: () => {
+                (this as any).activeDialogs?.delete(dialog);
+            },
         });
+        (this as any).activeDialogs?.add(dialog);
         mountPlatformDialogTitleWrap(dialog.element, this.i18n.searchSavedEditTitle || "编辑保存的搜索", "", "iconFilter");
         mountPlatformDialogCloseHint(dialog.element, this.i18n.platformCloseHint || "to close");
         const root = dialog.element.querySelector<HTMLElement>(".sw-saved-search-editor");
@@ -1190,18 +1194,19 @@ export function renderDocResults(this: DocSearchUiHost,
             appendDocSearchStatus.call(this, box, state, scrollElement, onClose, onRetry);
             return;
         }
+        // 排除当前已打开的文档（上半部分已有对应卡片）；深入穿透检索针对正文块、大纲、待办、标签与书签，不排除已打开文档
+        const isPenetration = (docs || []).some((doc) => doc.kind === "heading" || doc.kind === "block" || doc.kind === "task" || doc.kind === "tag" || doc.kind === "bookmark");
         // T-6802：运算符客户端预过滤（排除项剔除 / 短语必须命中），以及
         // "上次选择置顶"——同一查询下用户上次选中的结果优先展示。
+        // R9：穿透检索与 `-待办` 任务穿透模式不得把 `-待办` 当作排除词过滤掉命中的任务条目。
         const parsedQuery = this.docSearchState.parsedQueries.get(scrollElement);
         let effectiveDocs = docs;
-        if (parsedQuery && (parsedQuery.phrases.length > 0 || parsedQuery.excludes.length > 0)) {
+        if (!isPenetration && parsedQuery && !(parsedQuery as {taskQuery?: string}).taskQuery && (parsedQuery.phrases.length > 0 || parsedQuery.excludes.length > 0)) {
             effectiveDocs = docs.filter((doc) => matchesParsedQuery(
                 `${String(doc.title || "")} ${String(doc.hPath || "")}`,
                 parsedQuery,
             ));
         }
-        // 排除当前已打开的文档（上半部分已有对应卡片）；深入穿透检索针对正文块、大纲、待办、标签与书签，不排除已打开文档
-        const isPenetration = (effectiveDocs || []).some((doc) => doc.kind === "heading" || doc.kind === "block" || doc.kind === "task" || doc.kind === "tag" || doc.kind === "bookmark");
         const openRootIds = isPenetration ? new Set<string>() : collectOpenRootIds.call(this);
         const queryKey = (scrollElement.dataset.swDocSearchQuery || "").trim().toLowerCase();
         const promoteId = queryKey ? this.lastPickedByQuery.get(queryKey) : undefined;
@@ -1638,8 +1643,12 @@ function toggleDocPreviewPin(this: DocSearchUiHost, scrollElement: HTMLElement):
         if (typeof lvNotify !== "undefined" && pin) lvNotify.inline(pin, this.i18n.docSearchPreviewPinned?.replace("{x}", current.title) || "已固定");
     }
 
-export function mountDocPreviewPane(this: DocSearchUiHost, box: HTMLElement, scrollElement: HTMLElement): void {
-        const measuredWidth = scrollElement.clientWidth || scrollElement.parentElement?.clientWidth || window.innerWidth || 0;
+export function mountDocPreviewPane(this: DocSearchUiHost, box: HTMLElement, scrollElement: HTMLElement, knownWidth = 0): void {
+        const resolveWidth = () => {
+            const measuredWidth = scrollElement.clientWidth || scrollElement.parentElement?.clientWidth || window.innerWidth || 0;
+            return measuredWidth;
+        };
+        const measuredWidth = knownWidth > 0 ? knownWidth : resolveWidth();
         if (this.isMobile || measuredWidth < DOC_PREVIEW_MIN_WIDTH) {
             return;
         }
@@ -1956,8 +1965,7 @@ const docPreviewRenderContent = function(this: DocSearchUiHost, pane: HTMLElemen
         if (snapshot.empty) {
             const emptyCard = document.createElement("div");
             emptyCard.className = "sw__doc-preview-empty-card";
-            emptyCard.innerHTML = `<div class="sw__doc-preview-empty-icon">📝</div>`
-                + `<div class="sw__doc-preview-empty-text">${failed ? this.i18n.docSearchPreviewFailed : (this.i18n.docSearchPreviewNoContent || "该文档暂无长文本或子级大纲")}</div>`
+            emptyCard.innerHTML = `<div class="sw__doc-preview-empty-text">${failed ? this.i18n.docSearchPreviewFailed : (this.i18n.docSearchPreviewNoContent || "该文档暂无长文本或子级大纲")}</div>`
                 + `<div class="sw__doc-preview-empty-sub">可通过下方快捷按钮复制引用或超链接</div>`;
             body.appendChild(emptyCard);
         } else if (snapshot.items.length > 0) {
@@ -2003,8 +2011,34 @@ const docPreviewRenderContent = function(this: DocSearchUiHost, pane: HTMLElemen
             });
             body.appendChild(section);
         }
-        const headings = snapshot.outline.filter((entry: {name: string}, index: number) =>
-            index !== 0 || entry.name !== title || snapshot.outline.length === 1);
+        const outlineIdsByKey = new Map<string, string[]>();
+        const collectOutlineIds = (nodes: any[], depth = 0): void => {
+            if (!Array.isArray(nodes)) return;
+            for (const node of nodes) {
+                if (!node || typeof node !== "object") continue;
+                const rawName = String(node.name || node.content || "")
+                    .replace(/&(nbsp|amp|lt|gt|quot);/g, (_m, n) => ({nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"'}[n as string] || _m))
+                    .replace(/\s+/g, " ")
+                    .trim();
+                const nodeId = typeof node.id === "string" ? node.id.trim() : "";
+                const isSyntheticDocRoot = nodeId === rootId;
+                if (rawName && BLOCK_ID_RE.test(nodeId) && !isSyntheticDocRoot) {
+                    let level = Number.isFinite(node.depth) ? Math.trunc(node.depth) + 1 : 0;
+                    if (level < 1 || level > 6) {
+                        const shape = String(node.nodeType || node.type || node.subType || "").toLowerCase();
+                        level = /^h[1-6]$/.test(shape) ? Number(shape[1]) : Math.min(6, Math.max(1, depth + 1));
+                    }
+                    const key = `${level}:${rawName}`;
+                    const queue = outlineIdsByKey.get(key) || [];
+                    queue.push(nodeId);
+                    outlineIdsByKey.set(key, queue);
+                }
+                collectOutlineIds(node.blocks || node.children, depth + 1);
+            }
+        };
+        collectOutlineIds(outline);
+        const headings = snapshot.outline.filter((entry: {name: string; blockId?: string}, index: number) =>
+            entry.blockId ? entry.blockId !== rootId : (index !== 0 || entry.name !== title || snapshot.outline.length === 1));
         if (headings.length > 0) {
             const section = document.createElement("section");
             section.className = "sw__doc-preview-section";
@@ -2013,17 +2047,42 @@ const docPreviewRenderContent = function(this: DocSearchUiHost, pane: HTMLElemen
             label.textContent = this.i18n.docSearchPreviewOutline;
             const list = document.createElement("ul");
             list.className = "sw__doc-preview-outline";
-            headings.forEach((entry: {name: string; level: number}) => {
+            headings.forEach((entry: {name: string; level: number; blockId?: string}) => {
                 const line = document.createElement("li");
                 line.className = "sw__doc-preview-heading";
                 line.style.paddingLeft = `${(entry.level - 1) * 10}px`;
-                line.textContent = entry.name;
+                const entryBlockId = typeof entry.blockId === "string" && BLOCK_ID_RE.test(entry.blockId) && entry.blockId !== rootId ? entry.blockId : "";
+                const queue = outlineIdsByKey.get(`${entry.level}:${entry.name}`);
+                const headingId = entryBlockId || (queue && queue.length > 0 ? (queue.shift() || "") : "");
+                if (headingId) {
+                    const jumpBtn = document.createElement("button");
+                    jumpBtn.type = "button";
+                    jumpBtn.className = "sw__doc-preview-heading-btn";
+                    jumpBtn.dataset.blockId = headingId;
+                    jumpBtn.textContent = entry.name;
+                    jumpBtn.title = `${entry.name}`;
+                    jumpBtn.addEventListener("click", () => {
+                        const hostAny = this as any;
+                        if (hostAny?.platformSwitcherDialog?.element?.contains(pane)) {
+                            hostAny.platformSwitcherDialog.destroy();
+                        } else {
+                            const closeBtn = pane.closest<HTMLElement>(".sw-platform-dialog")?.querySelector<HTMLElement>(".sw-platform-header__close");
+                            closeBtn?.click();
+                        }
+                        if (typeof openDocSearchResult === "function") {
+                            void openDocSearchResult.call(this, rootId, headingId);
+                        }
+                    });
+                    line.appendChild(jumpBtn);
+                } else {
+                    line.textContent = entry.name;
+                }
                 list.appendChild(line);
             });
             section.append(label, list);
             body.appendChild(section);
         }
-        // 底部元信息与快捷操作：充实短文档下部空间，杜绝死白空洞
+        // 底部元信息与快捷操作：充实短文档下部空间，保持克制排版
         const metaSection = document.createElement("section");
         metaSection.className = "sw__doc-preview-section sw__doc-preview-meta";
         const metaTitle = document.createElement("h4");
@@ -2033,8 +2092,8 @@ const docPreviewRenderContent = function(this: DocSearchUiHost, pane: HTMLElemen
         metaGrid.className = "sw__doc-preview-meta-grid";
         const wordCount = (docPayload?.data?.content || "").replace(/<[^>]+>/g, "").trim().length;
         const blockCount = rows.length;
-        metaGrid.innerHTML = `<span class="sw__doc-preview-meta-pill">📝 估算字数 · ${wordCount}</span>`
-            + `<span class="sw__doc-preview-meta-pill">🧱 块数量 · ${blockCount}</span>`;
+        metaGrid.innerHTML = `<span class="sw__doc-preview-meta-pill">字数约 ${wordCount}</span>`
+            + `<span class="sw__doc-preview-meta-pill">块数 ${blockCount}</span>`;
 
         const actionsDiv = document.createElement("div");
         actionsDiv.className = "sw__doc-preview-actions";
@@ -2053,12 +2112,12 @@ const docPreviewRenderContent = function(this: DocSearchUiHost, pane: HTMLElemen
         const copyBtn = document.createElement("button");
         copyBtn.type = "button";
         copyBtn.className = "sw__doc-preview-act-btn";
-        copyBtn.textContent = "复制块引用 📋";
+        copyBtn.textContent = "复制块引用";
         copyBtn.addEventListener("click", (): void => copyToClip(`((${currentRootId} "${title}"))`, "已复制块引用代码"));
         const copyLinkBtn = document.createElement("button");
         copyLinkBtn.type = "button";
         copyLinkBtn.className = "sw__doc-preview-act-btn";
-        copyLinkBtn.textContent = "复制超链接 🔗";
+        copyLinkBtn.textContent = "复制超链接";
         copyLinkBtn.addEventListener("click", (): void => copyToClip(`siyuan://blocks/${currentRootId}`, "已复制思源协议超链接"));
         actionsDiv.append(copyBtn, copyLinkBtn);
         metaSection.append(metaTitle, metaGrid, actionsDiv);
@@ -2330,10 +2389,55 @@ export function docSearchHitId(this: DocSearchUiHost, doc: IDocSearchResult, roo
 
 export async function openDocSearchResult(this: DocSearchUiHost, rootId: string, hitId: string | null, position?: "right",
         options?: {preview?: boolean}): Promise<void> {
+        const safeHitId = typeof hitId === "string" && BLOCK_ID_RE.test(hitId) && hitId !== rootId ? hitId : null;
+        const scrollBlockIntoViewIfPresent = (blockId: string | null): boolean => {
+            if (!blockId || typeof document === "undefined") return false;
+            const el = document.querySelector<HTMLElement>(`.protyle-wysiwyg [data-node-id="${blockId}"]`);
+            if (el && typeof el.scrollIntoView === "function") {
+                el.scrollIntoView({block: "center"});
+                return true;
+            }
+            return false;
+        };
+        const focusBlockOnMobile = async (targetRoot: string, blockId: string | null): Promise<void> => {
+            if (!blockId) return;
+            // 先尝试 DOM 精准滚动，未挂载时回退 openTab({ doc: { id: blockId, action: ["cb-get-scroll"] } }) 并短重试 DOM 定位
+            if (scrollBlockIntoViewIfPresent(blockId)) return;
+            if (typeof openTab === "function") {
+                try {
+                    await openTab({app: this.app, doc: {id: blockId, action: ["cb-get-scroll"]}});
+                } catch (_) {
+                    // 移动端部分版本忽略 openTab，继续尝试 DOM 定位
+                }
+            }
+            if (scrollBlockIntoViewIfPresent(blockId)) return;
+            if (typeof window !== "undefined" && typeof window.setTimeout === "function") {
+                for (let attempt = 0; attempt < 5; attempt++) {
+                    await new Promise<void>((resolve) => window.setTimeout(resolve, 60));
+                    if (scrollBlockIntoViewIfPresent(blockId)) break;
+                }
+            }
+            void targetRoot;
+        };
         // T-6830 打开策略：开启复用且该文档已打开时，聚焦既有页签而非新开（防重复页签）。
-        // 命中块定位（hitId）只在打开新页签时才有意义，复用路径直接聚焦。
-        // T-6816：preview 选项时跳过复用（用户明确要一个预览页签）。
-        if (!(options?.preview) && this.reuseOpenTabsEnabled() && this.activateTabForReuse(rootId)) {
+        // 若带有命中块 ID（如预览大纲标题跳转），在聚焦既有页签后以 removeCurrentTab 原位跳转到目标块，不新增重复页签。
+        // T-6816：preview 选项时跳过复用（用户明确要一个预览页签）；position 指定分栏打开时走分栏。
+        if (!position && !(options?.preview) && this.reuseOpenTabsEnabled() && this.activateTabForReuse(rootId)) {
+            if (safeHitId) {
+                if (this.isMobile) {
+                    await focusBlockOnMobile(rootId, safeHitId);
+                } else {
+                    await openDocumentOnDesktop({
+                        rootId,
+                        hitId: safeHitId,
+                        app: this.app,
+                        openTab,
+                        logger,
+                        removeCurrentTab: true,
+                    });
+                    scrollBlockIntoViewIfPresent(safeHitId);
+                }
+            }
             return;
         }
         if (this.isMobile) {
@@ -2351,12 +2455,16 @@ export async function openDocSearchResult(this: DocSearchUiHost, rootId: string,
                     }
                 } catch (_) {}
             }
-            await this.mobileOpenDoc(targetRoot);
+            const mobileHitId = safeHitId || (targetRoot !== rootId && BLOCK_ID_RE.test(rootId) ? rootId : null);
+            const mobileOpened = await this.mobileOpenDoc(targetRoot);
+            if (mobileOpened && mobileHitId) {
+                await focusBlockOnMobile(targetRoot, mobileHitId);
+            }
             return;
         }
         const opened = await openDocumentOnDesktop({
             rootId,
-            hitId: hitId && BLOCK_ID_RE.test(hitId) ? hitId : null,
+            hitId: safeHitId,
             app: this.app,
             openTab,
             logger,

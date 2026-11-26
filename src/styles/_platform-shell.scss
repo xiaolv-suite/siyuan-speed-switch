@@ -94,7 +94,7 @@
     display: none !important;
 }
 
-.b3-dialog__container.sw-platform-dialog:not(.sw-mobile-switcher-dialog):not(:has(.sw-platform-chrome)) > .b3-dialog__header,
+.b3-dialog__container.sw-platform-dialog:not(.sw-mobile-switcher-dialog):not(.sw-platform-dialog--chromed) > .b3-dialog__header,
 .b3-dialog__container.sw-settings-dialog > .b3-dialog__header {
     display: flex !important;
     align-items: center;
@@ -449,7 +449,7 @@
     }
 }
 
-.b3-dialog__container:has(.sw-dialog__mobile-close-btn) > .b3-dialog__close {
+.b3-dialog__container.sw-dialog--has-mobile-close > .b3-dialog__close {
     display: none !important;
 }
 
@@ -951,8 +951,8 @@
     }
 }
 
-// T-7435: 思源 3.8.8+ 桌面紧凑模式自适应 (:root[data-ui-density="compact"])
-:root[data-ui-density="compact"] {
+// T-7435: 思源 3.8.8+ 桌面紧凑模式自适应（收敛至插件自身作用域选择器，严禁污染全局 :root）
+[data-ui-density="compact"] :is(.sw-platform-shell, .sw-platform-surface, .speed-switch, .sw-home, .sw-studio, .sw-fab-root) {
     --sw-platform-space-1: 2px;
     --sw-platform-space-2: 4px;
     --sw-platform-space-3: 8px;
@@ -1116,5 +1116,113 @@
             outline: none;
             box-shadow: var(--sw-focus-glow);
         }
+    }
+}
+
+// ==================== 已保存搜索编辑弹窗与 Studio 懒加载过渡态 ====================
+.sw-saved-search-editor {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-lg, 12px);
+    padding: var(--sw-space-xl, 16px);
+    color: var(--sw-color-text, var(--b3-theme-on-background));
+
+    &__field {
+        display: flex;
+        flex-direction: column;
+        gap: var(--sw-space-xs, 4px);
+        min-width: 0;
+
+        .b3-text-field,
+        .b3-select {
+            width: 100%;
+            min-height: 36px;
+            box-sizing: border-box;
+            border-radius: var(--sw-radius-control, 10px);
+            background: var(--sw-color-surface, var(--b3-theme-surface));
+            color: var(--sw-color-text, var(--b3-theme-on-background));
+            border-color: var(--sw-color-line-soft, var(--b3-border-color));
+            transition: border-color $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease;
+
+            &:focus-visible {
+                outline: none;
+                border-color: var(--sw-platform-accent, var(--b3-theme-primary));
+                box-shadow: var(--sw-focus-glow, 0 0 0 2px color-mix(in srgb, var(--b3-theme-primary, #7c68d5) 24%, transparent));
+            }
+        }
+    }
+
+    &__label {
+        font-size: var(--sw-font-sm, 12px);
+        font-weight: var(--sw-weight-medium, 500);
+        color: var(--sw-color-text-subtle, var(--b3-theme-on-surface-light));
+        line-height: var(--sw-leading-ui, 1.4);
+    }
+
+    &__hint {
+        min-height: 18px;
+        font-size: var(--sw-font-xs, 11px);
+        line-height: var(--sw-leading-ui, 1.4);
+        color: var(--sw-platform-warning, var(--b3-theme-error, #d97706));
+
+        &:empty {
+            display: none;
+        }
+    }
+
+    &__actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: var(--sw-space-md, 8px);
+        padding-top: var(--sw-space-xs, 4px);
+
+        .b3-button {
+            min-height: var(--sw-control-h, 34px);
+            border-radius: var(--sw-radius-control, 10px);
+            transition: background-color $sw-dur-fast $sw-ease, border-color $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease;
+        }
+    }
+}
+
+@media (max-width: 560px), (pointer: coarse) {
+    .sw-saved-search-editor {
+        padding: var(--sw-space-lg, 12px);
+
+        &__field .b3-text-field,
+        &__field .b3-select,
+        &__actions .b3-button {
+            min-height: 44px;
+        }
+    }
+}
+
+.sw-studio-loading {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sw-space-md, 8px);
+    min-height: 180px;
+    padding: var(--sw-space-2xl, 24px);
+    font-size: var(--sw-font-md, 13px);
+    color: var(--sw-color-text-subtle, var(--b3-theme-on-surface-light));
+    background: var(--sw-color-bg, var(--b3-theme-background));
+
+    &__spinner {
+        width: var(--sw-icon-sm, 16px);
+        height: var(--sw-icon-sm, 16px);
+        flex: 0 0 auto;
+        border-radius: 50%;
+        border: 2px solid color-mix(in srgb, var(--sw-platform-accent, var(--b3-theme-primary, #7c68d5)) 25%, transparent);
+        border-top-color: var(--sw-platform-accent, var(--b3-theme-primary, #7c68d5));
+        animation: sw-spin 0.8s linear infinite;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sw-studio-loading__spinner {
+        animation: none !important;
     }
 }
