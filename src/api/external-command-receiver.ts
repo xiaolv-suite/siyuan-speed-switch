@@ -1,4 +1,4 @@
-/** Minimal replacement for retired QuickGate transport. No arbitrary API/JS/command execution. */
+/** Minimal external command transport. No arbitrary API/JS/command execution. */
 export interface ExternalCommandPolicy {enabled: boolean; allowNavigation: boolean; allowWrites: boolean}
 export interface ExternalReceipt {v: 1; id: string; op: string; status: string; message?: string; data?: unknown; finishedAt: string; elapsedMs: number}
 interface JournalEntry {id: string; fingerprint: string; at: number; receipt: ExternalReceipt}
