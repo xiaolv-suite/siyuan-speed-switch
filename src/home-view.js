@@ -1,0 +1,1045 @@
+"use strict";
+
+const MAX_ITEMS = 24;
+const CALENDAR_MAX_ITEMS = 42;
+// 热力图格点上限：窗口最长 366 天 → 至多 53 周 × 7 = 371；HARD 为全局硬顶，防条目无限增长。
+const HEATMAP_MAX_ITEMS = 371;
+const HARD_ITEM_CEILING = 400;
+const MAX_TEXT = 256;
+const STATUSES = new Set(["loading", "ready", "empty", "error", "blocked"]);
+const NAVIGATION_LIST_MODULES = new Set([
+    "recent-documents", "pinned-docs", "favorites", "tags", "bookmarks", "document-sets",
+    "fixed-document", "current-document-outline", "document-relations-summary",
+]);
+let renderSequence = 0;
+function makeHomeEl(doc, tag) { return doc.createElement(tag); }
+
+function instanceHash(value) {
+    let hash = 2166136261;
+    for (const character of String(value || "")) {
+        hash ^= character.codePointAt(0);
+        hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+}
+
+function text(value, max = MAX_TEXT) {
+    return typeof value === "string" ? value.replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max) : "";
+}
+
+function safeHref(value) {
+    const href = text(value, 512);
+    if (!href) return "";
+    try {
+        return ["https:", "http:", "siyuan:"].includes(new URL(href).protocol) ? href : "";
+    } catch (_) {
+        return "";
+    }
+}
+
+function safeImageHref(value) {
+    const href = text(value, 512);
+    if (!href) return "";
+    try {
+        const url = new URL(href);
+        return url.protocol === "https:" && url.hostname === "lain.bgm.tv" && url.pathname.startsWith("/pic/cover/")
+            ? url.href : "";
+    } catch (_) {
+        return "";
+    }
+}
+
+// Intl.DateTimeFormat captures the host timezone when it is constructed, so a
+// single instance is reused across cards (building one costs ~60us versus ~2us
+// per format call) and only rebuilt when the reported UTC offset changes; a
+// machine crossing timezones therefore still renders current wall-clock times.
+let updatedAtFormatter = null;
+let updatedAtFormatterOffset = null;
+
+function formatUpdatedAt(value) {
+    const raw = Number(value);
+    if (!Number.isFinite(raw) || raw <= 0) return "";
+    const timestamp = raw < 100000000000 ? raw * 1000 : raw;
+    const date = new Date(timestamp);
+    if (!Number.isFinite(date.getTime())) return "";
+    try {
+        const offset = new Date().getTimezoneOffset();
+        if (!updatedAtFormatter || offset !== updatedAtFormatterOffset) {
+            updatedAtFormatter = new Intl.DateTimeFormat(undefined, {
+                month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+            });
+            updatedAtFormatterOffset = offset;
+        }
+        return updatedAtFormatter.format(date);
+    } catch (_) {
+        return "";
+    }
+}
+
+function renderModuleIcon(doc, value) {
+    const icon = text(value, 64);
+    if (!doc || typeof doc.createElement !== "function") return null;
+    if (/^icon[A-Za-z][A-Za-z0-9_-]*$/.test(icon)) {
+        const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("class", "sw__home-module-icon");
+        svg.setAttribute("aria-hidden", "true");
+        // 显式尺寸兜底（同 index.ts 移动端顶栏的成因）：样式未就绪时裸 svg 会退回
+        // 浏览器默认 300×150，把组件卡片头撑爆。28px 与 header 内 accent chip 的实际
+        // 渲染尺寸一致，CSS 就绪后由其接管，属性只是不可能被撑大的下限保障。
+        svg.setAttribute("width", "28");
+        svg.setAttribute("height", "28");
+        const use = doc.createElementNS("http://www.w3.org/2000/svg", "use");
+        use.setAttribute("href", `#${icon}`);
+        use.setAttribute("xlink:href", `#${icon}`);
+        svg.appendChild(use);
+        return svg;
+    }
+    if (icon && Array.from(icon).length <= 2) {
+        const label = makeHomeEl(doc, "span");
+        label.className = "sw__home-module-icon sw__home-module-icon--text";
+        label.setAttribute("aria-hidden", "true");
+        label.textContent = icon;
+        return label;
+    }
+    return null;
+}
+
+function normalizeHomeViewResult(value, options = {}) {
+    const source = value && typeof value === "object" ? value : {};
+    const rawSnapshot = source.snapshot && typeof source.snapshot === "object" ? source.snapshot : {};
+    const rawItems = Array.isArray(rawSnapshot.items) ? rawSnapshot.items : [];
+    const requestedMax = Number.isFinite(options.maxItems) ? Math.trunc(options.maxItems) : MAX_ITEMS;
+    const maxItems = Math.min(HARD_ITEM_CEILING, Math.max(1, requestedMax));
+    const items = rawItems.slice(0, maxItems).map((item) => {
+        const entry = {
+            label: text(item?.label),
+            value: text(item?.value),
+            href: safeHref(item?.href),
+            command: text(item?.command, 128),
+        };
+        const image = safeImageHref(item?.image);
+        if (image) entry.image = image;
+        const secondary = text(item?.secondary, 96);
+        if (secondary) entry.secondary = secondary;
+        if (typeof item?.done === "boolean") entry.done = item.done;
+        if (item?.disabled === true) entry.disabled = true;
+        if (typeof item?.weekend === "boolean") entry.weekend = item.weekend;
+        if (item?.outside === true) entry.outside = true;
+        if (["off", "work"].includes(item?.holiday)) entry.holiday = item.holiday;
+        if (Number.isFinite(item?.count) && item.count >= 0) entry.count = Math.trunc(item.count);
+        if (Number.isFinite(item?.depth)) entry.depth = Math.min(8, Math.max(0, Math.trunc(item.depth)));
+        if (typeof item?.treePath === "string") entry.treePath = text(item.treePath, 160);
+        if (item?.hasChildren === true) entry.hasChildren = true;
+        if (item?.expanded === false) entry.expanded = false;
+        if (item?.virtual === true) entry.virtual = true;
+        // level 由模型层量化（如 GitHub 贡献的 0~4 档），视图只透传不重写阈值，避免第二事实源；-1 = 窗口外。
+        if (Number.isFinite(item?.level)) entry.level = Math.min(4, Math.max(-1, Math.trunc(item.level)));
+        if (Number.isFinite(item?.rank) && item.rank > 0) entry.rank = Math.min(9999, Math.trunc(item.rank));
+        // T-7054 A 批次：世界时钟昼夜指示与 UTC 偏移透传
+        if (typeof item?.isDay === "boolean") entry.isDay = item.isDay;
+        if (typeof item?.utcOffset === "string") entry.utcOffset = item.utcOffset;
+        if (typeof item?.source === "string" && item.source) entry.source = text(item.source, 64);
+        if (typeof item?.pluginId === "string" && item.pluginId) entry.pluginId = text(item.pluginId, 64);
+        if (typeof item?.blockId === "string" && item.blockId) entry.blockId = text(item.blockId, 64);
+        if (typeof item?.id === "string" && item.id) entry.id = text(item.id, 64);
+        return entry;
+    }).filter((item) => options.keepEmptyItems === true || item.label || item.value || item.href);
+    const explicitStatus = STATUSES.has(source.status) ? source.status : STATUSES.has(rawSnapshot.status) ? rawSnapshot.status : "";
+    // 统计卡可以只有 stat（例如关闭日期行的本地时钟）；它仍是有内容的 ready
+    // 状态，不能因列表为空而退化成 empty 并失去时钟的局部刷新语义。
+    const hasStat = rawSnapshot.stat && typeof rawSnapshot.stat === "object"
+        && Boolean(text(rawSnapshot.stat.value, 32));
+    const status = explicitStatus || (source.loading === true ? "loading" : source.ok === false ? "error" : items.length || hasStat ? "ready" : "empty");
+    return {
+        status,
+        cached: source.cached === true,
+        ...(source.stale === true ? {stale: true} : {}),
+        reason: text(source.reason, 32),
+        title: text(rawSnapshot.title, 64),
+        calendarWeekdays: text(rawSnapshot.calendarWeekdays, 7),
+        // T-6975：日历当前月份偏移（快照→视图透传，供期间选择器回显当前值）
+        calendarOffset: Number.isFinite(rawSnapshot.calendarOffset) ? Math.trunc(rawSnapshot.calendarOffset) : 0,
+        // T-7054 A 批次：日进度百分比透传（local-time 进度条渲染源）
+        dayProgress: Number.isFinite(rawSnapshot.dayProgress) ? Math.min(100, Math.max(0, Math.trunc(rawSnapshot.dayProgress))) : -1,
+        // T-7054 A 批次：倒数日里程碑徽标透传（imminent/month/hundred）
+        ...(typeof rawSnapshot.milestone === "string" && rawSnapshot.milestone ? {milestone: rawSnapshot.milestone} : {}),
+        ...(text(rawSnapshot.emptyHint, 96) ? {emptyHint: text(rawSnapshot.emptyHint, 96)} : {}),
+        updatedAt: Number.isFinite(rawSnapshot.updatedAt) ? rawSnapshot.updatedAt : 0,
+        sourceHealth: ["fresh", "cached", "stale"].includes(rawSnapshot.sourceHealth) ? rawSnapshot.sourceHealth : "",
+        stat: rawSnapshot.stat && typeof rawSnapshot.stat === "object"
+            ? (() => {
+                const stat = {
+                    value: text(rawSnapshot.stat.value, 32),
+                    label: text(rawSnapshot.stat.label, 32),
+                    progress: Number.isFinite(rawSnapshot.stat.progress) ? Math.min(100, Math.max(0, rawSnapshot.stat.progress)) : null,
+                };
+                // T-6457 display 覆盖试点：白名单外的 emphasis 一律丢弃，不产生注入面
+                if (["large", "xl"].includes(rawSnapshot.stat.emphasis)) stat.emphasis = rawSnapshot.stat.emphasis;
+                const arc = rawSnapshot.stat.arc && typeof rawSnapshot.stat.arc === "object" ? rawSnapshot.stat.arc : null;
+                const max = arc && Number.isFinite(arc.max) ? Math.min(1000000, Math.max(0, arc.max)) : 0;
+                const value = arc && Number.isFinite(arc.value) ? Math.min(max, Math.max(0, arc.value)) : -1;
+                if (max > 0 && value >= 0) stat.arc = {value, max};
+                return stat;
+            })()
+            : null,
+        items,
+    };
+}
+
+function buildHomeModuleView(module, result, options = {}) {
+    const definition = module && typeof module === "object" ? module : {};
+    const moduleId = text(definition.moduleId, 64);
+    if (!moduleId) return null;
+    // T-6684：快照可携带 viewType 覆盖静态定义（受限同一白名单）——配置驱动的
+    // 视图切换（如 activity 年历网格）无需拆分新模块；仅改变既有有界条目的呈现，
+    // 不引入任何新能力面。
+    const allowedViewTypes = ["calendar", "weekdays", "media", "heatmap", "tag-tree"];
+    const snapshot = result && typeof result === "object" && result.snapshot && typeof result.snapshot === "object" ? result.snapshot : {};
+    const effectiveViewType = allowedViewTypes.includes(snapshot.viewType)
+        ? snapshot.viewType
+        : (allowedViewTypes.includes(definition.viewType) ? definition.viewType : "");
+    const isCalendar = effectiveViewType === "calendar";
+    const isHeatmap = effectiveViewType === "heatmap";
+    const normalized = normalizeHomeViewResult(result, {
+        keepEmptyItems: isCalendar || isHeatmap,
+        maxItems: isHeatmap ? HEATMAP_MAX_ITEMS : isCalendar ? CALENDAR_MAX_ITEMS : MAX_ITEMS,
+    });
+    const title = text(definition.title, 64) || moduleId;
+    return {
+        moduleId,
+        title,
+        icon: text(definition.icon, 64) || "iconFile",
+        category: text(definition.category, 32) || "custom",
+        configurable: Array.isArray(definition.configSchema) && definition.configSchema.length > 0,
+        viewType: effectiveViewType,
+        status: normalized.status,
+        stat: normalized.stat,
+        cached: normalized.cached,
+        ...(normalized.stale === true ? {stale: true} : {}),
+        reason: normalized.reason,
+        updatedAt: normalized.updatedAt,
+        sourceHealth: normalized.sourceHealth,
+        items: normalized.items,
+        ...(normalized.calendarWeekdays.length === 7 ? {calendarWeekdays: normalized.calendarWeekdays} : {}),
+        calendarOffset: Number.isFinite(normalized.calendarOffset) ? normalized.calendarOffset : 0,
+        dayProgress: Number.isFinite(normalized.dayProgress) ? normalized.dayProgress : -1,
+        ...(normalized.milestone ? {milestone: normalized.milestone} : {}),
+        // T-6925（真机反馈）：快照数据标题与定义标题相同时不再重复渲染——手机端
+        // 窄头部里标题列被挤成首字、旁挂完整同文案的"叠字"即源于此。
+        ...(normalized.title && normalized.title !== title ? {contextTitle: normalized.title} : {}),
+        ...(normalized.emptyHint ? {emptyHint: normalized.emptyHint} : {}),
+        ...(snapshot.retryable === true ? {retryable: true} : {}),
+        collapsed: options.collapsed === true,
+        role: "region",
+        ariaBusy: normalized.status === "loading",
+    };
+}
+
+function renderHomeModuleView(doc, view, options = {}) {
+    if (!doc || typeof doc.createElement !== "function" || !view || typeof view !== "object" || !view.moduleId) return null;
+    const labels = {
+        loading: "加载中…",
+        empty: "暂无内容",
+        error: "暂时无法加载",
+        blocked: "暂不可用",
+        retry: "重试",
+        config: "配置",
+        configAction: "配置组件",
+        collapse: "收起",
+        expand: "展开",
+        cached: "缓存",
+        updated: "更新",
+        sourceFresh: "实时",
+        sourceCached: "缓存源",
+        sourceStale: "过期缓存",
+        taskDone: "标记完成",
+        taskUndone: "标记未完成",
+        staleRefreshFailed: "旧内容（缓存）· 刷新失败",
+        timeout: "请求超时",
+        unsupported: "宿主不支持",
+        unregistered: "提供方未注册",
+        backoff: "暂缓重试",
+        previousMonth: "上月",
+        nextMonth: "下月",
+        today: "今天",
+        hasJournal: "有日记",
+        heatmapEmpty: "无贡献",
+        heatmapUnit: "次贡献",
+        heatmapLegend: "少 → 多",
+        tagVirtual: "组织节点",
+        ...(options.labels && typeof options.labels === "object" ? options.labels : {}),
+    };
+    const root = makeHomeEl(doc, "section");
+    root.className = "sw__home-module";
+    root.dataset.moduleId = view.moduleId;
+    root.dataset.status = view.status || "empty";
+    root.setAttribute("role", view.role || "region");
+    root.setAttribute("aria-busy", view.ariaBusy === true ? "true" : "false");
+    renderSequence = (renderSequence + 1) % 1000000000;
+    const instanceKey = `${instanceHash(view.moduleId)}-${renderSequence}`;
+    const titleId = `sw-home-title-${instanceKey}`;
+    root.setAttribute("aria-labelledby", titleId);
+    const heading = makeHomeEl(doc, "div");
+    heading.className = "sw__home-module-header";
+    const bodyId = `sw-home-body-${instanceKey}`;
+    const icon = renderModuleIcon(doc, view.icon);
+    if (icon) heading.appendChild(icon);
+    const title = makeHomeEl(doc, "h3");
+    title.className = "sw__home-module-title";
+    title.id = titleId;
+    title.textContent = view.title || view.moduleId;
+    title.title = title.textContent;
+    heading.appendChild(title);
+    if (view.contextTitle && view.viewType !== "calendar") {
+        const context = makeHomeEl(doc, "span");
+        context.className = "sw__home-module-context";
+        context.textContent = view.contextTitle;
+        context.title = view.contextTitle;
+        heading.appendChild(context);
+    }
+    const updatedAt = formatUpdatedAt(view.updatedAt);
+    if (view.cached || updatedAt) {
+        const meta = makeHomeEl(doc, "span");
+        meta.className = "sw__home-module-meta" + (view.stale ? " is-stale" : "");
+        meta.id = `sw-home-meta-${instanceKey}`;
+        // T-6473 头部瘦身：首行只显示时间本身（"更新"前缀移入 tooltip），
+        // 收窄后标题不再被挤成省略号
+        const metaText = [view.stale ? (labels.staleRefreshFailed || "Stale · refresh failed") : view.cached ? (labels.cached || "Cached") : "", updatedAt].filter(Boolean).join(" · ");
+        meta.textContent = metaText;
+        meta.setAttribute("title", `${labels.updated || "Updated"} ${metaText}`);
+        title.title = `${title.textContent} · ${meta.title}`;
+        root.setAttribute("aria-describedby", meta.id);
+        heading.appendChild(meta);
+    }
+    if (view.sourceHealth) {
+        const health = makeHomeEl(doc, "span");
+        health.className = `sw__home-source-health is-${view.sourceHealth}`;
+        health.dataset.health = view.sourceHealth;
+        health.textContent = view.sourceHealth === "fresh" ? labels.sourceFresh : view.sourceHealth === "cached" ? labels.sourceCached : labels.sourceStale;
+        health.setAttribute("aria-label", health.textContent);
+        health.setAttribute("title", health.textContent);
+        heading.appendChild(health);
+    }
+    if (view.configurable && options.onConfig) {
+        // T-6473 头部瘦身：文字按钮改齿轮图标（title/aria 保留 Configure 语义），
+        // 宽度从 ~70px 收窄到 ~22px
+        const configButton = makeHomeEl(doc, "button");
+        configButton.type = "button";
+        configButton.className = "sw__home-module-toggle b3-button b3-button--text sw__home-module-config";
+        configButton.dataset.focusKey = "config";
+        configButton.setAttribute("aria-label", labels.config || "Configure");
+        configButton.setAttribute("title", labels.config || "Configure");
+        const configIcon = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
+        configIcon.setAttribute("aria-hidden", "true");
+        configIcon.setAttribute("width", "14");
+        configIcon.setAttribute("height", "14");
+        configIcon.setAttribute("viewBox", "0 0 24 24");
+        const configUse = doc.createElementNS("http://www.w3.org/2000/svg", "use");
+        configUse.setAttribute("href", "#iconSettings");
+        configUse.setAttribute("xlink:href", "#iconSettings");
+        configIcon.appendChild(configUse);
+        configButton.appendChild(configIcon);
+        configButton.addEventListener("click", () => options.onConfig(view));
+        heading.appendChild(configButton);
+    }
+    if (options.onToggle) {
+        if (view.collapsed === true) {
+            const count = Array.isArray(view.items) ? view.items.length : 0;
+            const displayValue = view.stat?.value ? String(view.stat.value) : count > 0 ? String(count) : "";
+            if (displayValue) {
+                const badge = makeHomeEl(doc, "span");
+                badge.className = "sw__home-collapsed-badge";
+                badge.setAttribute("aria-label", count > 0 ? `${count} ${labels.itemsCount || "条目"}` : displayValue);
+                badge.textContent = displayValue;
+                heading.appendChild(badge);
+            }
+        }
+        const toggle = makeHomeEl(doc, "button");
+        toggle.type = "button";
+        toggle.className = "sw__home-module-toggle b3-button b3-button--text sw__home-module-fold";
+        toggle.dataset.focusKey = "toggle";
+        toggle.setAttribute("aria-expanded", view.collapsed === true ? "false" : "true");
+        toggle.setAttribute("aria-controls", bodyId);
+        toggle.setAttribute("aria-label", view.collapsed === true ? labels.expand : labels.collapse);
+        toggle.setAttribute("title", view.collapsed === true ? labels.expand : labels.collapse);
+        // 紧凑箭头图标替代文字按钮，减少头部常驻文字
+        toggle.innerHTML = '<svg><use xlink:href="#' + (view.collapsed === true ? "iconRight" : "iconDown") + '"></use></svg>';
+        toggle.addEventListener("click", () => options.onToggle(view));
+        heading.appendChild(toggle);
+        heading.addEventListener("dblclick", (event) => {
+            const target = event.target;
+            if (target && typeof target.closest === "function" && target.closest("button, input, select, textarea, a")) {
+                return;
+            }
+            event.preventDefault();
+            options.onToggle(view);
+        });
+    }
+    root.appendChild(heading);
+    const body = makeHomeEl(doc, "div");
+    body.className = "sw__home-module-body";
+    root.setAttribute("aria-expanded", view.collapsed === true ? "false" : "true");
+    body.setAttribute("aria-hidden", view.collapsed === true ? "true" : "false");
+    body.id = bodyId;
+    if (view.collapsed === true) {
+        body.hidden = true;
+    }
+    if (view.stat && view.stat.value) {
+        const hero = makeHomeEl(doc, "div");
+        // T-6457：emphasis 白名单校验在归一层完成，这里按令牌拼修饰类
+        hero.className = view.stat.emphasis ? `sw__home-stat sw__home-stat--${view.stat.emphasis}` : "sw__home-stat";
+        const copy = makeHomeEl(doc, "span");
+        copy.className = "sw__home-stat-copy";
+        const value = makeHomeEl(doc, "span");
+        value.className = "sw__home-stat-value";
+        value.textContent = view.stat.value;
+        const label = makeHomeEl(doc, "span");
+        label.className = "sw__home-stat-label";
+        label.textContent = view.stat.label || "";
+        copy.append(value, label);
+        hero.appendChild(copy);
+        // T-7054 A 批次：倒数日里程碑徽标——按剩余天数分档展示
+        if (view.milestone) {
+            const badge = makeHomeEl(doc, "span");
+            badge.className = `sw__home-stat-milestone is-${view.milestone}`;
+            badge.setAttribute("role", "note");
+            const milestoneLabels = {imminent: labels.milestoneImminent || "", month: labels.milestoneMonth || "", hundred: labels.milestoneHundred || ""};
+            badge.textContent = milestoneLabels[view.milestone] || "";
+            hero.appendChild(badge);
+        }
+        if (view.stat.arc && Number.isFinite(view.stat.arc.value) && Number.isFinite(view.stat.arc.max) && view.stat.arc.max > 0) {
+            const arc = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
+            const ratio = Math.min(1, Math.max(0, view.stat.arc.value / view.stat.arc.max));
+            const percent = Math.round(ratio * 100);
+            arc.classList.add("sw__home-stat-arc");
+            arc.setAttribute("viewBox", "0 0 40 40");
+            arc.setAttribute("role", "progressbar");
+            arc.setAttribute("aria-valuenow", String(percent));
+            arc.setAttribute("aria-valuemin", "0");
+            arc.setAttribute("aria-valuemax", "100");
+            arc.setAttribute("aria-label", `${view.stat.label || "Progress"} ${percent}%`);
+            const track = doc.createElementNS("http://www.w3.org/2000/svg", "circle");
+            track.classList.add("sw__home-stat-arc-track");
+            track.setAttribute("cx", "20");
+            track.setAttribute("cy", "20");
+            track.setAttribute("r", "16");
+            track.setAttribute("pathLength", "100");
+            const fill = doc.createElementNS("http://www.w3.org/2000/svg", "circle");
+            fill.classList.add("sw__home-stat-arc-fill");
+            fill.setAttribute("cx", "20");
+            fill.setAttribute("cy", "20");
+            fill.setAttribute("r", "16");
+            fill.setAttribute("pathLength", "100");
+            fill.setAttribute("stroke-dasharray", `${percent} ${100 - percent}`);
+            arc.append(track, fill);
+            hero.appendChild(arc);
+        }
+        body.appendChild(hero);
+        if (Number.isFinite(view.stat.progress)) {
+            const bar = makeHomeEl(doc, "div");
+            bar.className = "sw__home-progress";
+            bar.setAttribute("role", "progressbar");
+            bar.setAttribute("aria-valuenow", String(Math.round(view.stat.progress)));
+            bar.setAttribute("aria-valuemin", "0");
+            bar.setAttribute("aria-valuemax", "100");
+            const fill = makeHomeEl(doc, "div");
+            fill.className = "sw__home-progress-fill";
+            fill.style.width = Math.min(100, Math.max(0, view.stat.progress)) + "%";
+            bar.appendChild(fill);
+            body.appendChild(bar);
+        }
+    }
+    if (view.status === "ready" && view.viewType === "weekdays") {
+        // 周打卡行（Duolingo 式）：7 个圆点；条目约定 label=星期字、done=当天已完成
+        const row = makeHomeEl(doc, "div");
+        row.className = "sw__home-weekdays";
+        row.setAttribute("role", "list");
+        (Array.isArray(view.items) ? view.items : []).slice(0, 7).forEach((item) => {
+            const cell = makeHomeEl(doc, "div");
+            cell.className = "sw__home-weekday" + (item.done === true ? " is-done" : "");
+            cell.setAttribute("role", "listitem");
+            cell.setAttribute("aria-label", `${item.label || ""}${item.done === true ? " ✓" : ""}`);
+            const dot = makeHomeEl(doc, "span");
+            dot.className = "sw__home-weekday-dot";
+            if (item.done === true) {
+                // 显式尺寸兜底：容器是纯插件类（无 b3-button 继承思源兜底样式），
+                // 尺寸只由 .sw__home-weekday-dot svg 的 11px 规则提供——
+                // 样式未就绪时裸 svg 会退回 300×150（同 D-389 的顶栏成因）。
+                dot.innerHTML = '<svg width="11" height="11"><use xlink:href="#iconCheck"></use></svg>';
+            }
+            const label = makeHomeEl(doc, "span");
+            label.className = "sw__home-weekday-label";
+            label.textContent = (item.label || "").slice(0, 1);
+            cell.append(dot, label);
+            row.appendChild(cell);
+        });
+        body.appendChild(row);
+        root.appendChild(body);
+        return root;
+    }
+    if (view.status === "ready" && view.viewType === "calendar") {
+        // 日历月视图：7 列网格；条目约定 label=日期数字、value=文档 ID（可点击）、done=今天
+        if (typeof options.onCalendarNavigate === "function") {
+            const nav = makeHomeEl(doc, "div");
+            nav.className = "sw__home-calendar-nav";
+            const button = (label, direction) => {
+                const control = makeHomeEl(doc, "button");
+                control.type = "button";
+                control.className = "b3-button b3-button--text sw__home-calendar-nav-button";
+                control.setAttribute("aria-label", label || "");
+                control.textContent = direction ? (direction < 0 ? "‹" : "›") : label;
+                control.dataset.focusKey = direction < 0 ? "calendar-prev" : direction > 0 ? "calendar-next" : "calendar-today";
+                control.addEventListener("click", () => options.onCalendarNavigate(direction, view));
+                return control;
+            };
+            const period = makeHomeEl(doc, "strong");
+            period.className = "sw__home-calendar-period";
+            period.textContent = view.contextTitle || "";
+            // T-6975：快跳——«/» 跳转最近上一个/下一个有日记的月份（跳空档可跨月，
+            // 由宿主按月探测）；期间选择器直达任意月份（±24 钳制内）。缺失日记绝不创建。
+            // 宿主未提供 onCalendarJump 回调时不渲染（不得出现无操作的假入口，v0.43.2 教训）。
+            const jump = (step, focusKey, label) => {
+                const control = makeHomeEl(doc, "button");
+                control.type = "button";
+                control.className = "b3-button b3-button--text sw__home-calendar-nav-button";
+                control.setAttribute("aria-label", label || "");
+                control.textContent = step < 0 ? "«" : "»";
+                control.dataset.focusKey = focusKey;
+                control.addEventListener("click", () => options.onCalendarJump?.(step, view));
+                return control;
+            };
+            const jumpButtons = typeof options.onCalendarJump === "function"
+                ? [jump(-1, "calendar-jump-prev", labels.previousJournal), jump(1, "calendar-jump-next", labels.nextJournal)]
+                : [];
+            nav.append(
+                button(labels.previousMonth, -1),
+                ...jumpButtons.slice(0, 1),
+                period,
+                button(labels.today, 0),
+                button(labels.nextMonth, 1),
+                ...jumpButtons.slice(1),
+            );
+            if (typeof options.onCalendarPeriod === "function" && Array.isArray(options.calendarPeriodOptions) && options.calendarPeriodOptions.length > 0) {
+                const periodSelect = makeHomeEl(doc, "select");
+                periodSelect.className = "b3-select sw__home-calendar-period-select";
+                periodSelect.setAttribute("aria-label", labels.periodPicker || "");
+                options.calendarPeriodOptions.forEach((option) => {
+                    const opt = makeHomeEl(doc, "option");
+                    opt.value = String(option.offset);
+                    opt.textContent = option.label || "";
+                    if (option.offset === view.calendarOffset) opt.selected = true;
+                    periodSelect.appendChild(opt);
+                });
+                periodSelect.addEventListener("change", () => {
+                    const offset = Math.trunc(Number(periodSelect.value) || 0);
+                    options.onCalendarPeriod?.(offset, view);
+                });
+                nav.append(periodSelect);
+            }
+            body.appendChild(nav);
+        }
+        const grid = makeHomeEl(doc, "div");
+        grid.className = "sw__home-calendar";
+        grid.setAttribute("role", "grid");
+        const weekdayLabels = typeof view.calendarWeekdays === "string" && view.calendarWeekdays.length >= 7
+            ? view.calendarWeekdays
+            : typeof options.calendarWeekdays === "string" && options.calendarWeekdays.length >= 7
+                ? options.calendarWeekdays
+            : "一二三四五六日";
+        weekdayLabels.slice(0, 7).split("").forEach((label) => {
+            const head = makeHomeEl(doc, "span");
+            head.className = "sw__home-calendar-head";
+            head.textContent = label;
+            grid.appendChild(head);
+        });
+        (Array.isArray(view.items) ? view.items : []).forEach((item, index) => {
+            const clickable = Boolean(item.value) && typeof options.onItem === "function";
+            const cell = makeHomeEl(doc, clickable ? "button" : "span");
+            cell.className = "sw__home-calendar-cell"
+                + (item.value ? " has-journal" : "")
+                + (item.done === true ? " is-today" : "")
+                + (item.outside === true ? " is-outside" : "")
+                + (item.holiday === "off" ? " is-holiday" : item.holiday === "work" ? " is-workday" : "")
+                + (item.weekend === true ? " is-weekend" : item.weekend === false ? "" : index % 7 >= 5 ? " is-weekend" : "");
+            cell.setAttribute("role", "gridcell");
+            if (clickable) cell.type = "button";
+            const primary = makeHomeEl(doc, "span");
+            primary.className = "sw__home-calendar-primary";
+            primary.textContent = item.label || "";
+            cell.appendChild(primary);
+            if (item.secondary) {
+                const secondary = makeHomeEl(doc, "small");
+                secondary.className = "sw__home-calendar-secondary";
+                secondary.textContent = item.secondary;
+                cell.appendChild(secondary);
+            }
+            if (item.value) {
+                const marker = makeHomeEl(doc, "span");
+                marker.className = "sw__home-calendar-marker";
+                marker.setAttribute("aria-hidden", "true");
+                cell.appendChild(marker);
+            }
+            const ariaParts = [view.contextTitle, item.label, item.secondary, item.value ? labels.hasJournal : ""].filter(Boolean);
+            if (ariaParts.length) cell.setAttribute("aria-label", ariaParts.join(" "));
+            if (clickable) {
+                cell.dataset.focusKey = `calendar-day-${index}`;
+                cell.addEventListener("click", () => options.onItem(item, view));
+            }
+            grid.appendChild(cell);
+        });
+        body.appendChild(grid);
+        root.appendChild(body);
+        return root;
+    }
+    if (view.status === "ready" && view.viewType === "heatmap") {
+        // 贡献热力图：列=周、行=周日~周六；格点强弱取自模型层量化的 level（视图不重写阈值）。
+        const grid = makeHomeEl(doc, "div");
+        grid.className = "sw__home-heatmap";
+        grid.setAttribute("role", "grid");
+        (Array.isArray(view.items) ? view.items : []).forEach((item) => {
+            const rawLevel = Number.isFinite(item.level) ? Math.trunc(item.level) : 0;
+            const level = Math.min(4, Math.max(0, rawLevel));
+            const cell = makeHomeEl(doc, "span");
+            cell.className = "sw__home-heatmap-cell is-level-" + level + (item.outside === true ? " is-outside" : "");
+            cell.setAttribute("role", "gridcell");
+            if (item.outside === true) cell.setAttribute("aria-hidden", "true");
+            const count = Number.isFinite(item.count) ? Math.trunc(item.count) : 0;
+            const detail = count > 0 ? `${count} ${labels.heatmapUnit}` : labels.heatmapEmpty;
+            cell.setAttribute("aria-label", [item.label, detail].filter(Boolean).join(" "));
+            grid.appendChild(cell);
+        });
+        body.appendChild(grid);
+        // T-6472 色阶文字图例：格点颜色强弱显式化（可及性；装饰色块对读屏隐藏）
+        const legendText = typeof labels.heatmapLegend === "string" ? labels.heatmapLegend : "";
+        if (legendText) {
+            const legend = makeHomeEl(doc, "div");
+            legend.className = "sw__home-heatmap-legend";
+            for (let level = 0; level <= 4; level += 1) {
+                const swatch = makeHomeEl(doc, "span");
+                swatch.className = "sw__home-heatmap-legend-swatch is-level-" + level;
+                swatch.setAttribute("aria-hidden", "true");
+                legend.appendChild(swatch);
+            }
+            const legendLabel = makeHomeEl(doc, "span");
+            legendLabel.textContent = legendText;
+            legend.appendChild(legendLabel);
+            body.appendChild(legend);
+        }
+        root.appendChild(body);
+        return root;
+    }
+    if (view.status === "ready" && view.viewType === "media") {
+        const grid = makeHomeEl(doc, "ul");
+        grid.className = "sw__home-media-grid";
+        grid.setAttribute("role", "list");
+        (Array.isArray(view.items) ? view.items : []).forEach((item, index) => {
+            const row = makeHomeEl(doc, "li");
+            row.className = "sw__home-media-item" + (item.image ? " has-cover" : " is-source");
+            const button = makeHomeEl(doc, "button");
+            button.type = "button";
+            button.className = "sw__home-media-action";
+            button.dataset.focusKey = `media-${index}`;
+            if (item.href) button.dataset.href = item.href;
+            if (item.image) {
+                const coverWrap = makeHomeEl(doc, "div");
+                coverWrap.className = "sw__home-media-cover-wrap";
+                const image = makeHomeEl(doc, "img");
+                image.className = "sw__home-media-cover";
+                image.src = item.image;
+                image.alt = "";
+                image.loading = "lazy";
+                image.decoding = "async";
+                image.referrerPolicy = "no-referrer";
+                coverWrap.appendChild(image);
+                if (item.badge) {
+                    const badge = makeHomeEl(doc, "span");
+                    badge.className = "sw__home-media-badge";
+                    badge.textContent = String(item.badge);
+                    coverWrap.appendChild(badge);
+                }
+                const numProgress = Number(item.progress);
+                if (Number.isFinite(numProgress) && numProgress >= 0) {
+                    const progressWrap = makeHomeEl(doc, "span");
+                    progressWrap.className = "sw__home-media-progress";
+                    progressWrap.setAttribute("aria-hidden", "true");
+                    const progressBar = makeHomeEl(doc, "i");
+                    progressBar.className = "sw__home-media-progress-bar";
+                    progressBar.style.width = `${Math.min(100, Math.max(0, numProgress))}%`;
+                    progressWrap.appendChild(progressBar);
+                    coverWrap.appendChild(progressWrap);
+                }
+                button.appendChild(coverWrap);
+            }
+            const copy = makeHomeEl(doc, "span");
+            copy.className = "sw__home-media-copy";
+            const title = makeHomeEl(doc, "strong");
+            title.className = "sw__home-media-title";
+            title.textContent = item.label || item.href || "";
+            copy.appendChild(title);
+            if (item.secondary) {
+                const secondary = makeHomeEl(doc, "small");
+                secondary.className = "sw__home-media-secondary";
+                secondary.textContent = item.secondary;
+                copy.appendChild(secondary);
+            }
+            button.appendChild(copy);
+            if (typeof options.onItem === "function") button.addEventListener("click", () => options.onItem(item, view));
+            row.appendChild(button);
+            grid.appendChild(row);
+        });
+        body.appendChild(grid);
+        root.appendChild(body);
+        return root;
+    }
+    if (view.status === "ready" && view.viewType === "tag-tree") {
+        const tree = makeHomeEl(doc, "ul");
+        tree.className = "sw__home-tag-tree";
+        tree.setAttribute("role", "tree");
+        const records = (Array.isArray(view.items) ? view.items : []).map((item, index) => {
+            const row = makeHomeEl(doc, "li");
+            row.className = "sw__home-tag-tree-item" + (item.virtual === true ? " is-virtual" : "");
+            row.dataset.swRow = String(index);
+            row.dataset.treePath = item.treePath || item.label || "";
+            row.setAttribute("role", "treeitem");
+            const depth = Number.isFinite(item.depth) ? item.depth : 0;
+            row.setAttribute("aria-level", String(depth + 1));
+            row.style.setProperty("--sw-tag-depth", String(depth));
+            if (item.hasChildren === true) row.setAttribute("aria-expanded", String(item.expanded !== false));
+            const line = makeHomeEl(doc, "div");
+            line.className = "sw__home-tag-tree-line";
+            const toggle = makeHomeEl(doc, "button");
+            toggle.type = "button";
+            toggle.className = "sw__home-tag-tree-toggle";
+            toggle.dataset.focusKey = `tag-toggle:${item.treePath || item.label || index}`;
+            toggle.setAttribute("aria-label", item.expanded === false ? labels.expand : labels.collapse);
+            toggle.disabled = item.hasChildren !== true;
+            toggle.textContent = item.hasChildren === true ? (item.expanded === false ? "›" : "⌄") : "·";
+            line.appendChild(toggle);
+            const action = makeHomeEl(doc, "button");
+            action.type = "button";
+            action.className = "sw__home-module-item-action sw__home-tag-tree-action";
+            action.disabled = item.disabled === true || item.virtual === true;
+            action.dataset.value = item.value || "";
+            action.dataset.focusKey = `tag:${item.treePath || item.label || index}`;
+            const label = makeHomeEl(doc, "span");
+            label.className = "sw__home-module-item-label";
+            label.textContent = item.label || item.value || "";
+            action.appendChild(label);
+            if (item.secondary) {
+                const secondary = makeHomeEl(doc, "small");
+                secondary.className = "sw__home-module-item-secondary";
+                secondary.textContent = item.secondary;
+                action.appendChild(secondary);
+            }
+            const description = [label.textContent, item.secondary, item.virtual === true ? labels.tagVirtual : ""].filter(Boolean).join(" · ");
+            if (description) action.setAttribute("aria-label", description);
+            if (typeof options.onItem === "function" && action.disabled !== true) action.addEventListener("click", () => options.onItem(item, view));
+            line.appendChild(action);
+            row.appendChild(line);
+            toggle.addEventListener("click", (event) => {
+                event.preventDefault();
+                if (item.hasChildren !== true) return;
+                item.expanded = item.expanded === false;
+                row.setAttribute("aria-expanded", String(item.expanded));
+                toggle.setAttribute("aria-label", item.expanded ? labels.collapse : labels.expand);
+                toggle.textContent = item.expanded ? "⌄" : "›";
+                updateVisibility();
+            });
+            return {item, row};
+        });
+        const updateVisibility = () => {
+            records.forEach((record, index) => {
+                let depth = Number.isFinite(record.item.depth) ? record.item.depth : 0;
+                let visible = true;
+                for (let cursor = index - 1; cursor >= 0 && depth > 0; cursor -= 1) {
+                    const candidate = records[cursor].item;
+                    const candidateDepth = Number.isFinite(candidate.depth) ? candidate.depth : 0;
+                    if (candidateDepth < depth) {
+                        if (candidate.hasChildren === true && candidate.expanded === false) visible = false;
+                        depth = candidateDepth;
+                    }
+                }
+                record.row.hidden = !visible;
+            });
+        };
+        records.forEach((record) => tree.appendChild(record.row));
+        updateVisibility();
+        body.appendChild(tree);
+        root.appendChild(body);
+        return root;
+    }
+    if (view.status === "ready") {
+        const list = makeHomeEl(doc, "ul");
+        list.className = "sw__home-module-list";
+        list.setAttribute("role", "list");
+        const showRowValues = ["external-local-time", "external-world-clock", "external-quote-daily"].includes(view.moduleId);
+        const focusKeys = new Map();
+        const usedFocusKeys = new Set();
+        const canToggle = typeof options.onToggleItem === "function";
+        const countValues = (Array.isArray(view.items) ? view.items : []).filter((item) => Number.isFinite(item.count) && item.count > 0).map((item) => item.count);
+        const maxCount = countValues.length > 0 ? Math.max(...countValues) : 0;
+        (Array.isArray(view.items) ? view.items : []).forEach((item) => {
+            const row = makeHomeEl(doc, "li");
+            row.className = "sw__home-module-item";
+            // 时钟心跳使用稳定行标记做局部补丁；普通组件也保留标记，避免
+            // 后续新增本地只读组件时必须重新设计选择器。
+            row.dataset.swRow = String(list.children.length);
+            const button = makeHomeEl(doc, "button");
+            button.type = "button";
+            button.className = "sw__home-module-item-action";
+            button.disabled = item.disabled === true;
+            // 时钟的 value 每分钟/每秒都会变，焦点身份应绑定城市/标签而不是时间文本。
+            const focusBase = showRowValues
+                ? (item.label || item.value || item.href || "item")
+                : (item.value || item.label || item.href || "item");
+            let focusIndex = focusKeys.get(focusBase) || 0;
+            let focusKey = focusIndex ? `${focusBase}-${focusIndex}` : focusBase;
+            while (usedFocusKeys.has(focusKey)) {
+                focusIndex += 1;
+                focusKey = `${focusBase}-${focusIndex}`;
+            }
+            focusKeys.set(focusBase, focusIndex + 1);
+            usedFocusKeys.add(focusKey);
+            button.dataset.focusKey = focusKey;
+            button.dataset.value = item.value || "";
+            if (item.href) button.dataset.href = item.href;
+            if (item.command) button.dataset.command = item.command;
+            button.classList.toggle("is-done", item.done === true);
+            if (Number.isFinite(item.rank) && item.rank > 0) {
+                const rank = makeHomeEl(doc, "span");
+                rank.className = "sw__home-module-item-rank";
+                rank.textContent = String(item.rank);
+                rank.setAttribute("aria-hidden", "true");
+                button.appendChild(rank);
+            }
+            if (NAVIGATION_LIST_MODULES.has(view.moduleId)) {
+                const itemIcon = makeHomeEl(doc, "span");
+                itemIcon.className = "sw__home-module-item-icon";
+                itemIcon.setAttribute("aria-hidden", "true");
+                const rowIcon = renderModuleIcon(doc, view.icon);
+                if (rowIcon) {
+                    rowIcon.setAttribute("width", "18");
+                    rowIcon.setAttribute("height", "18");
+                    itemIcon.appendChild(rowIcon);
+                }
+                button.appendChild(itemIcon);
+            }
+            const itemLabel = makeHomeEl(doc, "span");
+            itemLabel.className = "sw__home-module-item-label";
+            itemLabel.textContent = item.label || item.value || item.href || "";
+            button.appendChild(itemLabel);
+            // T-7054 A 批次：世界时钟昼夜指示器——日间暖黄渐变/夜间深蓝渐变圆形
+            if (typeof item.isDay === "boolean") {
+                const dn = makeHomeEl(doc, "span");
+                dn.className = "sw__home-calendar-daynight " + (item.isDay ? "is-day" : "is-night");
+                dn.setAttribute("aria-hidden", "true");
+                dn.textContent = item.isDay ? "☀" : "🌙";
+                button.prepend(dn);
+            }
+            let itemValue = null;
+            if (showRowValues && item.label && item.value) {
+                itemValue = makeHomeEl(doc, "span");
+                itemValue.className = "sw__home-module-item-value";
+                itemValue.dataset.swRowValue = "true";
+                itemValue.textContent = item.value;
+                button.appendChild(itemValue);
+            }
+            if (item.secondary) {
+                const secondary = makeHomeEl(doc, "small");
+                secondary.className = "sw__home-module-item-secondary";
+                secondary.textContent = item.secondary;
+                button.appendChild(secondary);
+            }
+            const itemDescription = [itemLabel.textContent, itemValue?.textContent, item.secondary].filter(Boolean).join(" · ");
+            if (itemDescription) {
+                button.setAttribute("aria-label", itemDescription);
+                // Desktop hover and supported touch long-press surfaces expose the exact bucket value.
+                if (Number.isFinite(item.count)) button.title = itemDescription;
+            }
+            if (item.href) row.classList.add("has-link");
+            if (canToggle && typeof item.done === "boolean") {
+                const check = makeHomeEl(doc, "button");
+                let toggleRevision = 0;
+                check.type = "button";
+                check.className = "sw__home-module-item-check" + (item.done ? " is-done" : "");
+                check.setAttribute("aria-label", item.done ? labels.taskUndone : labels.taskDone);
+                check.setAttribute("aria-pressed", String(item.done));
+                // 显式尺寸兜底：同 .sw__home-weekday-dot——尺寸仅来自插件 CSS 的 11px 规则
+                check.innerHTML = item.done ? '<svg width="11" height="11"><use xlink:href="#iconCheck"></use></svg>' : "";
+                check.addEventListener("click", (event) => {
+                    event.stopPropagation();
+                    const revision = ++toggleRevision;
+                    const previousDone = item.done === true;
+                    const nextDone = !previousDone;
+                    item.done = nextDone;
+                    check.classList.toggle("is-done", nextDone);
+                    check.setAttribute("aria-pressed", String(nextDone));
+                    check.setAttribute("aria-label", nextDone ? labels.taskUndone : labels.taskDone);
+                    check.innerHTML = nextDone ? '<svg width="11" height="11"><use xlink:href="#iconCheck"></use></svg>' : "";
+                    button.classList.toggle("is-done", nextDone);
+                    const rollback = () => {
+                        // A slower response from an earlier click must not
+                        // overwrite a newer optimistic state.
+                        if (revision !== toggleRevision) return;
+                        item.done = previousDone;
+                        check.classList.toggle("is-done", previousDone);
+                        check.setAttribute("aria-pressed", String(previousDone));
+                        check.setAttribute("aria-label", previousDone ? labels.taskUndone : labels.taskDone);
+                        check.innerHTML = previousDone ? '<svg width="11" height="11"><use xlink:href="#iconCheck"></use></svg>' : "";
+                        button.classList.toggle("is-done", previousDone);
+                    };
+                    try {
+                        // Pass the desired state explicitly. `item.done` is already
+                        // optimistic at this point, so inferring the target in the
+                        // host would invert the write a second time.
+                        // Keep the historical `(item, view)` argument order;
+                        // append the explicit target state for host writers.
+                        const result = options.onToggleItem(item, view, nextDone);
+                        if (result && typeof result.then === "function") {
+                            Promise.resolve(result).then((ok) => {
+                                if (ok === false) rollback();
+                            }, rollback);
+                        } else if (result === false) {
+                            rollback();
+                        }
+                    } catch (_) {
+                        rollback();
+                    }
+                });
+                row.appendChild(check);
+            }
+            if (options.onItem && item.disabled !== true) button.addEventListener("click", () => options.onItem(item, view));
+            if (Number.isFinite(item.count) && item.count > 0 && maxCount > 0) {
+                const barWrap = makeHomeEl(doc, "span");
+                barWrap.className = "sw__home-item-bar";
+                const barFill = makeHomeEl(doc, "span");
+                barFill.className = "sw__home-item-bar-fill";
+                barFill.style.width = Math.min(100, Math.round(item.count / maxCount * 100)) + "%";
+                barWrap.appendChild(barFill);
+                row.appendChild(barWrap);
+            }
+            row.appendChild(button);
+            list.appendChild(row);
+        });
+        body.appendChild(list);
+        if (!list.children.length && view.emptyHint) {
+            root.classList.add("is-empty-content");
+            const hint = makeHomeEl(doc, "p");
+            hint.className = "sw__home-module-status sw__home-module-status--empty";
+            hint.textContent = view.emptyHint;
+            body.appendChild(hint);
+            if (view.retryable === true && options.onRetry) {
+                const retry = makeHomeEl(doc, "button");
+                retry.type = "button";
+                retry.className = "sw__home-module-retry b3-button b3-button--outline";
+                retry.dataset.focusKey = "retry";
+                retry.textContent = labels.retry || "重试";
+                retry.addEventListener("click", () => options.onRetry(view));
+                body.appendChild(retry);
+            }
+            if (view.configurable && typeof options.onConfig === "function") {
+                const configHint = makeHomeEl(doc, "button");
+                configHint.type = "button";
+                configHint.className = "sw__home-module-config-hint b3-button b3-button--outline";
+                configHint.dataset.focusKey = "config-hint";
+                configHint.textContent = labels.configAction || labels.config || "配置组件";
+                configHint.addEventListener("click", () => options.onConfig(view));
+                body.appendChild(configHint);
+            }
+        }
+        // 小驴打卡风格：今日待办全部完成时的情绪化鼓励横幅
+        const allTasksDone = view.moduleId === "today-tasks" && Array.isArray(view.items) && view.items.length > 0 && view.items.every((it) => it.done === true);
+        if (allTasksDone) {
+            const celebration = makeHomeEl(doc, "div");
+            celebration.className = "sw__home-celebration";
+            celebration.textContent = labels.allTasksDone || "🎉 太棒了！今日待办已全部完成";
+            body.appendChild(celebration);
+        }
+        // 小驴打卡风格：本周打卡 7天周期胶囊时间轴
+        if (view.moduleId === "checkin-weekly" && Array.isArray(view.items) && view.items.length > 0) {
+            const tracker = makeHomeEl(doc, "div");
+            tracker.className = "sw__home-capsule-tracker";
+            const dayNames = ["一", "二", "三", "四", "五", "六", "日"];
+            const todayDay = (new Date().getDay() + 6) % 7;
+            for (let i = 0; i < 7; i += 1) {
+                const targetDay = dayNames[i];
+                const item = view.items.find((it) => it && (it.label === targetDay || it.label === `周${targetDay}` || it.label === `星期${targetDay}`)) || view.items[i];
+                const capsule = makeHomeEl(doc, "div");
+                capsule.className = "sw__home-capsule-item";
+                const isToday = i === todayDay;
+                const val = item ? Number(item.value) : 0;
+                const isDone = Number.isFinite(val) && val > 0;
+                if (isToday) capsule.classList.add("is-today");
+                if (isDone) capsule.classList.add("is-done");
+                const dayLabel = makeHomeEl(doc, "span");
+                dayLabel.className = "sw__home-capsule-day";
+                dayLabel.textContent = targetDay;
+                const dot = makeHomeEl(doc, "span");
+                dot.className = "sw__home-capsule-dot";
+                dot.textContent = isDone ? "✓" : (isToday ? "●" : "·");
+                capsule.append(dayLabel, dot);
+                tracker.appendChild(capsule);
+            }
+            body.insertBefore(tracker, list);
+        }
+        // T-7054 A 批次：时间与日期组件日进度条——当日已过百分比可视化
+        if (view.moduleId === "external-local-time" && view.dayProgress >= 0) {
+            const progress = makeHomeEl(doc, "div");
+            progress.className = "sw__home-day-progress";
+            progress.setAttribute("role", "progressbar");
+            progress.setAttribute("aria-valuenow", String(view.dayProgress));
+            progress.setAttribute("aria-valuemin", "0");
+            progress.setAttribute("aria-valuemax", "100");
+            progress.setAttribute("aria-label", `Day progress ${view.dayProgress}%`);
+            const bar = makeHomeEl(doc, "div");
+            bar.className = "sw__home-day-progress-bar";
+            bar.style.width = `${view.dayProgress}%`;
+            progress.appendChild(bar);
+            body.appendChild(progress);
+        }
+    } else {
+        if (view.status === "loading") {
+            const skeleton = makeHomeEl(doc, "div");
+            skeleton.className = "sw__home-loading-skeleton";
+            skeleton.setAttribute("aria-hidden", "true");
+            ["wide", "medium", "short"].forEach((size) => {
+                const line = makeHomeEl(doc, "span");
+                line.className = `sw__home-loading-skeleton-line is-${size}`;
+                skeleton.appendChild(line);
+            });
+            body.appendChild(skeleton);
+        }
+        const status = makeHomeEl(doc, "p");
+        status.className = `sw__home-module-status sw__home-module-status--${view.status || "empty"}`;
+        status.setAttribute("role", view.status === "error" ? "alert" : "status");
+        status.setAttribute("aria-live", view.status === "error" ? "assertive" : "polite");
+        // Keep a generic fallback for older hosts, while allowing the host
+        // adapter to surface a stable reason such as timeout/unsupported in a
+        // localized way without exposing raw exception text.
+        const hint = (view.status === "empty" || view.status === "blocked") && view.emptyHint ? view.emptyHint : "";
+        status.textContent = hint || labels[view.reason] || labels[view.status] || labels.empty;
+        body.appendChild(status);
+        if ((view.status === "error" || view.retryable === true) && options.onRetry) {
+            const retry = makeHomeEl(doc, "button");
+            retry.type = "button";
+            retry.className = "sw__home-module-retry b3-button b3-button--outline";
+            retry.dataset.focusKey = "retry";
+            retry.textContent = labels.retry;
+            retry.addEventListener("click", () => options.onRetry(view));
+            body.appendChild(retry);
+        }
+        if ((view.status === "empty" || view.status === "blocked" || view.reason === "blocked") && view.configurable && typeof options.onConfig === "function") {
+            const configHint = makeHomeEl(doc, "button");
+            configHint.type = "button";
+            configHint.className = "sw__home-module-config-hint b3-button b3-button--outline";
+            configHint.dataset.focusKey = "config-hint";
+            configHint.textContent = labels.configAction || labels.config || "配置组件";
+            configHint.addEventListener("click", () => options.onConfig(view));
+            body.appendChild(configHint);
+        }
+    }
+    root.appendChild(body);
+    return root;
+}
+
+module.exports = {MAX_ITEMS, CALENDAR_MAX_ITEMS, MAX_TEXT, normalizeHomeViewResult, buildHomeModuleView, renderHomeModuleView, renderModuleIcon, formatUpdatedAt};
