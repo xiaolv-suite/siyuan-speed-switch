@@ -8,9 +8,9 @@
 
 全能切换器 · Bento 小组件工作台 · 代码片段实验室 · 全局智能悬浮球 · 连续切片暂存栈
 
-**当前版本：v0.48.94** ｜ 最近正式版：v0.48.94（2026-11-26） ｜ [English Documentation](./README.en-US.md) ｜ [更新日志](./CHANGELOG.md)
+**当前版本：v0.48.95** ｜ 最近正式版：v0.48.95（2026-11-27） ｜ [English Documentation](./README.en-US.md) ｜ [更新日志](./CHANGELOG.md)
 
-[![Version](https://img.shields.io/badge/version-0.48.94-blue)](./plugin.json)
+[![Version](https://img.shields.io/badge/version-0.48.95-blue)](./plugin.json)
 [![思源笔记](https://img.shields.io/badge/思源笔记-%3E%3D%203.8.4-brightgreen.svg)](https://b3log.org/siyuan)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
@@ -24,18 +24,16 @@
 
 ---
 
-## 本次更新（v0.48.94 · 2026-11-26）
+## 本次更新（v0.48.95 · 2026-11-27）
 
-- **插件页签自动归组并标明来源**：已打开的第三方插件与小驴全家桶插件页面统一归入「🧩 插件页面」分组，卡片清晰展示来源插件徽标，不再与日常笔记页签混杂；
-- **三大共享中枢深度协同**：全面融合小驴罗盘（顶栏防横跳 + 重复通知折叠 + 免打扰固化）、全生态 AI 路由、块助手 1–8 原生底座与自定义双击触发、活动流与联合灾备恢复；
-- **首开极致提速与零阻塞启动**：全量 18 项存储键收敛为首帧 5 项核心同步加载，Tier 2 历史、悬浮球与选区监听延后初始化，面板首开毫秒级直出；
-- **AI 等待体验统一与真实取消**：代码片段工作室 AI 助手（首包到达前自动替换空白框）与连续切片暂存栈（单卡 AI 精炼、AI 智能编织专题笔记）全面接入阶段化 `.lv-ai-thinking` 思考卡并打通 `AbortSignal` 实时取消；
-- **四级折叠日记区精准落盘**：切片汇编推入今日日记自动落入 `#### 🐴 小驴记录` H5/超级块折叠区，严格防越界污染文档正文，并兼容思源多级日记路径与冲突过滤；
-- **全包及内置片段零 `:has()` / 零高模糊 60fps 性能**：全面清零主包、代码片段工作室及全量内置精选 CSS 片段中的 `:has()` 回溯选择器，模糊令牌统一收紧至 `<=12px`，并修复穿透检索左列栅格与 AI 面板排版对齐。
+- **全生态 `lv-kit` 底座合龙**：同步最新 `lv-kit` 零 Protyle DOM 残留治理、Batch 1 A1–A4 与跨仓桥接清理，严格保持零 `:has(`、零 `:root` 泄露与 60fps 渲染；
+- **多轮走查盲区与 UI 专项清零**：修复回收站 Esc 关闭、提交指南弹窗、收藏夹下拉菜单、空状态胶囊、`390×844` 移动端分组适配与 `ui-checker` P0/P1 视觉细节；
+- **搜索防抖与排序交互加固**：桌面与移动端切换排序时保留搜索关键词，清空或 Esc 立即取消挂起防抖，Enter 执行前自动冲刷最新检索词。
 
 <details>
-<summary>展开查看历史版本更新摘要（v0.48.93 及更早版本 · 完整记录见 <a href="./CHANGELOG.md">CHANGELOG.md</a>）</summary>
+<summary>展开查看历史版本更新摘要（v0.48.94 及更早版本 · 完整记录见 <a href="./CHANGELOG.md">CHANGELOG.md</a>）</summary>
 
+- **v0.48.94（2026-11-26）**：全生态大重构里程碑正式版，插件页签自动归组并标明来源、三大共享中枢、`.lv-ai-thinking` 等待卡、`#### 🐴 小驴记录` 四级折叠日记区及零 `:has()` 60fps 性能优化。
 - **v0.48.93（2026-11-23）**：启动存储加载分级（18 项收敛至 5 项）、慢读门闩与外部同步保护。
 
 - **v0.48.91（2026-11-15）**：罗盘中枢顶栏常驻与防抖，全生态通知体系与长效免打扰，极速切换器与切片库体验打磨。
@@ -193,10 +191,10 @@
 - 桌面端与移动端兼容性验证遵循证据分级原则（浏览器模拟仅作结构冒烟，不冒充 Android 真机验收）；
 - 本地正式发布候选版本（published release candidate）须通过全部离线门禁并保留上一版可回滚归档包后方可封验。
 
-> 架构设计详见 [系统架构图](docs/architecture.svg) 与 [界面结构图](docs/interface-map.svg)。当前版本为 `v0.48.94`。
+> 架构设计详见 [系统架构图](docs/architecture.svg) 与 [界面结构图](docs/interface-map.svg)。当前版本为 `v0.48.95`。
 
 ---
 
 ## 📄 开源协议 (License)
 
-[MIT License](LICENSE) · Copyright (c) 2026 xiaolv-suite · 当前版本为 `v0.48.94`
+[MIT License](LICENSE) · Copyright (c) 2026 xiaolv-suite · 当前版本为 `v0.48.95`

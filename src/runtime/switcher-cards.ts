@@ -3,7 +3,7 @@ import {lvNotify} from "../libs/lv-notice-kit";
 import {resolveEffectiveMotion} from "../libs/lv-ui-prefs";
 import {lvMascot} from "../libs/ui/mascots";
 import {logger} from "../logger";
-import {detectSpecialTabKind, sortItems as sortItemsUtil, sortGroupItems as sortGroupItemsUtil, groupTabsByMode, resolveIconFallback, buildTabGroupsByParent, resolveTabRootId, isSuccessfulMobileTabsResult} from "../util";
+import {getVisibleSwitcherCards, detectSpecialTabKind, sortItems as sortItemsUtil, sortGroupItems as sortGroupItemsUtil, groupTabsByMode, resolveIconFallback, buildTabGroupsByParent, resolveTabRootId, isSuccessfulMobileTabsResult} from "../util";
 import {formatChangedWindowStart, updatedChangedWithin} from "../recent-closed";
 import {buildOpenedDocumentScope, buildSearchDocumentFilterMatcher, formatUpdatedBadge, matchesParsedQuery, parseSearchQuery, pinyinTitleHit, resolveSearchNotebookId} from "../search-model";
 import {cancelDocPreview, mountDocPreviewPane} from "../doc-search-ui";
@@ -249,11 +249,10 @@ export class SwitcherCardsRuntime {
     }
 
     // T-6820 数字直达可发现性：为前 9 个可见卡片写入 1-9 角标（CSS ::after 渲染），
-    // 与 bindKeydown 的数字直达一一对应；第 9 个之后的卡片移除标记。
+    // 与 bindKeydown 的数字直达一一对应；第 9 个之后的卡片与隐藏/折叠分组卡片移除标记。
     private updateDigitBadges(scrollElement: HTMLElement) {
-        const visible = Array.from(scrollElement.querySelectorAll<HTMLElement>(".sw__card"))
-            .filter((card) => !card.classList.contains("fn__none"));
-        visible.forEach((card, index) => {
+        scrollElement.querySelectorAll<HTMLElement>(".sw__card[data-sw-digit]").forEach((card) => delete card.dataset.swDigit);
+        (getVisibleSwitcherCards(scrollElement) as HTMLElement[]).forEach((card, index) => {
             const digit = index < 9 ? String(index + 1) : "";
             if (digit) card.dataset.swDigit = digit;
             else delete card.dataset.swDigit;
@@ -495,6 +494,15 @@ export class SwitcherCardsRuntime {
             groupEl.classList.toggle("sw__group--collapsed", nextCollapsed);
             header.setAttribute("aria-expanded", nextCollapsed ? "false" : "true");
             header.querySelector<SVGUseElement>(".sw__group-chevron use")?.setAttribute("xlink:href", "#" + (nextCollapsed ? "iconRight" : "iconDown"));
+            if (nextCollapsed && groupEl.querySelector(".sw__card.sw__focused")) {
+                const fallback = getVisibleSwitcherCards(scrollElement)[0] as HTMLElement | undefined;
+                if (fallback) this.focusCard(fallback, false);
+                else groupEl.querySelectorAll<HTMLElement>(".sw__card.sw__focused").forEach((c) => {
+                    c.classList.remove("sw__focused");
+                    c.removeAttribute("aria-current");
+                });
+            }
+            this.updateDigitBadges(scrollElement);
         });
         groupEl.appendChild(header);
 
@@ -644,11 +652,7 @@ export class SwitcherCardsRuntime {
                 qChip.className = "b3-button b3-button--text sw__recent-query-chip";
                 qChip.textContent = q;
                 qChip.addEventListener("click", () => {
-                    const targetSurface = empty.closest<HTMLElement>(".sw-platform-surface")
-                        || empty.closest<HTMLElement>(".sw-platform-dialog")
-                        || empty.closest<HTMLElement>(".sw--sidebar")
-                        || searchSurface;
-                    const searchInput = targetSurface?.querySelector<HTMLInputElement>(".sw__search");
+                    const searchInput = resolveEmptyTargetSurface()?.querySelector<HTMLInputElement>(".sw__search");
                     if (searchInput) {
                         searchInput.value = q;
                         searchInput.dispatchEvent(new (searchInput.ownerDocument.defaultView || window).Event("input", {bubbles: true}));
@@ -676,6 +680,13 @@ export class SwitcherCardsRuntime {
             || surfaceRoot
             || this.sidebarElement
             || document.querySelector<HTMLElement>(".sw__mobile[data-sw-surface='switcher']");
+        const resolveEmptyTargetSurface = () => {
+            const targetSurface = empty.closest<HTMLElement>(".sw-platform-surface")
+                || empty.closest<HTMLElement>(".sw-platform-dialog")
+                || empty.closest<HTMLElement>(".sw--sidebar")
+                || searchSurface;
+            return targetSurface;
+        };
         const addAction = (action: string, label: string, callback: () => void) => {
             const button = document.createElement("button");
             button.type = "button";
@@ -691,10 +702,7 @@ export class SwitcherCardsRuntime {
             if (this.mobileSwitcherDialog?.element.contains(empty)) this.mobileSwitcherDialog.destroy();
         };
         addAction("focus-search", this.i18n.platformGuideSearchAction || "开始搜索", () => {
-            const targetSurface = empty.closest<HTMLElement>(".sw-platform-surface")
-                || empty.closest<HTMLElement>(".sw-platform-dialog")
-                || empty.closest<HTMLElement>(".sw--sidebar")
-                || searchSurface;
+            const targetSurface = resolveEmptyTargetSurface();
             targetSurface?.querySelector<HTMLInputElement>(".sw__search")?.focus({preventScroll: true});
         });
         const available = this.getAvailablePlatformSurfaces();
@@ -711,6 +719,7 @@ export class SwitcherCardsRuntime {
             });
         }
         addAction("open-guide", this.i18n.platformGuideButton || "快速开始", () => this.openPlatformGuide("switcher"));
+        empty.appendChild(actions);
         const syntaxBar = document.createElement("div");
         syntaxBar.className = "sw__empty-syntax-bar";
         syntaxBar.setAttribute("role", "toolbar");
@@ -739,11 +748,7 @@ export class SwitcherCardsRuntime {
                     sc.run();
                     return;
                 }
-                const targetSurface = empty.closest<HTMLElement>(".sw-platform-surface")
-                    || empty.closest<HTMLElement>(".sw-platform-dialog")
-                    || empty.closest<HTMLElement>(".sw--sidebar")
-                    || searchSurface;
-                const searchInput = targetSurface?.querySelector<HTMLInputElement>(".sw__search");
+                const searchInput = resolveEmptyTargetSurface()?.querySelector<HTMLInputElement>(".sw__search");
                 if (searchInput && sc.prefix) {
                     searchInput.value = sc.prefix;
                     searchInput.dispatchEvent(new (searchInput.ownerDocument.defaultView || window).Event("input", {bubbles: true}));
@@ -764,20 +769,14 @@ export class SwitcherCardsRuntime {
                 } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
                     e.preventDefault();
                     if (idx === 0) {
-                        const targetSurface = empty.closest<HTMLElement>(".sw-platform-surface")
-                            || empty.closest<HTMLElement>(".sw-platform-dialog")
-                            || empty.closest<HTMLElement>(".sw--sidebar")
-                            || searchSurface;
+                        const targetSurface = resolveEmptyTargetSurface();
                         targetSurface?.querySelector<HTMLInputElement>(".sw__search")?.focus({preventScroll: true});
                     } else {
                         emptyNavTargets[(idx - 1 + emptyNavTargets.length) % emptyNavTargets.length]?.focus();
                     }
                 } else if (e.key === "Escape") {
                     e.preventDefault();
-                    const targetSurface = empty.closest<HTMLElement>(".sw-platform-surface")
-                        || empty.closest<HTMLElement>(".sw-platform-dialog")
-                        || empty.closest<HTMLElement>(".sw--sidebar")
-                        || searchSurface;
+                    const targetSurface = resolveEmptyTargetSurface();
                     targetSurface?.querySelector<HTMLInputElement>(".sw__search")?.focus({preventScroll: true});
                 }
             });

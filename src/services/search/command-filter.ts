@@ -17,11 +17,20 @@ export function filterCommands<T extends { id?: string; label?: string; title?: 
 ): T[] {
     const clean = extractCommandQuery(query).toLowerCase();
     if (!clean) return commands;
+    const tokens = clean.split(/\s+/).filter(Boolean);
     return commands.filter((cmd) => {
         const text = (cmd.label || cmd.title || cmd.command || cmd.id || "").toLowerCase();
-        if (text.includes(clean)) return true;
-        if (cmd.pluginTitle && cmd.pluginTitle.toLowerCase().includes(clean)) return true;
-        if (typeof pinyinTitleHit === "function" && pinyinTitleHit(text, clean)) return true;
-        return false;
+        const pluginTitle = (cmd.pluginTitle || "").toLowerCase();
+        const combined = pluginTitle ? `${text} ${pluginTitle}` : text;
+        if (tokens.length <= 1) {
+            if (text.includes(clean)) return true;
+            if (pluginTitle && pluginTitle.includes(clean)) return true;
+            if (typeof pinyinTitleHit === "function" && (pinyinTitleHit(text, clean) || (pluginTitle && pinyinTitleHit(pluginTitle, clean)))) return true;
+            return false;
+        }
+        return tokens.every((token) =>
+            combined.includes(token)
+            || (typeof pinyinTitleHit === "function" && (pinyinTitleHit(text, token) || (pluginTitle && pinyinTitleHit(pluginTitle, token))))
+        );
     });
 }

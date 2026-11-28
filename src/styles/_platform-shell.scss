@@ -10,7 +10,7 @@
 // The aliases are also exposed on today's roots so an adapter can be added
 // without introducing a second color or spacing system.  Existing roots do
 // not consume these aliases yet, so this block is behavior-neutral.
-:is(.sw-platform-shell, .sw-platform-surface, .speed-switch, .sw-home, .sw-studio, .sw-fab-root) {
+:is(.sw-platform-shell, .sw-platform-surface, .sw-platform-dialog, .sw-settings, .sw-settings-dialog, .sw-home-store, .sw-home-store-dialog, .speed-switch, .sw-home, .sw-studio, .sw-fab-root) {
     --sw-platform-accent: var(--sw-color-accent, var(--sw-accent-fallback, #8576e8));
     --sw-platform-accent-soft: var(--sw-accent-soft, color-mix(in srgb, var(--sw-platform-accent) 12%, transparent));
     --sw-platform-accent-pressed: var(--sw-accent-pressed, color-mix(in srgb, var(--sw-platform-accent) 20%, transparent));
@@ -263,9 +263,13 @@
     padding-right: var(--sw-platform-space-4, 16px);
 }
 
-:is(.speed-switch.sw--fullscreen, .sw-dialog--fullscreen) .sw-platform-header__actions,
-.b3-dialog__container.sw-dialog--fullscreen .sw-platform-header__actions {
+:is(.speed-switch.sw--fullscreen, .sw-dialog--fullscreen).sw-dialog--frameless-avoidance .sw-platform-header__actions,
+.b3-dialog__container.sw-dialog--fullscreen.sw-dialog--frameless-avoidance .sw-platform-header__actions {
     margin-right: 140px;
+}
+
+:is(body.body--mobile, [data-is-mobile="true"]) :is(.speed-switch.sw--fullscreen, .sw-dialog--fullscreen, .b3-dialog__container.sw-dialog--fullscreen) .sw-platform-header__actions {
+    margin-right: 0;
 }
 
 // T-8002：窄视口下顶栏收缩。三列原为 minmax(0,1fr)/minmax(350px,520px)/minmax(0,1fr)，
@@ -283,6 +287,11 @@
     :is(.speed-switch.sw--fullscreen, .sw-dialog--fullscreen) .sw-platform-header,
     .b3-dialog__container.sw-dialog--fullscreen .sw-platform-header {
         padding-right: var(--sw-platform-space-2);
+    }
+
+    :is(.speed-switch.sw--fullscreen, .sw-dialog--fullscreen) .sw-platform-header__actions,
+    .b3-dialog__container.sw-dialog--fullscreen .sw-platform-header__actions {
+        margin-right: 0;
     }
 
     // 状态 chip（内核已连接）在窄屏让位：上一版让品牌名不收缩后，它会溢出
@@ -779,12 +788,12 @@
 .sw-platform-seg {
     display: inline-flex;
     align-items: stretch;
-    gap: var(--sw-space-2xs, 2px);
+    gap: var(--sw-space-xs, 4px);
     max-width: 100%;
     padding: var(--sw-space-xs, 4px);
-    border: 1px solid var(--sw-platform-line);
+    border: 1px solid var(--sw-platform-line, var(--sw-color-line));
     border-radius: var(--sw-radius-control, 10px);
-    background: var(--sw-platform-surface-muted);
+    background: var(--sw-platform-surface-muted, var(--sw-color-surface-muted));
 }
 
 .sw-platform-seg__item {
@@ -795,23 +804,28 @@
     min-width: 0;
     min-height: var(--sw-control-h-md);
     padding: var(--sw-space-xs, 4px) var(--sw-space-lg, 12px);
-    border: 0;
+    border: 1px solid color-mix(in srgb, var(--sw-platform-line, var(--sw-color-line)) 78%, transparent);
     border-radius: $sw-radius-sm;
-    color: var(--sw-platform-text);
-    background: transparent;
+    color: var(--sw-platform-text, var(--sw-color-text));
+    background: color-mix(in srgb, var(--sw-platform-surface, var(--sw-color-surface)) 86%, transparent);
     cursor: pointer;
     font: inherit;
     font-size: var(--sw-font-sm, 12px);
     line-height: var(--sw-leading-compact, 1.2);
     white-space: nowrap;
-    transition: color $sw-dur-fast $sw-ease, background $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease;
+    transition: color $sw-dur-fast $sw-ease, background $sw-dur-fast $sw-ease, border-color $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease;
 }
 
-.sw-platform-seg__item:hover { color: var(--sw-platform-text); background: var(--sw-platform-accent-soft); }
+.sw-platform-seg__item:hover {
+    color: var(--sw-platform-text, var(--sw-color-text));
+    background: var(--sw-platform-accent-soft, var(--sw-color-accent-soft));
+    border-color: color-mix(in srgb, var(--sw-platform-accent, var(--sw-color-accent)) 45%, var(--sw-platform-line, var(--sw-color-line)));
+}
 
 .sw-platform-seg__item.is-active {
-    color: var(--sw-platform-text);
-    background: var(--sw-platform-bg);
+    color: var(--sw-platform-accent, var(--sw-color-accent));
+    background: color-mix(in srgb, var(--sw-platform-accent, var(--sw-color-accent)) 14%, var(--sw-platform-surface, var(--sw-color-surface)));
+    border-color: var(--sw-platform-accent, var(--sw-color-accent));
     font-weight: var(--sw-weight-semibold, 600);
     box-shadow: var(--sw-shadow-xs);
 }
@@ -945,7 +959,7 @@
 }
 
 @media (prefers-contrast: more) {
-    :is(.sw-platform-shell, .sw-platform-surface, .speed-switch, .sw-home, .sw-studio, .sw-fab-root) {
+    :is(.sw-platform-shell, .sw-platform-surface, .sw-platform-dialog, .sw-settings, .sw-settings-dialog, .sw-home-store, .sw-home-store-dialog, .speed-switch, .sw-home, .sw-studio, .sw-fab-root) {
         --sw-platform-line: var(--sw-color-line, currentColor);
         --sw-platform-focus: 0 0 0 3px var(--sw-platform-accent);
     }

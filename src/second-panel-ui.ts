@@ -41,6 +41,9 @@ declare const __PLUGIN_VERSION__: string;
 // 这个清单同时作为“恢复默认”范围，避免把整个目录误当成默认布局。
 const EMPTY_WORKBENCH_DEFAULT_IDS: readonly string[] = HOME_DEFAULT_MODULE_IDS;
 
+// 模块级健康监控「全部重试」冷却截止时间戳（避免 renderHealthList 重建 DOM 后按钮瞬间解锁）
+let healthRetryAllCooldownUntil = 0;
+
 export interface SecondPanelUiHost {
     i18n: Record<string, string>;
     isMobile: boolean;
@@ -177,7 +180,13 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
         mountPlatformDialogTitleWrap(dialog.element, this.i18n.dialogWorkbenchTitle || "工作台", "", "iconLayoutHome");
         mountPlatformDialogCloseHint(dialog.element, this.i18n.platformCloseHint || "to close");
         if (fullscreenMode) {
-            dialog.element.querySelector(".b3-dialog__container")?.classList.add("sw-dialog--fullscreen");
+            const wbContainer = dialog.element.querySelector(".b3-dialog__container");
+            wbContainer?.classList.add("sw-dialog--fullscreen");
+            const isElectronFrameless = !this.isMobile && typeof document !== "undefined"
+                && (/Electron/i.test(navigator?.userAgent || "") || Boolean(document.querySelector("#minWindow, #maxWindow, #closeWindow, .toolbar__window")));
+            if (isElectronFrameless) {
+                wbContainer?.classList.add("sw-dialog--frameless-avoidance");
+            }
         }
         const root = dialog.element.querySelector<HTMLElement>(".sw-home");
         // 宿主主题或 Dialog 改写内容时可能丢失工作台根节点。不要把
@@ -468,8 +477,11 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
             defs.forEach((_def, moduleId) => {
                 if (this.homeBuiltinAdapterIds.has(moduleId) || this.homeThirdPartyIds.has(moduleId)) catalogIds.add(moduleId);
             });
+            const tier2Pending = typeof (this as any).ensureTier2Loaded === "function" && !(this as any).tier2Ready;
             const defaults = prepareHomeDefaultState(this.getHomeState(), device, catalogIds);
-            if (defaults.changed) this.saveHomeState(defaults.state);
+            if (!tier2Pending) {
+                if (defaults.changed) this.saveHomeState(defaults.state);
+            }
             const state = defaults.state;
             const layoutList = (state.layouts[device] || []) as Array<any>;
             // T-6969 Slice 3：X 英雄位约束——每面板至多 1 个 full 档，超出降级 large
@@ -479,7 +491,7 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
             const renderLayoutList = heroCheck.demoted > 0 ? heroCheck.list : layoutList;
             if (heroCheck.demoted > 0) {
                 state.layouts[device] = heroCheck.list;
-                this.saveHomeState(state);
+                if (!tier2Pending) this.saveHomeState(state);
             }
             const byId = new Map(state.instances.map((inst: any) => [inst.instanceId, inst]));
             const cells: Array<{ inst: any; layout: any }> = [];
@@ -1939,6 +1951,11 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
             const homeFlushRefresh = () => {
                 homeRefreshTimer = 0;
                 if (!root.isConnected || pendingModules.size === 0) { pendingModules.clear(); return; }
+                if (activeDragCleanups.size || activeResizeCleanups.size) {
+                    homeRefreshTimer = window.setTimeout(homeFlushRefresh, 150);
+                    homeRefreshTimers.push(homeRefreshTimer);
+                    return;
+                }
                 const ids = [...pendingModules];
                 pendingModules.clear();
                 controllers.forEach((entry) => {
@@ -2135,7 +2152,6 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
             quickHost.className = "sw-home__quick-actions sw__quick-actions";
             root.appendChild(quickHost);
             this.renderQuickActions(dialog.element, this.isMobile ? "mobile" : "desktop", null, () => dialog.destroy(), ".sw-home__quick-actions");
-            quickHost.classList.add("sw__quick-actions--icons");
             // T-6879（T-6874b）：底部回执条（ok/total 正常 · 失败 n），随刷新实时聚合
             const receipt = document.createElement("div");
             receipt.className = "sw-home__receipt";
@@ -2194,11 +2210,16 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                 loading: this.i18n.homeHealthGroupLoading,
                 ok: this.i18n.homeHealthGroupOk,
             };
+            let healthCooldownTimer = 0;
             const dialog = new Dialog({
                 title: this.i18n.homeHealthDetailsTitle,
                 content: '<div class="sw-home-health"></div>',
                 width: "min(520px, 94vw)",
                 destroyCallback: () => {
+                    if (healthCooldownTimer) {
+                        window.clearTimeout(healthCooldownTimer);
+                        healthCooldownTimer = 0;
+                    }
                     (this as any).activeDialogs?.delete(dialog);
                     if (returnFocus?.isConnected) {
                         try {
@@ -2255,6 +2276,7 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
             // 双击防护不重复触发；settle 后从集合移除并重绘列表（行落回真实分组=结果）。
             const inFlightRetries = new Set<string>();
             const renderHealthList = (): void => {
+                if (!dialog.element.isConnected) return;
                 const report = buildHomeHealthReport(collectRows());
                 listRoot.textContent = "";
                 const groupLabels: Record<string, string> = {
@@ -2424,7 +2446,7 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                 refreshListButton.addEventListener("click", () => renderHealthList());
                 listRoot.appendChild(refreshListButton);
 
-                // T-7411 健康监控弹窗「一键全部重试」自愈把手
+                // T-7411 健康监控弹窗「一键全部重试」自愈把手（模块级冷却时间戳，重绘后仍保持禁用与倒计时）
                 const failedRows = report.failed.concat(report.stale);
                 if (failedRows.length > 0 && this.getSettings().homeStore?.retryFailed !== false) {
                     const retryAllButton = document.createElement("button");
@@ -2433,24 +2455,8 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                     retryAllButton.textContent = this.i18n.homeHealthRetryAll || "全部重试";
                     retryAllButton.addEventListener("click", () => {
                         if (retryAllButton.disabled) return;
-                        retryAllButton.disabled = true;
-                        retryAllButton.setAttribute("aria-disabled", "true");
-                        let cooldown = 3;
-                        retryAllButton.textContent = `${this.i18n.homeHealthRetryAll || "全部重试"} (${cooldown}s)`;
-                        const tick = () => {
-                            cooldown -= 1;
-                            if (cooldown <= 0) {
-                                if (retryAllButton.isConnected) {
-                                    retryAllButton.disabled = false;
-                                    retryAllButton.removeAttribute("aria-disabled");
-                                    retryAllButton.textContent = this.i18n.homeHealthRetryAll || "全部重试";
-                                }
-                            } else if (retryAllButton.isConnected) {
-                                retryAllButton.textContent = `${this.i18n.homeHealthRetryAll || "全部重试"} (${cooldown}s)`;
-                                window.setTimeout(tick, 1000);
-                            }
-                        };
-                        window.setTimeout(tick, 1000);
+                        healthRetryAllCooldownUntil = Date.now() + 3000;
+                        syncRetryCooldown(3000);
                         failedRows.forEach((row: {instanceId: string}) => {
                             if (inFlightRetries.has(row.instanceId)) return;
                             const controller = homeControllers.find((c) => c.instanceId === row.instanceId);
@@ -2465,6 +2471,19 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
                         });
                         renderHealthList();
                     });
+                    const syncRetryCooldown = (remMs: number) => {
+                        const cooldown = Math.max(1, Math.ceil(remMs / 1000));
+                        retryAllButton.disabled = true;
+                        retryAllButton.setAttribute("aria-disabled", "true");
+                        retryAllButton.textContent = `${this.i18n.homeHealthRetryAll || "全部重试"} (${cooldown}s)`;
+                        if (!healthCooldownTimer) {
+                            healthCooldownTimer = window.setTimeout(() => {
+                                healthCooldownTimer = 0;
+                                renderHealthList();
+                            }, 1000);
+                        }
+                    };
+                    if (Date.now() < healthRetryAllCooldownUntil) syncRetryCooldown(healthRetryAllCooldownUntil - Date.now());
                     listRoot.appendChild(retryAllButton);
                 }
             };
@@ -2472,8 +2491,26 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
         };
         };
 
+        let deferredModuleTimer = 0;
         const handleModuleChange = () => {
-            if (root.isConnected) renderPanel();
+            if (panelReleased || !root.isConnected) return;
+            if (activeDragCleanups.size || activeResizeCleanups.size) {
+                if (!deferredModuleTimer) deferredModuleTimer = window.setTimeout(() => { deferredModuleTimer = 0; handleModuleChange(); }, 120);
+                return;
+            }
+            const ecoEvent = (this as { _activeEcosystemEvent?: string })._activeEcosystemEvent;
+            if (ecoEvent) {
+                if (ecoEvent === "reader:focus" || ecoEvent === "reader:blur") return;
+                const key = ecoEvent[0] === "r" ? "sireader"
+                    : (ecoEvent[0] === "m" || ecoEvent[0] === "p") ? "simedia"
+                    : ecoEvent.startsWith("lv-cards:") ? "card"
+                    : ecoEvent.replace(/^(?:lv-|xiaolv:)/, "").split(":")[0];
+                if (key && homeControllers.length) {
+                    homeControllers.forEach((e) => { if (e.moduleId.toLowerCase().includes(key)) void e.refresh(); });
+                    return;
+                }
+            }
+            renderPanel();
         };
         this.homeModuleChangeListeners.add(handleModuleChange);
 
@@ -2497,11 +2534,9 @@ export function openSecondPanel(this: SecondPanelUiHost, context?: PlatformSurfa
         };
         renderPanel();
         if (typeof (this as any).ensureTier2Loaded === "function" && !(this as any).tier2Ready) {
-            const prevHomeState = (this as any).data?.sw_home_state;
+            const prev = (this as any).data?.sw_home_state;
             void (this as any).ensureTier2Loaded().then(() => {
-                if (root.isConnected && !(this as any).isUnloading && (this as any).data?.sw_home_state !== prevHomeState) {
-                    renderPanel();
-                }
+                if (root.isConnected && !(this as any).isUnloading && (this as any).data?.sw_home_state !== prev) handleModuleChange();
             }).catch(() => {});
         }
         scheduleIconClamp();

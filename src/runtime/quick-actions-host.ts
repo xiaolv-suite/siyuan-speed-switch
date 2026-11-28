@@ -3,7 +3,7 @@ import {lvLaunchpad} from "../libs/lv-notice-kit";
 import {logger} from "../logger";
 import {resolveQuickActionSurfaceState, resolveIconReference, normalizeCustomIcon, isImageIconReference, normalizeQuickActionText} from "../util";
 import {pinyinTitleHit} from "../search-model";
-import {sanitizeQuickActions, getBuiltinQuickActions, getDefaultQuickActionTargets, resolveQuickActionSupport, getQuickActionCommandTargets, getGlobalQuickActions, shouldRenderQuickAction} from "../quick-actions";
+import {sanitizeQuickActions, getBuiltinQuickActions, getDefaultQuickActionTargets, resolveQuickActionSupport, getQuickActionCommandTargets, getGlobalQuickActions, shouldRenderQuickAction, resolveQuickActionPickerLabels} from "../quick-actions";
 import {createFloatingBallActionExecutor} from "../floating-ball-actions";
 import {checkFloatingBallSettingsBudget} from "../floating-ball-settings-model";
 import {MESSAGE_DEFAULT_MS, BLOCK_ID_RE, QUICK_ACTIONS_KEY, QUICK_ACTIONS_MAX, ICON_CATALOG, ICON_CATEGORIES} from "../constants";
@@ -366,7 +366,8 @@ export class QuickActionsHostRuntime {
             homeButton.className = "sw__quick-action sw__quick-action--home b3-tooltips b3-tooltips__n";
             homeButton.setAttribute("aria-label", this.i18n.secondPanel);
             homeButton.title = this.i18n.secondPanel;
-            homeButton.innerHTML = `<span class="sw__quick-action-icon"><svg><use xlink:href="#iconLayoutHome"></use></svg></span><span class="sw__quick-action-label">${this.i18n.secondPanel}</span>`;
+            const homeLabel = isMobileBottomBar ? (this.i18n.workbenchLabel || this.i18n.secondPanel) : this.i18n.secondPanel;
+            homeButton.innerHTML = `<span class="sw__quick-action-icon"><svg><use xlink:href="#iconLayoutHome"></use></svg></span><span class="sw__quick-action-label">${homeLabel}</span>`;
             homeButton.addEventListener("click", () => {
                 close();
                 this.openPlatformSurface("workbench", "switcher", {entry: "quick-action"});
@@ -479,31 +480,11 @@ export class QuickActionsHostRuntime {
             return parts.join(" · ");
         };
         const candidates: IQuickActionPickerCandidate[] = [];
-        const builtinLabels: Record<string, string> = {
-            switcher: this.i18n.quickBuiltinSwitcher,
-            search: this.i18n.quickBuiltinSearch,
-            journal: this.i18n.quickBuiltinJournal,
-            settings: this.i18n.quickBuiltinSettings,
-            home: this.i18n.secondPanel,
-            "snippet-studio": this.i18n.platformStudio,
-            "quick-capture": this.i18n.quickBuiltinQuickCapture,
-            "previous-tab": this.i18n.quickBuiltinPreviousTab,
-            "next-tab": this.i18n.quickBuiltinNextTab,
-            "scroll-top": this.i18n.quickBuiltinScrollTop,
-            "scroll-bottom": this.i18n.quickBuiltinScrollBottom,
-            "sync-now": this.i18n.quickBuiltinSyncNow,
-            "insert-template": this.i18n.quickBuiltinInsertTemplate,
-            "cycle-doc-set": this.i18n.quickBuiltinCycleDocSet,
-            "cycle-ball-preset": this.i18n.quickBuiltinCycleBallPreset,
-            "throw-window": this.i18n.quickBuiltinThrowWindow,
-            "hide-keyboard": this.i18n.quickBuiltinHideKeyboard,
-            "jump-back": this.i18n.quickBuiltinJumpBack,
-            "jump-forward": this.i18n.quickBuiltinJumpForward,
-        };
+        const pickerLabels = resolveQuickActionPickerLabels(this.i18n) as Record<string, string>;
         getBuiltinQuickActions().forEach((raw) => {
             const action = raw as IQuickAction;
             if (existing.has(`builtin:${action.value}`)) return;
-            action.label = builtinLabels[action.value] || action.label;
+            action.label = pickerLabels[action.value] || action.label;
             candidates.push({
                 id: action.id,
                 label: action.label,
@@ -514,21 +495,10 @@ export class QuickActionsHostRuntime {
                 action,
             });
         });
-        const globalLabels: Record<string, string> = {
-            outline: this.i18n.quickGlobalOutline,
-            bookmark: this.i18n.quickGlobalBookmark,
-            tag: this.i18n.quickGlobalTag,
-            inbox: this.i18n.quickGlobalInbox,
-            backlinks: this.i18n.quickGlobalBacklinks,
-            recentDocs: this.i18n.quickGlobalRecentDocs,
-            recentClosed: this.i18n.quickGlobalRecentClosed,
-            riffCard: this.i18n.quickGlobalRiffCard,
-            editReadonly: this.i18n.quickGlobalEditReadonly,
-        };
         getGlobalQuickActions().forEach((raw) => {
             const action = raw as IQuickAction;
             if (existing.has(`global:${action.value}`)) return;
-            action.label = globalLabels[action.value] || action.label;
+            action.label = pickerLabels[action.value] || action.label;
             candidates.push({
                 id: action.id,
                 label: action.label,

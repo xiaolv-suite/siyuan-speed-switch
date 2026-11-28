@@ -324,6 +324,7 @@ export interface ISearchSession<T> {
     cache: Map<string, T>;
     controller: AbortController | null;
     timer: number | null;
+    flush?: (() => void) | null;
     cacheLimit: number;
 }
 
@@ -978,9 +979,9 @@ export interface ISpeedSwitchHost extends Plugin {
     assembleSwitcherParts(dialog: Dialog, settings: ISwSettings, fullscreen: boolean, tabs: Tab[], activeTab: Tab | undefined, release: {fn: () => void}, focusSearch?: boolean, returnTo?: PlatformSurface, context?: PlatformSurfaceContext | null): any;
     prepareSwitcherChrome(dialog: Dialog, fullscreen: boolean): any;
     bindSwitcherListArea(dialog: Dialog, scrollElement: HTMLDivElement, tabs: Tab[], activeTab: Tab | undefined, listOpts: {onOverlayClose: IOverlayClose, onTabsChanged: IOverlayClose}, settings: ISwSettings, searchInput: HTMLInputElement | null, sortSelect: HTMLSelectElement | null, closeOverlay: IOverlayClose, updatedMap: {[rootId: string]: string}): any;
-    bindSearchInputComposition(input: HTMLInputElement, onTrigger: () => void): void;
-    bindSearchInputComposition(input: HTMLInputElement, onTrigger: () => void, scrollElement?: HTMLElement, onClose?: IOverlayClose): void;
-    bindSearchInputComposition(input: HTMLInputElement, onTrigger: () => void, scrollElement?: HTMLElement, onClose?: IOverlayClose): any;
+    bindSearchInputComposition(input: HTMLInputElement, onTrigger: () => void): () => void;
+    bindSearchInputComposition(input: HTMLInputElement, onTrigger: () => void, scrollElement?: HTMLElement, onClose?: IOverlayClose): () => void;
+    bindSearchInputComposition(input: HTMLInputElement, onTrigger: () => void, scrollElement?: HTMLElement, onClose?: IOverlayClose): () => void;
     bindSwitcherBackTop(dialog: Dialog, scrollElement: HTMLElement): () => void;
     bindSwitcherFullscreenToggle(dialog: Dialog, settings: ISwSettings, initialFullscreen: boolean): any;
     bindSwitcherToolbarActions(dialog: Dialog, searchInput: HTMLInputElement | null, sortSelect: HTMLSelectElement | null, listOpts: {onOverlayClose: () => void, onTabsChanged: () => void}, closeOverlay: () => void, updatedMap: {[rootId: string]: string}, returnTo?: PlatformSurface, context?: PlatformSurfaceContext | null): () => void;

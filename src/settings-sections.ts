@@ -13,7 +13,7 @@ import {formatStorageBytes, buildStorageUsageSummary} from "./settings-model";
 import {diffConfigPackGroups, configPackBaselineSignature, normalizeConfigPackImport} from "./config-pack-model";
 import {createDocumentSet, upsertDocumentSet, removeDocumentSet, rollbackDocumentSet, mergeDocumentSets, normalizeDocumentSets, planDocumentSetRestore, summarizeDocumentSetRestore, runDocumentSetRestore, buildDocumentSetRestoreReport, documentSetRestoreReportToMarkdown, orderDocumentSetRestoreEntries, diffDocumentSetVersion} from "./document-sets";
 import {mountQuickActionPicker} from "./quick-actions-ui";
-import {appendQuickAction, sanitizeQuickActions} from "./quick-actions";
+import {appendQuickAction, resolveQuickActionPickerLabels, sanitizeQuickActions} from "./quick-actions";
 import {createDefaultFloatingBallConfig, normalizeFloatingBallConfig, selectFloatingBallFirstLayer, applyFloatingBallPreset, saveFloatingBallPreset, removeFloatingBallPreset, FLOATING_BALL_UI_SURFACES, FLOATING_BALL_ACTION_LIMIT, FLOATING_BALL_FIRST_LAYER_LIMIT, FLOATING_BALL_DIGIT_SLOT_COUNT} from "./floating-ball-model";
 import {selectFloatingBallMoreActions} from "./floating-ball-panel";
 import {FLOATING_BALL_SETTINGS_MAX_BYTES, buildFloatingBallSettingsRows, updateFloatingBallAction, moveFloatingBallAction, removeFloatingBallAction, restoreFloatingBallDefaults, serializeFloatingBallSettings, importFloatingBallSettings, checkFloatingBallSettingsBudget} from "./floating-ball-settings-model";
@@ -61,6 +61,24 @@ declare module "./quick-actions-ui" {
 }
 
 function makeSettingEl<K extends keyof HTMLElementTagNameMap>(tag: K): HTMLElementTagNameMap[K] { return document.createElement(tag); }
+function makeTextBtn(text: string, extraClass = ""): HTMLButtonElement {
+    const btn = makeSettingEl("button");
+    btn.type = "button";
+    btn.className = `b3-button b3-button--text${extraClass ? ` ${extraClass}` : ""}`;
+    btn.textContent = text;
+    return btn;
+}
+function triggerBlobDownload(content: string, type: string, filename: string) {
+    const blob = new Blob([content], {type});
+    const url = URL.createObjectURL(blob);
+    const link = makeSettingEl("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
 
 export interface SettingsSectionsHost {
     // 宿主字段
@@ -1333,29 +1351,12 @@ export function buildSettingsDocumentSets(this: SettingsSectionsHost, ): HTMLEle
         input.className = "b3-text-field fn__block";
         input.placeholder = this.i18n.documentSetNamePlaceholder;
         input.maxLength = 80;
-        const save = makeSettingEl("button");
-        save.type = "button";
-        save.className = "b3-button b3-button--text";
-        save.textContent = this.i18n.documentSetSave;
-        const exportButton = makeSettingEl("button");
-        exportButton.type = "button";
-        exportButton.className = "b3-button b3-button--text";
-        exportButton.textContent = this.i18n.documentSetExport;
+        const save = makeTextBtn(this.i18n.documentSetSave);
+        const exportButton = makeTextBtn(this.i18n.documentSetExport);
         exportButton.addEventListener("click", () => {
-            const blob = new Blob([JSON.stringify({schemaVersion: 1, sets: this.getDocumentSets()}, null, 2)], {type: "application/json"});
-            const url = URL.createObjectURL(blob);
-            const link = makeSettingEl("a");
-            link.href = url;
-            link.download = "siyuan-speed-switch-document-sets.json";
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.setTimeout(() => URL.revokeObjectURL(url), 0);
+            triggerBlobDownload(JSON.stringify({schemaVersion: 1, sets: this.getDocumentSets()}, null, 2), "application/json", "siyuan-speed-switch-document-sets.json");
         });
-        const importButton = makeSettingEl("button");
-        importButton.type = "button";
-        importButton.className = "b3-button b3-button--text";
-        importButton.textContent = this.i18n.documentSetImport;
+        const importButton = makeTextBtn(this.i18n.documentSetImport);
         const importInput = makeSettingEl("input");
         importInput.type = "file";
         importInput.accept = "application/json,.json";
@@ -1488,54 +1489,29 @@ export function buildSettingsDocumentSets(this: SettingsSectionsHost, ): HTMLEle
                 // 免得用户对着空报告点导出。报告只活在本次设置页渲染的闭包里，
                 // 关闭设置页即丢弃——不落盘、不进插件数据，避免扩大持久化数据面。
                 let lastRestoreReport: ReturnType<typeof buildDocumentSetRestoreReport> | null = null;
-                const exportReport = makeSettingEl("button");
-                exportReport.type = "button";
-                exportReport.className = "b3-button b3-button--text";
-                exportReport.textContent = this.i18n.documentSetRestoreReport;
+                const exportReport = makeTextBtn(this.i18n.documentSetRestoreReport);
                 exportReport.disabled = true;
                 exportReport.addEventListener("click", () => {
                     if (!lastRestoreReport) {
                         showMessage(this.i18n.documentSetRestoreReportNone);
                         return;
                     }
-                    const blob = new Blob([JSON.stringify(lastRestoreReport, null, 2)], {type: "application/json"});
-                    const url = URL.createObjectURL(blob);
-                    const link = makeSettingEl("a");
-                    link.href = url;
-                    link.download = `siyuan-speed-switch-restore-report-${lastRestoreReport.setId || "set"}.json`;
-                    document.body.appendChild(link);
-                    link.click();
-                    link.remove();
-                    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+                    triggerBlobDownload(JSON.stringify(lastRestoreReport, null, 2), "application/json", `siyuan-speed-switch-restore-report-${lastRestoreReport.setId || "set"}.json`);
                     showMessage(this.i18n.documentSetRestoreReportExported);
                 });
                 // T-6841：Markdown 导出——人类可读格式，失败项附原因码，便于粘贴到
                 // issue/笔记；与 JSON 导出同源（同一份 lastRestoreReport 渲染）。
-                const exportReportMd = makeSettingEl("button");
-                exportReportMd.type = "button";
-                exportReportMd.className = "b3-button b3-button--text";
-                exportReportMd.textContent = this.i18n.documentSetRestoreReportMd;
+                const exportReportMd = makeTextBtn(this.i18n.documentSetRestoreReportMd);
                 exportReportMd.disabled = true;
                 exportReportMd.addEventListener("click", () => {
                     if (!lastRestoreReport) {
                         showMessage(this.i18n.documentSetRestoreReportNone);
                         return;
                     }
-                    const blob = new Blob([documentSetRestoreReportToMarkdown(lastRestoreReport)], {type: "text/markdown"});
-                    const url = URL.createObjectURL(blob);
-                    const link = makeSettingEl("a");
-                    link.href = url;
-                    link.download = `siyuan-speed-switch-restore-report-${lastRestoreReport.setId || "set"}.md`;
-                    document.body.appendChild(link);
-                    link.click();
-                    link.remove();
-                    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+                    triggerBlobDownload(documentSetRestoreReportToMarkdown(lastRestoreReport), "text/markdown", `siyuan-speed-switch-restore-report-${lastRestoreReport.setId || "set"}.md`);
                     showMessage(this.i18n.documentSetRestoreReportExported);
                 });
-                const restore = makeSettingEl("button");
-                restore.type = "button";
-                restore.className = "b3-button b3-button--text";
-                restore.textContent = this.i18n.documentSetRestore;
+                const restore = makeTextBtn(this.i18n.documentSetRestore);
                 let restoreController: AbortController | null = null;
                 restore.addEventListener("click", async () => {
                     if (restoreController) {
@@ -2235,32 +2211,41 @@ export function buildSettingsFloatingBall(this: SettingsSectionsHost, s: ISwSett
         row.append(label, select);
         flickSelects.push({direction, select});
     });
-    const renderFlickOptions = () => {
-        const config: any = getBallCfg();
-        const catalog = this.getFloatingBallActions();
-        const surface = surfaceSelect.value as QuickActionTarget;
-        flickSelects.forEach(({direction, select}) => {
-            const current = config.behavior?.flickActions?.[direction] || "";
-            const fixedMore = direction === "up";
-            const options: Array<{value: string; label: string}> = [
-                {value: "more", label: this.i18n.floatingBallFlickMore},
-            ];
-            if (!fixedMore) options.unshift({value: "", label: this.i18n.floatingBallFlickNone});
-            const seen = new Set(options.map((option) => option.value));
-            if (!fixedMore) catalog.forEach((action: any) => {
+    const populateActionSelect = (
+        select: HTMLSelectElement,
+        baseOptions: Array<{value: string; label: string}>,
+        current: string,
+        config: any,
+        surface: QuickActionTarget,
+        includeCatalog = true,
+        fallbackLabel = current,
+    ) => {
+        const options = [...baseOptions];
+        const seen = new Set(options.map((option) => option.value));
+        if (includeCatalog) {
+            this.getFloatingBallActions().forEach((action: any) => {
                 if (!action?.id || seen.has(action.id)) return;
                 if (this.getQuickActionSupport(action, surface) === "unsupported") return;
                 seen.add(action.id);
                 options.push({value: action.id, label: clickActionLabel(action, config, surface)});
             });
-            if (!fixedMore && current && !seen.has(current)) {
-                options.push({value: current, label: current});
-            }
-            select.innerHTML = "";
-            options.forEach((option) => select.appendChild(new Option(option.label, option.value)));
+        }
+        if (current && !seen.has(current)) options.push({value: current, label: fallbackLabel});
+        select.innerHTML = "";
+        options.forEach((option) => select.appendChild(new Option(option.label, option.value)));
+        select.value = current;
+    };
+    const renderFlickOptions = () => {
+        const config: any = getBallCfg();
+        const surface = surfaceSelect.value as QuickActionTarget;
+        flickSelects.forEach(({direction, select}) => {
+            const current = config.behavior?.flickActions?.[direction] || "";
+            const fixedMore = direction === "up";
+            const options: Array<{value: string; label: string}> = [{value: "more", label: this.i18n.floatingBallFlickMore}];
+            if (!fixedMore) options.unshift({value: "", label: this.i18n.floatingBallFlickNone});
+            populateActionSelect(select, options, fixedMore ? "more" : current, config, surface, !fixedMore);
             select.disabled = fixedMore;
             select.setAttribute("aria-disabled", String(fixedMore));
-            select.value = fixedMore ? "more" : current;
         });
     };
     wrapper.appendChild(flickSection);
@@ -2303,25 +2288,13 @@ export function buildSettingsFloatingBall(this: SettingsSectionsHost, s: ISwSett
     });
     const renderGestureOptions = () => {
         const config: any = getBallCfg();
-        const catalog = this.getFloatingBallActions();
+        const surface = surfaceSelect.value as QuickActionTarget;
+        const base = [
+            {value: "", label: this.i18n.floatingBallFlickNone},
+            {value: "more", label: this.i18n.floatingBallFlickMore},
+        ];
         gestureRows.forEach(({key, select}) => {
-            const current = config.behavior?.[key] || "";
-            const options: Array<{value: string; label: string}> = [
-                {value: "", label: this.i18n.floatingBallFlickNone},
-                {value: "more", label: this.i18n.floatingBallFlickMore},
-            ];
-            const seen = new Set(options.map((option) => option.value));
-            const surface = surfaceSelect.value as QuickActionTarget;
-            catalog.forEach((action: any) => {
-                if (!action?.id || seen.has(action.id)) return;
-                if (this.getQuickActionSupport(action, surface) === "unsupported") return;
-                seen.add(action.id);
-                options.push({value: action.id, label: clickActionLabel(action, config, surface)});
-            });
-            if (current && !seen.has(current)) options.push({value: current, label: current});
-            select.innerHTML = "";
-            options.forEach((option) => select.appendChild(new Option(option.label, option.value)));
-            select.value = current;
+            populateActionSelect(select, base, config.behavior?.[key] || "", config, surface);
         });
     };
     wrapper.appendChild(gestureSection);
@@ -2393,10 +2366,7 @@ export function buildSettingsFloatingBall(this: SettingsSectionsHost, s: ISwSett
             if (current?.kind === "action" && current.actionId) value = `action:${current.actionId}`;
             if (current?.kind === "saved-search" && current.searchId) value = `saved-search:${current.searchId}`;
             if (value && !Array.from(select.options).some((option) => option.value === value)) {
-                const unavailable = current.kind === "saved-search"
-                    ? this.i18n.floatingBallDigitSlotUnavailable
-                    : this.i18n.floatingBallDigitSlotUnavailable;
-                select.appendChild(new Option(`${unavailable}: ${current.kind === "saved-search" ? current.searchId : current.actionId}`, value));
+                select.appendChild(new Option(`${this.i18n.floatingBallDigitSlotUnavailable}: ${current.kind === "saved-search" ? current.searchId : current.actionId}`, value));
             }
             select.value = value;
             select.addEventListener("change", () => {
@@ -2546,58 +2516,16 @@ export function buildSettingsFloatingBall(this: SettingsSectionsHost, s: ISwSett
     const clickActionLabel = (action: any, config: any, surface: string) => {
         const descriptor = config.actions?.[surface]?.find((entry: any) => entry.actionId === action.id);
         if (descriptor?.label) return descriptor.label;
-        const builtinLabels: Record<string, string> = {
-            switcher: this.i18n.quickBuiltinSwitcher,
-            search: this.i18n.quickBuiltinSearch,
-            journal: this.i18n.quickBuiltinJournal,
-            settings: this.i18n.quickBuiltinSettings,
-            home: this.i18n.secondPanel,
-            "quick-capture": this.i18n.quickBuiltinQuickCapture,
-            "previous-tab": this.i18n.quickBuiltinPreviousTab,
-            "next-tab": this.i18n.quickBuiltinNextTab,
-            "scroll-top": this.i18n.quickBuiltinScrollTop,
-            "scroll-bottom": this.i18n.quickBuiltinScrollBottom,
-            outline: this.i18n.quickGlobalOutline,
-            bookmark: this.i18n.quickGlobalBookmark,
-            tag: this.i18n.quickGlobalTag,
-            inbox: this.i18n.quickGlobalInbox,
-            backlinks: this.i18n.quickGlobalBacklinks,
-            recentDocs: this.i18n.quickGlobalRecentDocs,
-            recentClosed: this.i18n.quickGlobalRecentClosed,
-            riffCard: this.i18n.quickGlobalRiffCard,
-            editReadonly: this.i18n.quickGlobalEditReadonly,
-            "sync-now": this.i18n.quickBuiltinSyncNow,
-            "insert-template": this.i18n.quickBuiltinInsertTemplate,
-            "cycle-doc-set": this.i18n.quickBuiltinCycleDocSet,
-            "cycle-ball-preset": this.i18n.quickBuiltinCycleBallPreset,
-            "throw-window": this.i18n.quickBuiltinThrowWindow,
-            "hide-keyboard": this.i18n.quickBuiltinHideKeyboard,
-            "jump-back": this.i18n.quickBuiltinJumpBack,
-            "jump-forward": this.i18n.quickBuiltinJumpForward,
-        };
+        const builtinLabels = resolveQuickActionPickerLabels(this.i18n) as Record<string, string>;
         return builtinLabels[action.value] || action.label || action.id;
     };
     const renderClickActionOptions = (config: any, surface: string) => {
         const current = config.clickAction?.[surface] || "switcher";
-        const catalog = this.getFloatingBallActions();
-        const options: Array<{value: string; label: string}> = [
+        const descriptor = config.actions?.[surface]?.find((entry: any) => entry.actionId === current);
+        populateActionSelect(clickActionSelect, [
             {value: "switcher", label: this.i18n.floatingBallClickSwitcher},
             {value: "__floating-ball-more__", label: this.i18n.floatingBallClickMore},
-        ];
-        const seen = new Set(options.map((option) => option.value));
-        catalog.forEach((action: any) => {
-            if (!action?.id || seen.has(action.id)) return;
-            if (this.getQuickActionSupport(action, surface as QuickActionTarget) === "unsupported") return;
-            seen.add(action.id);
-            options.push({value: action.id, label: clickActionLabel(action, config, surface)});
-        });
-        if (!seen.has(current)) {
-            const descriptor = config.actions?.[surface]?.find((entry: any) => entry.actionId === current);
-            options.push({value: current, label: descriptor?.label || current});
-        }
-        clickActionSelect.innerHTML = "";
-        options.forEach((option) => clickActionSelect.appendChild(new Option(option.label, option.value)));
-        clickActionSelect.value = current;
+        ], current, config, surface as QuickActionTarget, true, descriptor?.label || current);
     };
     const renderControlValues = () => controlValues.forEach(({output, format}, input) => {
         const text = format(Number(input.value));

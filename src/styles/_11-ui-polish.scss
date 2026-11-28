@@ -731,26 +731,28 @@
             flex-wrap: nowrap;
             overflow-x: auto;
             overflow-y: hidden;
+            scroll-snap-type: x proximity;
             min-height: 52px;
-            padding: var(--sw-space-sm, 6px) var(--sw-space-md, 8px);
+            padding: var(--sw-space-sm, 6px) var(--sw-space-sm, 6px);
             padding-bottom: calc(var(--sw-space-sm, 6px) + env(safe-area-inset-bottom, 0px));
             border-top: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--sw-color-line) 45%, transparent));
             border-radius: var(--sw-radius-panel, 18px) var(--sw-radius-panel, 18px) 0 0;
             background: var(--sw-card-float-bg, var(--sw-color-surface));
             box-shadow: var(--sw-rim-light, inset 0 1px 0 0 rgba(255, 255, 255, 0.08)), var(--sw-shadow-bento);
-            gap: var(--sw-space-xs, 4px);
+            gap: var(--sw-space-2xs, 2px);
             box-sizing: border-box;
         }
 
         .sw__quick-action {
             flex-direction: column;
             justify-content: center;
-            flex-shrink: 0;
+            flex: 0 0 auto;
+            scroll-snap-align: start;
             gap: var(--sw-space-2xs, 2px);
-            min-width: 52px;
+            min-width: 44px;
             min-height: 44px;
             height: auto;
-            padding: var(--sw-space-xs, 4px) var(--sw-space-md, 8px);
+            padding: var(--sw-space-xs, 4px) var(--sw-space-xs, 4px);
             border: 1px solid var(--sw-color-line-soft, color-mix(in srgb, var(--sw-color-line) 45%, transparent));
             border-radius: var(--sw-radius-md, 8px);
             background: var(--sw-card-float-bg, var(--sw-color-surface));
@@ -764,12 +766,21 @@
                 font-size: var(--sw-font-2xs, 10px);
                 font-weight: var(--sw-weight-medium, 500);
                 letter-spacing: -0.01em;
+                max-width: 5.6em;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            &.sw__quick-action--collapse {
+                min-width: 28px;
+                padding: var(--sw-space-xs, 4px) var(--sw-space-2xs, 2px);
             }
 
             &.sw__mobile-nav-item {
-                min-width: 56px;
+                min-width: 46px;
                 width: auto;
-                padding: var(--sw-space-xs, 4px) var(--sw-space-md, 8px);
+                padding: var(--sw-space-xs, 4px) var(--sw-space-xs, 4px);
 
                 .sw__quick-action-label,
                 .sw__mobile-nav-label {
@@ -932,10 +943,6 @@
             padding: var(--sw-space-md, 8px) var(--sw-space-2xl, 24px) !important;
         }
 
-        .sw-platform-header__brand-subtitle {
-            display: none !important;
-        }
-
         // Apple Segmented Control 导航胶囊
         .sw-platform-surface-nav {
             background: color-mix(in srgb, var(--sw-color-text-subtle) 6%, transparent);
@@ -1045,7 +1052,7 @@
     }
 
     .sw-home__cell-body {
-        padding: var(--sw-space-xl, 16px) 20px !important;
+        padding: var(--sw-space-lg, 12px) 18px !important;
         height: 100% !important;
         display: flex !important;
         flex-direction: column !important;
@@ -1065,7 +1072,7 @@
             display: flex !important;
             flex-direction: column !important;
             flex: 1 1 auto !important;
-            gap: var(--sw-space-lg, 12px) !important;
+            gap: var(--sw-space-md, 8px) !important;
             min-height: 0;
         }
     }
@@ -1126,7 +1133,7 @@
 
             .sw__home-stat-value {
                 font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", var(--sw-font-mono, monospace) !important;
-                font-size: clamp(34px, 4.2vw, 44px) !important;
+                font-size: clamp(30px, 3.8vw, 38px) !important;
                 font-weight: 850 !important;
                 letter-spacing: -0.04em !important;
                 color: var(--sw-platform-accent) !important;
@@ -1139,7 +1146,7 @@
                 letter-spacing: 0.08em !important;
                 text-transform: uppercase !important;
                 font-weight: 750 !important;
-                color: #ffffff !important;
+                color: var(--b3-theme-on-primary, #0f1722) !important;
                 background: var(--sw-platform-accent, #0284c7) !important;
                 padding: var(--sw-space-2xs, 2px) 10px !important;
                 border-radius: 999px !important;
@@ -1148,11 +1155,13 @@
         }
 
         .sw__home-day-progress {
+            flex: none !important;
             position: relative !important;
             height: 8px !important;
+            min-height: 8px !important;
             border-radius: 999px !important;
             background: color-mix(in srgb, var(--sw-platform-accent) 18%, transparent) !important;
-            margin: var(--sw-space-sm, 6px) 0 10px !important;
+            margin: var(--sw-space-2xs, 2px) 0 !important;
             overflow: visible !important;
             box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1) !important;
         }
@@ -1207,7 +1216,7 @@
 
             .sw__home-stat-value {
                 font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", var(--sw-font-mono, monospace) !important;
-                font-size: clamp(34px, 4.4vw, 46px) !important;
+                font-size: clamp(30px, 3.8vw, 38px) !important;
                 font-weight: 850 !important;
                 letter-spacing: -0.04em !important;
                 color: #10b981 !important;
@@ -1217,7 +1226,7 @@
             .sw__home-stat-label {
                 font-size: 11px !important;
                 font-weight: 750 !important;
-                color: #ffffff !important;
+                color: #0f1722 !important;
                 background: #10b981 !important;
                 padding: var(--sw-space-2xs, 2px) 10px !important;
                 border-radius: 999px !important;
@@ -1226,12 +1235,14 @@
         }
 
         .sw__home-progress {
+            flex: none !important;
             position: relative !important;
             height: 8px !important;
+            min-height: 8px !important;
             border-radius: 999px !important;
             background: color-mix(in srgb, #10b981 18%, transparent) !important;
             overflow: visible !important;
-            margin: var(--sw-space-sm, 6px) 0 10px !important;
+            margin: var(--sw-space-2xs, 2px) 0 !important;
             box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1) !important;
 
             > div, > span, &::after {
@@ -1304,7 +1315,7 @@
         .sw__home-module-body {
             display: flex !important;
             flex-direction: column !important;
-            gap: 10px !important;
+            gap: var(--sw-space-md, 8px) !important;
             height: 100% !important;
         }
 
@@ -1313,7 +1324,7 @@
             align-items: center !important;
             align-self: flex-start !important;
             gap: var(--sw-space-md, 8px) !important;
-            padding: var(--sw-space-sm, 6px) var(--sw-space-lg, 12px) !important;
+            padding: var(--sw-space-xs, 4px) 10px !important;
             min-height: auto !important;
             background: color-mix(in srgb, var(--sw-color-text, #0f172a) 3.5%, var(--sw-color-bg, #ffffff)) !important;
             border: 1px solid color-mix(in srgb, var(--sw-color-text, #0f172a) 7%, transparent) !important;
@@ -1355,17 +1366,17 @@
             justify-content: center !important;
             align-items: center !important;
             text-align: center !important;
-            gap: var(--sw-space-sm, 6px) !important;
+            gap: var(--sw-space-2xs, 2px) !important;
             background: color-mix(in srgb, var(--sw-stat-accent) 6%, var(--sw-color-surface)) !important;
             border: 1px dashed color-mix(in srgb, var(--sw-stat-accent) 26%, transparent) !important;
             border-radius: 14px !important;
-            padding: 14px 20px !important;
+            padding: var(--sw-space-md, 8px) 14px !important;
             color: var(--sw-color-text-subtle) !important;
-            font-size: 13px !important;
+            font-size: var(--sw-font-sm, 12px) !important;
             font-weight: 650 !important;
 
             &::before {
-                font-size: 14px !important;
+                font-size: var(--sw-font-md, 13px) !important;
                 font-weight: 750 !important;
                 color: var(--sw-stat-accent) !important;
             }
@@ -1678,7 +1689,7 @@
             .sw__home-stat-label {
                 font-size: 11px !important;
                 font-weight: 700 !important;
-                color: #ffffff !important;
+                color: #0f1722 !important;
                 background: var(--sw-stat-badge) !important;
                 padding: var(--sw-space-2xs, 2px) 10px !important;
                 border-radius: 999px !important;
@@ -1914,7 +1925,7 @@
     }
 
     .sw__home-module-header {
-        min-height: 32px;
+        min-height: var(--sw-control-h-md, 26px);
         display: flex;
         align-items: center;
         gap: var(--sw-space-sm, 6px);
@@ -2725,18 +2736,8 @@
 
         .sw-studio__details {
             position: relative;
-            padding-bottom: 18px;
-        }
-        .sw-studio__details::after {
-            content: "";
-            position: absolute;
-            z-index: 2;
-            right: 0;
-            bottom: 0;
-            left: 0;
-            height: 12px;
-            pointer-events: none;
-            background: linear-gradient(0deg, var(--sw-color-surface), color-mix(in srgb, var(--sw-color-surface) 0%, transparent));
+            padding-bottom: var(--sw-space-2xl, 24px);
+            scroll-padding-bottom: 56px;
         }
         .sw-studio__details:focus-within::after { opacity: 0; }
 
@@ -3082,15 +3083,6 @@
         }
     }
 
-    .sw__palette-section-title {
-        padding: var(--sw-space-sm, 6px) var(--sw-space-md, 8px) var(--sw-space-xs, 4px);
-        font-size: var(--sw-font-xs, 11px);
-        font-weight: 600;
-        color: var(--sw-color-text-muted, rgba(128, 128, 128, 0.8));
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-    }
-
     .sw__palette-item {
         display: flex;
         align-items: center;
@@ -3201,9 +3193,9 @@
         margin-right: var(--sw-space-xs, 4px);
         font-size: var(--sw-font-2xs, 10px);
         font-weight: var(--sw-weight-semibold, 600);
-        color: #f59e0b;
-        background: color-mix(in srgb, #f59e0b 14%, transparent);
-        border: 1px solid color-mix(in srgb, #f59e0b 35%, transparent);
+        color: var(--sw-badge-recommend, #92400e);
+        background: color-mix(in srgb, var(--sw-badge-recommend, #92400e) 14%, transparent);
+        border: 1px solid color-mix(in srgb, var(--sw-badge-recommend, #92400e) 35%, transparent);
         border-radius: var(--sw-platform-radius-pill, 999px);
         white-space: nowrap;
         user-select: none;
@@ -3292,8 +3284,8 @@ mark.sw__search-mark,
 .sw__doc-snippet mark {
     padding: 1px var(--sw-space-2xs, 2px);
     border-radius: 3px;
-    background: color-mix(in srgb, var(--sw-color-accent) 22%, transparent);
-    color: var(--sw-color-accent);
+    background: color-mix(in srgb, var(--sw-color-accent) 18%, transparent);
+    color: color-mix(in srgb, var(--sw-color-accent) 45%, var(--sw-color-text));
     font-weight: 700;
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sw-color-accent) 30%, transparent);
 }
@@ -3319,12 +3311,23 @@ mark.sw__search-mark,
 
 // ==================== Epoch 6 联邦规范 · Bento 软性美学与微交互 ====================
 
-// 按钮物理微触感
-button:active:not(:disabled),
-.b3-button:active:not(:disabled),
-.sw__mode-chip:active,
-.sw__palette-item:active {
-    transform: translateY(1.5px) scale(0.985);
+// 按钮物理微触感（限定雷切根容器作用域，严禁污染思源宿主及其他插件）
+:is(.speed-switch, .sw-home, .sw-settings-dialog, .sw-platform-dialog, .sw-home-store-dialog, .sw-studio, .sw-fab-root, .sw__palette-backdrop) {
+    button:active:not(:disabled),
+    .b3-button:active:not(:disabled),
+    .sw__mode-chip:active,
+    .sw__palette-item:active {
+        transform: translateY(1.5px) scale(0.985);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        button:active:not(:disabled),
+        .b3-button:active:not(:disabled),
+        .sw__mode-chip:active,
+        .sw__palette-item:active {
+            transform: none;
+        }
+    }
 }
 
 // 弹窗标题栏规范：22×22 紫底白标 + 标题 + 版本胶囊
@@ -3387,8 +3390,7 @@ button:active:not(:disabled),
 }
 
 // 参考图午夜深空黑金卡底色与质感（重点对比块）
-.sw-home__cell--midnight,
-.sw-home__midnight-card {
+.sw-home__cell--midnight {
     background: var(--sw-card-accent-dark, var(--lv-midnight-card, #1B1E2E));
     border: 1px solid color-mix(in srgb, var(--sw-color-accent) 28%, var(--sw-color-line));
     border-radius: var(--sw-radius-card, 16px);
@@ -3906,13 +3908,32 @@ button:active:not(:disabled),
     }
 
     // 分类药丸 Tab 栏（Apple Segmented Control）
+    .sw-home-store__filter-bar {
+        align-items: center !important;
+        margin: var(--sw-space-sm, 6px) 0 12px !important;
+
+        .sw-home-store__tabs {
+            margin: 0 !important;
+        }
+
+        .sw-home-store__sort {
+            height: 42px !important;
+            min-height: 42px !important;
+            margin: 0 !important;
+            border-radius: 999px !important;
+            background: color-mix(in srgb, var(--sw-color-surface) 92%, transparent) !important;
+            border: 1px solid color-mix(in srgb, var(--sw-color-line) 55%, transparent) !important;
+            color: var(--sw-color-text) !important;
+        }
+    }
+
     .sw-home-store__tabs {
         background: color-mix(in srgb, var(--sw-color-text-subtle) 6%, transparent) !important;
         padding: var(--sw-space-xs, 4px) !important;
         border-radius: var(--sw-platform-radius-pill, 999px) !important;
         border: 1px solid color-mix(in srgb, var(--sw-color-line) 35%, transparent) !important;
         gap: var(--sw-space-xs, 4px) !important;
-        margin: var(--sw-space-sm, 6px) 0 14px !important;
+        margin: 0 !important;
     }
 
     .sw-home-store__tab {
@@ -4035,7 +4056,7 @@ button:active:not(:disabled),
         // 添加到工作台等主要操作按钮
         .sw-home-store__add {
             background: linear-gradient(135deg, var(--sw-platform-accent, #3b82f6), color-mix(in srgb, var(--sw-platform-accent, #3b82f6) 80%, #6366f1)) !important;
-            color: #ffffff !important;
+            color: var(--b3-theme-on-primary, #0f1722) !important;
             border: none !important;
             border-radius: 12px !important;
             font-weight: 750 !important;
@@ -4065,7 +4086,7 @@ button:active:not(:disabled),
             font-weight: 600 !important;
             transition: transform $sw-dur-fast $sw-ease, background $sw-dur-fast $sw-ease, border-color $sw-dur-fast $sw-ease, box-shadow $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease, opacity $sw-dur-fast $sw-ease !important;
 
-            :is(html[data-theme-mode="dark"], [data-theme-mode="dark"], [data-appearance="dark"], body.body--dark, body.theme--dark, html.dark, .b3-theme-dark) & {
+            :is(html[data-theme-mode="dark"], [data-theme-mode="dark"], [data-appearance="dark"], body.body--dark, body.theme--dark, html.dark, .b3-theme-dark) &:not(.is-selected):not(.is-recommended) {
                 background: color-mix(in srgb, var(--sw-color-surface) 84%, rgba(255, 255, 255, 0.08)) !important;
                 border-color: rgba(255, 255, 255, 0.18) !important;
             }
@@ -4085,12 +4106,12 @@ button:active:not(:disabled),
 
             &.is-selected {
                 background: var(--sw-platform-accent, #3b82f6) !important;
-                color: #ffffff !important;
+                color: var(--b3-theme-on-primary, #0f1722) !important;
                 border-color: var(--sw-platform-accent, #3b82f6) !important;
                 box-shadow: 0 2px 8px color-mix(in srgb, var(--sw-platform-accent) 40%, transparent) !important;
 
                 .sw-home-store__size-rec-badge {
-                    color: #ffffff !important;
+                    color: var(--b3-theme-on-primary, #0f1722) !important;
                 }
             }
         }
@@ -4216,10 +4237,7 @@ button:active:not(:disabled),
 }
 
 /* ══════════ 按钮专项：忙碌态拦截 / 文字显示（按压反馈 base-controls 已有） ══════════ */
-.sw-settings,
-.b3-dialog__container.sw-settings-dialog,
-.sw-second-panel,
-.sw-floating-ball-panel {
+:is(.sw-settings, .b3-dialog__container.sw-settings-dialog) {
     /* 忙碌态：拦截连点 + 视觉降透明 */
     button[aria-busy="true"] {
         pointer-events: none;
@@ -4240,11 +4258,10 @@ button:active:not(:disabled),
 }
 
 /* ══════════ 文字专项：等宽数字对齐 / 行高节奏 / 换行保护 ══════════ */
-:is(.sw-settings, .sw-second-panel, .sw-floating-ball-panel, .b3-dialog__container.sw-settings-dialog) {
+:is(.sw-settings, .b3-dialog__container.sw-settings-dialog) {
     font-variant-numeric: tabular-nums;
 
-    .sw-settings__hint,
-    .sw-setting__desc {
+    .sw-settings__hint {
         line-height: 1.55;
         overflow-wrap: anywhere;
     }

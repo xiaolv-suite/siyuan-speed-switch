@@ -228,48 +228,53 @@ export class PaletteHostRuntime {
             this.recentPaletteActions = [actionId, ...this.recentPaletteActions.filter((id) => id !== actionId)].slice(0, 5);
         }
 
+        const openTargetDoc = (docOpts: {position?: "right" | "bottom"; mode?: "preview"} = {}) => {
+            if (!rootId) return;
+            destroySwitcher();
+            if (this.isMobile) void this.mobileOpenDoc(rootId);
+            else void this.bridge.openTab({app: this.app, doc: {id: blockId || rootId, ...(docOpts.mode ? {mode: docOpts.mode} : {})}, ...(docOpts.position ? {position: docOpts.position} : {})});
+        };
+        const openExternalBridgeOrDefault = (
+            target: any,
+            isActive: boolean,
+            invoke: () => void,
+            successTpl: string,
+        ) => {
+            if (!rootId) return;
+            destroySwitcher();
+            const openDefault = () => {
+                if (this.isMobile) void this.mobileOpenDoc(rootId);
+                else void this.bridge.openTab({app: this.app, doc: {id: rootId}});
+                showMessage((this.i18n.openedInDefaultEditorReceipt || "在默认编辑器中打开：{x}").replace("{x}", title));
+            };
+            if (isActive && target) {
+                try {
+                    invoke();
+                    showMessage(successTpl.replace("{x}", title));
+                } catch {
+                    openDefault();
+                }
+            } else {
+                openDefault();
+            }
+        };
+
         switch (actionId) {
             case "open-active":
                 if (effectiveHandlers?.onActivate && tab) {
                     effectiveHandlers.onActivate(tab);
-                } else if (rootId) {
-                    destroySwitcher();
-                    if (this.isMobile) {
-                        void this.mobileOpenDoc(rootId);
-                    } else {
-                        void this.bridge.openTab({app: this.app, doc: {id: blockId || rootId}});
-                    }
+                } else {
+                    openTargetDoc();
                 }
                 break;
             case "open-right":
-                if (rootId) {
-                    destroySwitcher();
-                    if (this.isMobile) {
-                        void this.mobileOpenDoc(rootId);
-                    } else {
-                        void this.bridge.openTab({app: this.app, doc: {id: blockId || rootId}, position: "right"});
-                    }
-                }
+                openTargetDoc({position: "right"});
                 break;
             case "open-bottom":
-                if (rootId) {
-                    destroySwitcher();
-                    if (this.isMobile) {
-                        void this.mobileOpenDoc(rootId);
-                    } else {
-                        void this.bridge.openTab({app: this.app, doc: {id: blockId || rootId}, position: "bottom"});
-                    }
-                }
+                openTargetDoc({position: "bottom"});
                 break;
             case "open-preview":
-                if (rootId) {
-                    destroySwitcher();
-                    if (this.isMobile) {
-                        void this.mobileOpenDoc(rootId);
-                    } else {
-                        void this.bridge.openTab({app: this.app, doc: {id: blockId || rootId, mode: "preview"}});
-                    }
-                }
+                openTargetDoc({mode: "preview"});
                 break;
             case "toggle-pin":
                 if (card && effectiveHandlers?.onTogglePin && tab) {
@@ -339,48 +344,18 @@ export class PaletteHostRuntime {
                     if (docPath) copyToClipboard(String(docPath));
                 }
                 break;
-            case "open-in-reader":
-                if (rootId) {
-                    destroySwitcher();
-                    const sireader = (getBridgeSafely("sireader") || (window as any).sireader) as any;
-                    const isReaderActive = !!(sireader && typeof sireader.openDoc === "function");
-                    if (isReaderActive) {
-                        try {
-                            sireader.openDoc(rootId);
-                            showMessage((this.i18n.openedInReaderReceipt || "已在思阅中打开：{x}").replace("{x}", title));
-                        } catch {
-                            if (this.isMobile) void this.mobileOpenDoc(rootId);
-                            else void this.bridge.openTab({app: this.app, doc: {id: rootId}});
-                            showMessage((this.i18n.openedInDefaultEditorReceipt || "在默认编辑器中打开：{x}").replace("{x}", title));
-                        }
-                    } else {
-                        if (this.isMobile) void this.mobileOpenDoc(rootId);
-                        else void this.bridge.openTab({app: this.app, doc: {id: rootId}});
-                        showMessage((this.i18n.openedInDefaultEditorReceipt).replace("{x}", title));
-                    }
-                }
+            case "open-in-reader": {
+                const sireader = (getBridgeSafely("sireader") || (window as any).sireader) as any;
+                const isReaderActive = !!(sireader && typeof sireader.openDoc === "function");
+                openExternalBridgeOrDefault(sireader, isReaderActive, () => { sireader.openDoc(rootId); }, this.i18n.openedInReaderReceipt || "已在思阅中打开：{x}");
                 break;
-            case "open-in-media":
-                if (rootId) {
-                    destroySwitcher();
-                    const player = (getBridgeSafely("simedia") || (window as any).siyuanMediaPlayer) as any;
-                    const isMediaActive = !!(player?.controller && typeof player.controller.play === "function");
-                    if (isMediaActive) {
-                        try {
-                            player.controller.play(rootId);
-                            showMessage((this.i18n.openedInMediaReceipt || "已在思播中打开：{x}").replace("{x}", title));
-                        } catch {
-                            if (this.isMobile) void this.mobileOpenDoc(rootId);
-                            else void this.bridge.openTab({app: this.app, doc: {id: rootId}});
-                            showMessage((this.i18n.openedInDefaultEditorReceipt || "在默认编辑器中打开：{x}").replace("{x}", title));
-                        }
-                    } else {
-                        if (this.isMobile) void this.mobileOpenDoc(rootId);
-                        else void this.bridge.openTab({app: this.app, doc: {id: rootId}});
-                        showMessage((this.i18n.openedInDefaultEditorReceipt).replace("{x}", title));
-                    }
-                }
+            }
+            case "open-in-media": {
+                const player = (getBridgeSafely("simedia") || (window as any).siyuanMediaPlayer) as any;
+                const isMediaActive = !!(player?.controller && typeof player.controller.play === "function");
+                openExternalBridgeOrDefault(player, isMediaActive, () => { player.controller.play(rootId); }, this.i18n.openedInMediaReceipt || "已在思播中打开：{x}");
                 break;
+            }
             case "save-as-doc-set":
                 this.saveCurrentTabsAsDocSet();
                 break;

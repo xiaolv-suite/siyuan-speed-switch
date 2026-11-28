@@ -161,7 +161,7 @@
             &.is-active {
                 background: var(--sw-color-data, #10b981);
                 border-color: var(--sw-color-data, #10b981);
-                color: #ffffff;
+                color: #0f1722;
             }
         }
     }
@@ -287,7 +287,7 @@
         transition: background-color $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease, border-color $sw-dur-fast $sw-ease;
         &:hover {
             background: var(--sw-color-accent);
-            color: #fff;
+            color: var(--b3-theme-on-primary, var(--sw-color-on-accent, #0f1722));
         }
     }
     &__library-filters { display: flex; flex-wrap: wrap; gap: var(--sw-space-sm, 6px); }
@@ -569,7 +569,7 @@
     &__spinner { width: var(--sw-icon-xs, 14px); height: 14px; border: 2px solid color-mix(in srgb, var(--studio-accent) 25%, transparent); border-top-color: var(--studio-accent); border-radius: 50%; animation: sw-studio-spin .8s linear infinite; }
     &__hint { color: var(--studio-on-surface); font-size: var(--sw-font-xs, 11px); line-height: 1.55; margin: var(--sw-space-xs, 4px) 0; overflow-wrap: anywhere; }
     &__lower { display: grid; grid-template-columns: minmax(230px, 2fr) minmax(0, 3fr); gap: 14px; min-height: 0; }
-    &__details, &__editor-section { overflow: auto; padding: 14px; }
+    &__details, &__editor-section { overflow: auto; padding: 14px 14px 18px; scroll-padding-bottom: 56px; }
     &__description { line-height: 1.55; margin: 10px 0; color: var(--studio-on-surface); }
     &__capabilities { display: grid; gap: var(--sw-space-sm, 6px); margin: 10px 0; padding: 10px var(--sw-space-lg, 12px); border: 1px dashed var(--studio-line); border-radius: 10px; }
     &__capability { position: relative; padding-left: 14px; color: var(--studio-on-surface); font-size: var(--sw-font-xs, 11px); line-height: 1.55; overflow-wrap: anywhere; }
@@ -579,7 +579,7 @@
     &__selection-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     &__selection-meta { color: var(--studio-on-surface); font-size: var(--sw-font-xs, 11px); overflow-wrap: anywhere; }
     &__field { display: grid; gap: var(--sw-space-sm, 6px); margin: var(--sw-space-lg, 12px) 0; color: var(--studio-on-surface); font-size: var(--sw-font-xs, 11px); }
-    &__commands { position: sticky; bottom: 0; z-index: 2; display: flex; gap: var(--sw-space-md, 8px); flex-wrap: wrap; margin-top: var(--sw-space-lg, 12px); padding-top: var(--sw-space-sm, 6px); background: color-mix(in srgb, var(--sw-color-bg) 92%, var(--studio-surface)); }
+    &__commands { position: sticky; bottom: -18px; z-index: 2; display: flex; gap: var(--sw-space-md, 8px); flex-wrap: wrap; margin: var(--sw-space-lg, 12px) -14px -18px; padding: var(--sw-space-md, 8px) 14px 14px; border-top: 1px solid var(--sw-color-line-soft, var(--studio-line)); background: var(--sw-color-surface, color-mix(in srgb, var(--sw-color-bg) 92%, var(--studio-surface))); }
     &__editor-section { display: flex; flex-direction: column; }
     &__color-swatches {
         display: inline-flex;
@@ -682,7 +682,7 @@
             &:hover {
                 background: var(--studio-accent);
                 border-color: var(--studio-accent);
-                color: #fff;
+                color: var(--b3-theme-on-primary, var(--sw-color-on-accent, #0f1722));
             }
         }
 
@@ -1072,7 +1072,7 @@
         &.is-active {
             background: var(--studio-accent);
             border-color: var(--studio-accent);
-            color: #fff;
+            color: var(--b3-theme-on-primary, var(--sw-color-on-accent, #0f1722));
             font-weight: var(--sw-weight-semibold, 600);
         }
 
@@ -1085,7 +1085,7 @@
             &:hover, &.is-active {
                 background: #ff6b35;
                 border-color: #ff6b35;
-                color: #fff;
+                color: #0f1722;
             }
         }
     }
@@ -1206,7 +1206,7 @@
         &:hover:not(:disabled) {
             border-color: var(--studio-accent);
             background: var(--studio-accent);
-            color: #ffffff;
+            color: var(--b3-theme-on-primary, var(--sw-color-on-accent, #0f1722));
         }
     }
     &__library-store-cta {

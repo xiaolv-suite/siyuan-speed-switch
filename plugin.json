@@ -2,7 +2,7 @@
   "name": "siyuan-speed-switch",
   "author": "xiaolv-suite",
   "url": "https://github.com/xiaolv-suite/siyuan-speed-switch",
-  "version": "0.48.94",
+  "version": "0.48.95",
   "minAppVersion": "3.8.4",
   "settingsWindow": true,
   "disabledInPublish": false,

@@ -110,12 +110,6 @@ function createSnippetGroupId(now = Date.now(), suffix = 0) {
     return `g-${stamp}-${tail}`.slice(0, SNIPPET_GROUP_ID_MAX);
 }
 
-function updateStore(store, updater) {
-    const current = normalizeSnippetGroupStore(store);
-    const next = updater(current);
-    return normalizeSnippetGroupStore(next);
-}
-
 function addSnippetGroup(store, name, options = {}) {
     const current = normalizeSnippetGroupStore(store);
     const cleanName = cleanText(name, SNIPPET_GROUP_NAME_MAX);

@@ -313,10 +313,10 @@ export class HistoryHostRuntime {
         const openedKeys = new Set(opened.map((tab) => this.pinKeyOf(tab)));
         const openedRoots = new Set(opened.map((tab) => this.rootIdOf(tab)).filter(Boolean));
         const sections = buildRecentHistorySections(this.getOpenHistory(), this.getClosedHistory(), openedRoots);
-        if (sections.count === 0) {
+        const appendEmptyHistoryState = (emptyText: string) => {
             const empty = document.createElement("div");
             empty.className = "sw__history-empty";
-            empty.textContent = entryFilter ? this.i18n.historyChangedEmpty : this.i18n.noOpenHistory;
+            empty.textContent = emptyText;
             panel.appendChild(empty);
             if (entryFilter && onShowAll) {
                 const showAll = document.createElement("button");
@@ -326,6 +326,9 @@ export class HistoryHostRuntime {
                 showAll.addEventListener("click", onShowAll);
                 panel.appendChild(showAll);
             }
+        };
+        if (sections.count === 0) {
+            appendEmptyHistoryState(entryFilter ? this.i18n.historyChangedEmpty : this.i18n.noOpenHistory);
             return;
         }
         let shown = 0;
@@ -394,18 +397,7 @@ export class HistoryHostRuntime {
             this.refreshOpenHistoryDropdowns();
         });
         if (shown === 0) {
-            const empty = document.createElement("div");
-            empty.className = "sw__history-empty";
-            empty.textContent = this.i18n.historyChangedEmpty;
-            panel.appendChild(empty);
-            if (onShowAll) {
-                const showAll = document.createElement("button");
-                showAll.type = "button";
-                showAll.className = "b3-button b3-button--text sw__history-show-all";
-                showAll.textContent = this.i18n.historyChangedShowAll;
-                showAll.addEventListener("click", onShowAll);
-                panel.appendChild(showAll);
-            }
+            appendEmptyHistoryState(this.i18n.historyChangedEmpty);
         }
     }
 

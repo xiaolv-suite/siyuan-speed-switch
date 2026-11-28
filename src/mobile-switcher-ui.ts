@@ -29,7 +29,7 @@ export interface MobileSwitcherUiHost {
     groupCollapseState: Set<string>;
     rootIdOf(tab: Tab): string | null;
     applySearch(scrollElement: HTMLElement, searchInput: HTMLInputElement, onClose: IOverlayClose): void;
-    bindSearchInputComposition(input: HTMLInputElement, onTrigger: () => void, scrollElement?: HTMLElement, onClose?: IOverlayClose): void;
+    bindSearchInputComposition(input: HTMLInputElement, onTrigger: () => void, scrollElement?: HTMLElement, onClose?: IOverlayClose): (() => void) | void;
     buildEmptyState(): HTMLElement;
     /** DL2 阶段3：空态吉祥物（mascot 偏好门控，关闭回退线性 emoji） */
     resolveLvMascotHtml(): string;
@@ -529,7 +529,6 @@ export function bindMobileSwitcherToolbarActions(this: MobileSwitcherUiHost,
                     renderMobileList();
                     const searchEl = dialog.element.querySelector<HTMLInputElement>(".sw__search");
                     if (searchEl) {
-                        searchEl.value = "";
                         this.applySearch(scrollElement, searchEl, closeOverlay);
                     }
                 });
@@ -659,15 +658,15 @@ export function bindMobileSwitcherToolbarActions(this: MobileSwitcherUiHost,
             sortSelect.style.removeProperty("z-index");
             updateSortButton();
             this.updateSettings({sortBy: sortSelect.value as SortBy});
-            // 排序切换：复用装配期 renderMobileList（重读最新列表 + 共享 updatedMap），再清搜索词重过滤
+            // 排序切换：复用装配期 renderMobileList（重读最新列表 + 共享 updatedMap），保留当前搜索词重放筛选排序
             renderMobileList();
-            searchInput.value = "";
             this.applySearch(scrollElement, searchInput, closeOverlay);
         });
-        this.bindSearchInputComposition(searchInput, () => {
+        const disposeSearchComposition = this.bindSearchInputComposition(searchInput, () => {
             this.applySearch(scrollElement, searchInput, closeOverlay);
-        }, scrollElement, closeOverlay);
+        }, scrollElement, closeOverlay) || (() => undefined);
         return () => {
+            disposeSearchComposition();
             disposeSearchFilter();
             document.removeEventListener("keydown", onDocumentKeyDown, true);
             document.removeEventListener("focusin", onDocumentFocus, true);
@@ -742,10 +741,44 @@ export function renderMobileList(this: MobileSwitcherUiHost, scrollElement: HTML
         if (tabs.length === 0) {
             const emptyEl = document.createElement("div");
             emptyEl.className = "sw__empty sw__mobile-empty";
-            emptyEl.style.cssText = "display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 16px;text-align:center;gap:8px;color:var(--sw-color-text-subtle);opacity:0.85;";
+            emptyEl.style.cssText = "display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 16px;text-align:center;gap:8px;color:var(--sw-color-text-subtle);";
             /* DL2 阶段3：空态吉祥物（mascot 偏好门控，关闭回退线性 emoji） */
             const mascotHtml = this.resolveLvMascotHtml();
-            emptyEl.innerHTML = `${mascotHtml}<div style="font-size:14px;font-weight:600;">${this.i18n.noOpenedTabs || "暂无已打开页签"}</div><div style="font-size:12px;opacity:0.75;">${this.i18n.noOpenedTabsHint || "输入关键词或点击下方药丸即可全库穿透检索"}</div>`;
+            emptyEl.innerHTML = `${mascotHtml}<div style="font-size:14px;font-weight:600;color:var(--sw-color-text);">${this.i18n.noOpenedTabs || "暂无已打开页签"}</div><div style="font-size:12px;color:var(--sw-color-text-muted);">${this.i18n.noOpenedTabsHint || "输入关键词或点击下方药丸即可全库穿透检索"}</div>`;
+            const pillsBar = document.createElement("div");
+            pillsBar.className = "sw__empty-syntax-bar";
+            pillsBar.setAttribute("role", "toolbar");
+            pillsBar.setAttribute("aria-label", this.i18n.chipsLabel || "穿透检索快捷药丸");
+            const mobileShortcuts: Array<{label: string; prefix: string; desc: string}> = [
+                {label: `: ${this.i18n.searchModeHeading || "大纲"}`, prefix: ":", desc: "输入冒号搜索当前或全局大纲标题"},
+                {label: `# ${this.i18n.searchModeTag || "标签"}`, prefix: "#", desc: "输入井号按标签检索笔记"},
+                {label: `! ${this.i18n.searchModeBookmark || "书签"}`, prefix: "!", desc: "输入感叹号检索书签标记"},
+                {label: `^ ${this.i18n.searchModeBlock || "正文"}`, prefix: "^", desc: "输入尖号深入检索段落/列表/代码块"},
+                {label: `- ${this.i18n.searchModeTask || "待办"}`, prefix: "- ", desc: "输入短横线检索待办事项"},
+                {label: `? ${this.i18n.searchModeHelp || "速查"}`, prefix: "?", desc: "查看全部穿透搜索模式语法技巧"},
+            ];
+            mobileShortcuts.forEach((sc) => {
+                const pill = document.createElement("button");
+                pill.type = "button";
+                pill.className = "b3-button b3-button--text sw__empty-syntax-chip";
+                pill.dataset.prefix = sc.prefix;
+                pill.textContent = sc.label;
+                pill.setAttribute("aria-label", `${sc.label} · ${sc.desc}`);
+                pill.title = sc.desc;
+                pill.addEventListener("click", () => {
+                    const mobileRoot = scrollElement.closest(".sw__mobile");
+                    const searchEl = mobileRoot?.querySelector<HTMLInputElement>(".sw__search")
+                        || scrollElement.ownerDocument.querySelector<HTMLInputElement>(".sw__mobile .sw__search");
+                    if (!searchEl) return;
+                    searchEl.value = sc.prefix;
+                    const clearBtn = mobileRoot?.querySelector<HTMLButtonElement>(".sw__search-clear");
+                    if (clearBtn) clearBtn.classList.remove("fn__none");
+                    this.applySearch(scrollElement, searchEl, opts.onOverlayClose);
+                    searchEl.focus({preventScroll: true});
+                });
+                pillsBar.appendChild(pill);
+            });
+            emptyEl.appendChild(pillsBar);
             scrollElement.appendChild(emptyEl);
             return all;
         }

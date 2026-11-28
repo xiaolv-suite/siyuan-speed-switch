@@ -13,13 +13,14 @@ function createSearchSession(cacheLimit) {
         cache: new Map(),
         controller: null,
         timer: null,
+        flush: null,
         cacheLimit: normalizedLimit,
     };
 }
 
 /**
  * 开始新一轮搜索：旧定时器和旧请求同时失效，并返回本轮版本号。
- * @param {{version: number, controller: AbortController|null, timer: number|null}} session
+ * @param {{version: number, controller: AbortController|null, timer: number|null, flush?: (() => void)|null}} session
  * @returns {number}
  */
 function beginSearch(session) {
@@ -30,6 +31,7 @@ function beginSearch(session) {
         globalThis.clearTimeout(session.timer);
         session.timer = null;
     }
+    session.flush = null;
     session.controller?.abort();
     session.controller = null;
     return session.version;

@@ -349,6 +349,40 @@ function resolveQuickActionLabel(action, translations) {
     return action.label || "";
 }
 
+function resolveQuickActionPickerLabels(i18n) {
+    if (!i18n || typeof i18n !== "object") return {};
+    return {
+        switcher: i18n.quickBuiltinSwitcher,
+        search: i18n.quickBuiltinSearch,
+        journal: i18n.quickBuiltinJournal,
+        settings: i18n.quickBuiltinSettings,
+        home: i18n.secondPanel,
+        "snippet-studio": i18n.platformStudio,
+        "quick-capture": i18n.quickBuiltinQuickCapture,
+        "previous-tab": i18n.quickBuiltinPreviousTab,
+        "next-tab": i18n.quickBuiltinNextTab,
+        "scroll-top": i18n.quickBuiltinScrollTop,
+        "scroll-bottom": i18n.quickBuiltinScrollBottom,
+        "sync-now": i18n.quickBuiltinSyncNow,
+        "insert-template": i18n.quickBuiltinInsertTemplate,
+        "cycle-doc-set": i18n.quickBuiltinCycleDocSet,
+        "cycle-ball-preset": i18n.quickBuiltinCycleBallPreset,
+        "throw-window": i18n.quickBuiltinThrowWindow,
+        "hide-keyboard": i18n.quickBuiltinHideKeyboard,
+        "jump-back": i18n.quickBuiltinJumpBack,
+        "jump-forward": i18n.quickBuiltinJumpForward,
+        outline: i18n.quickGlobalOutline,
+        bookmark: i18n.quickGlobalBookmark,
+        tag: i18n.quickGlobalTag,
+        inbox: i18n.quickGlobalInbox,
+        backlinks: i18n.quickGlobalBacklinks,
+        recentDocs: i18n.quickGlobalRecentDocs,
+        recentClosed: i18n.quickGlobalRecentClosed,
+        riffCard: i18n.quickGlobalRiffCard,
+        editReadonly: i18n.quickGlobalEditReadonly,
+    };
+}
+
 module.exports = {
     getQuickActionCommandTargets,
     normalizeProvider,
@@ -360,6 +394,7 @@ module.exports = {
     getBuiltinQuickActions,
     getGlobalQuickActions,
     resolveQuickActionLabel,
+    resolveQuickActionPickerLabels,
     getDefaultQuickActionTargets,
     resolveQuickActionSupport,
     shouldRenderQuickAction,

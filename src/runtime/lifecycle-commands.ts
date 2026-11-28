@@ -100,7 +100,7 @@ export class LifecycleCommandsRuntime {
                 if (switcherDlg && Array.isArray(surfaceStack) && surfaceStack.some((item) => item?.id === "lv-notice-active-card")) {
                     const containers = Array.from(document.querySelectorAll<HTMLElement>(".b3-dialog__container"));
                     if (containers[containers.length - 1] === switcherDlg
-                        && !document.querySelector(".sw-activity-stream-dialog, .sw__palette-backdrop, .sw__sort-menu, .sw__history-menu, .sw__fav-menu")) {
+                        && !document.querySelector(".sw-activity-stream-dialog, .sw__palette-backdrop, .sw__sort-menu, .sw__history-panel:not(.fn__none), .sw__fav-panel:not(.fn__none)")) {
                         const searchInput = switcherDlg.querySelector<HTMLInputElement>("input.sw__search");
                         if (!searchInput || !searchInput.value) {
                             const closeBtn = switcherDlg.querySelector<HTMLElement>(".sw-platform-header__close, .b3-dialog__close");
@@ -925,13 +925,14 @@ export class LifecycleCommandsRuntime {
             "mediaChanged", "playerDestroy",
         ];
         eventNames.forEach((name) => {
-            const handler = () => {
+            this.ecosystemUnsubscribers.push(child.trackListener(window, name, () => {
                 if (this.workbenchDialog?.element?.isConnected) {
-                    this.scheduleAnimationFrame(triggerHomeRefresh);
+                    this.scheduleAnimationFrame(() => {
+                        (this as { _activeEcosystemEvent?: string })._activeEcosystemEvent = name;
+                        try { triggerHomeRefresh(); } finally { (this as { _activeEcosystemEvent?: string })._activeEcosystemEvent = undefined; }
+                    });
                 }
-            };
-            const unsub = child.trackListener(window, name, handler);
-            this.ecosystemUnsubscribers.push(unsub);
+            }));
         });
 
         // 跨日休眠补跑机制：设备息屏/待机唤醒或焦点回归时检测自然日切换，主动对齐组件与沉淀流

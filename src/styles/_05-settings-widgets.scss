@@ -703,10 +703,20 @@
 // T-6925（真机反馈）：工作台底部快捷条此前视觉上与组件内容混在一起——
 // 透明底 + 浅边框贴在白底卡片旁不可辨，看起来像"悬浮遮挡"。
 // 移动端补齐底栏形态：通栏、实底、上边框与安全区高度。
+.b3-dialog__container.sw-platform-dialog--workbench,
+.sw-home--mobile {
+    overflow-x: hidden;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
 .sw-home--mobile .sw-home__quick-actions {
     // T-8001：负底边距（原 -12px）会抵消父级 padding-bottom，把紧随其后的
     // 回执行（.sw-home__receipt）挤出可视区造成裁切；改为 0 由父级 padding 兜住。
-    margin: 10px -16px 0;
+    margin: 10px 0 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
     padding: var(--sw-space-sm, 6px) 10px;
     border-top: 1px solid var(--sw-color-line);
     background: var(--sw-color-surface);
@@ -2249,8 +2259,7 @@
         font-variant-numeric: tabular-nums;
         line-height: 1;
 
-        sup,
-        .sw__unit {
+        sup {
             font-size: 0.6em;
             vertical-align: super;
             margin-left: var(--sw-space-2xs, 2px);

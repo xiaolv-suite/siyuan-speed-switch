@@ -874,6 +874,9 @@
 :is(.sw-settings, .sw-second-panel, .sw-floating-ball-panel, .b3-dialog__container.sw-settings-dialog) {
     :is(select, .b3-select) {
         cursor: pointer;
+        background-color: var(--sw-color-surface, var(--sw-color-bg));
+        color: var(--sw-color-text, var(--sw-color-text-subtle));
+        border-color: var(--sw-color-line);
     }
 
     :is(select, .b3-select) :is(option, optgroup) {

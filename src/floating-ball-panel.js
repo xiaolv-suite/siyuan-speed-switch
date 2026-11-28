@@ -1296,9 +1296,7 @@ function createFloatingBallPanelController(options = {}) {
         focusMoreEntry();
     }
 
-    function closeMore(closeOptions = {}) {
-        if (disposed || !open) return;
-        clearConfigureTimer();
+    function detachMorePanelListeners() {
         documentRef.removeEventListener?.("keydown", onDocumentEscape, true);
         documentRef.removeEventListener?.("keydown", onMorePanelKeydown);
         documentRef.defaultView?.removeEventListener("resize", positionMore);
@@ -1308,6 +1306,12 @@ function createFloatingBallPanelController(options = {}) {
             unpopSurface();
             unpopSurface = null;
         }
+    }
+
+    function closeMore(closeOptions = {}) {
+        if (disposed || !open) return;
+        clearConfigureTimer();
+        detachMorePanelListeners();
         const restore = lastFocusedElement;
         const shouldRestore = closeOptions.restoreFocus !== false && moreHost?.contains(documentRef.activeElement);
         open = false;
@@ -1350,15 +1354,7 @@ function createFloatingBallPanelController(options = {}) {
             ? lastFocusedElement : container.querySelector?.(".sw-fab-trigger");
         disposed = true;
         open = false;
-        if (unpopSurface) {
-            unpopSurface();
-            unpopSurface = null;
-        }
-        documentRef.removeEventListener?.("keydown", onDocumentEscape, true);
-        documentRef.removeEventListener?.("keydown", onMorePanelKeydown);
-        documentRef.defaultView?.removeEventListener("resize", positionMore);
-        documentRef.defaultView?.visualViewport?.removeEventListener("resize", positionMore);
-        documentRef.defaultView?.visualViewport?.removeEventListener("scroll", positionMore);
+        detachMorePanelListeners();
         if (activeInside && canFocus(fallback)) fallback.focus({preventScroll: true});
         else if (activeInside) documentRef.activeElement?.blur?.();
         root?.remove();

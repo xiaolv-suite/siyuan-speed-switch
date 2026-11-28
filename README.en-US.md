@@ -1,13 +1,13 @@
 # Lv Speed Switch (小驴雷切)
 
-[![Version](https://img.shields.io/badge/version-0.48.94-blue)](./plugin.json) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE) [![SiYuan](https://img.shields.io/badge/SiYuan-SiYuan_Note-ff5c67)](https://b3log.org/siyuan)
+[![Version](https://img.shields.io/badge/version-0.48.95-blue)](./plugin.json) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE) [![SiYuan](https://img.shields.io/badge/SiYuan-SiYuan_Note-ff5c67)](https://b3log.org/siyuan)
 
 **What problem does Lv Speed Switch solve?**
 When working with dozens of opened tabs and multiple projects in SiYuan Note, heavy knowledge workers face five constant pain points: **losing track of open tabs, struggling to recover accidentally closed workspace contexts, lacking a glanceable dashboard, scattering cross-document excerpts, and risking host stability when tweaking custom CSS/JS**.
 
 **Lv Speed Switch** is a **local-first unified switcher and work-context platform** for SiYuan Note ([Interface Map](docs/interface-map.svg) · [Architecture Diagram](docs/architecture.svg)). It connects **core productivity surfaces**—the Switcher (Surface 1), Bento Widget Workbench (Surface 2), Snippet Studio (Surface 3), and an intelligent Floating Action Button (FAB)—so you can find, preview, switch, capture, and restore your work context in under a second.
 
-> **Latest stable release: v0.48.94 (2026-11-26)** · [中文文档](./README.md)<br>
+> **Latest stable release: v0.48.95 (2026-11-27)** · [中文文档](./README.md)<br>
 > Minimum Supported Host Version: **SiYuan Note v3.8.4+** (Desktop, Sidebar Dock & Mobile)
 
 <div align="center">
@@ -16,18 +16,16 @@ When working with dozens of opened tabs and multiple projects in SiYuan Note, he
 
 ---
 
-## What's New In v0.48.94 (2026-11-26)
+## What's New In v0.48.95 (2026-11-27)
 
-- **Plugin Tab Grouping with Source Badges**: Opened ecosystem and third-party plugin pages are automatically grouped under `🧩 Plugin Pages` with clear source plugin badges instead of cluttering document tabs;
-- **Shared Ecosystem Hubs Integration**: Integrated Xiaolv Launchpad (anti-jitter topbar, duplicate alert folding `×N`, persistent multi-day snooze), unified AI Router, Block Assistant 1–8 native base + custom double-click, Activity Stream, and Backup/Restore;
-- **Sub-50ms First-Open Startup**: Sync startup storage loading narrowed to 5 core keys while Tier 2 history, Floating Ball, and selection observers initialize lazily for instant first-open response;
-- **Unified AI Thinking Experience & Real Cancellation**: Snippet Studio AI assistant (hiding blank readonly textarea until first token) and Snippet Stack (single-card refine & smart note synthesis) render unified `.lv-ai-thinking` cards with `AbortSignal` cancellation;
-- **Structured `#### 🐴 小驴记录` Diary Zone**: Snippet Stack journal assembly writes cleanly into a collapsible H4/H5/superblock diary zone with multi-level daily note probing and conflict-file filtering;
-- **Zero `:has()` & Tightened Blur 60fps Performance**: Purged all CSS `:has()` backtracking selectors from both the plugin bundle and all built-in curated snippets, capped blur tokens at `<=12px`, and refined penetration search & Studio AI panel layout alignment.
+- **Shared `lv-kit` Alignment**: Synced zero-Protyle-DOM-residue fixes, Batch 1 A1–A4 updates, and bridge cleanup while strictly preserving zero `:has(`, zero `:root` leaks, and 60fps performance;
+- **Walkthrough Blindspots & UI Polish**: Fixed recycle-bin Esc handling, submit guide modal, favorites dropdown, empty pills, `390×844` mobile group layout, and `ui-checker` P0/P1 polish;
+- **Search Stability Hardening**: Preserved active query when switching sort modes across desktop and mobile, canceled pending debounce on clear/Esc, and flushed debounce before Enter execution.
 
 <details>
-<summary>View Previous Release Highlights (v0.48.93 and earlier · Full history in <a href="./CHANGELOG.md">CHANGELOG.md</a>)</summary>
+<summary>View Previous Release Highlights (v0.48.94 and earlier · Full history in <a href="./CHANGELOG.md">CHANGELOG.md</a>)</summary>
 
+- **v0.48.94 (2026-11-26)**: Milestone release with Plugin Tab Grouping & source badges, shared Launchpad/AI Router/Block Assistant hubs, `.lv-ai-thinking` wait UX, `#### 🐴 小驴记录` diary zone, and zero `:has()` 60fps performance.
 - **v0.48.93 (2026-11-23)**: Startup storage staging (18 keys narrowed to 5 core keys), slow-read latch & external sync guard.
 
 - **v0.48.88 (2026-11-04)**: Integrated all 7 Lv ecosystem pillars, Surface 1 Activity Stream toolbar & footer status pill, modal Escape focus-stack hardening, Snippet Stack AI synthesis, and 30 real-host isolated E2E tests.
@@ -151,4 +149,4 @@ The project enforces strict local-first verification and a comprehensive Release
 - Host compatibility verification across desktop and mobile platforms (browser emulation is a structural smoke test, not Android acceptance);
 - Formal published candidate builds must satisfy all offline gating tests and retain the previous rollback archive before sealing.
 
-> The current version is `v0.48.94`
+> The current version is `v0.48.95`

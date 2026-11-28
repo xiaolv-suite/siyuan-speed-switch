@@ -259,7 +259,7 @@ const CITY_ZONE_GROUPS = Object.freeze({
     "Asia/Bangkok": ["曼谷", "Bangkok", "清迈", "Chiang Mai", "普吉", "Phuket"],
     "Asia/Kuala_Lumpur": ["吉隆坡", "槟城", "Penang"],
     "Asia/Jakarta": ["雅加达", "Jakarta", "泗水", "Surabaya"],
-    "Asia/Kolkata": ["新德里", "孟买", "班加罗尔", "金奈", "海得拉巴", "Hyderabad", "Delhi", "Mumbai", "Bangalore", "Chennai", "海得拉巴", "Hyderabad"],
+    "Asia/Kolkata": ["新德里", "孟买", "班加罗尔", "金奈", "海得拉巴", "Hyderabad", "Delhi", "Mumbai", "Bangalore", "Chennai"],
     "Asia/Dubai": ["迪拜", "Dubai", "阿布扎比", "Abu Dhabi", "沙迦", "Sharjah"],
     "Asia/Riyadh": ["利雅得", "吉达", "Jeddah", "麦加", "Mecca", "麦地那", "Medina"],
     "Europe/London": ["伦敦", "London", "Manchester", "曼彻斯特", "Edinburgh", "爱丁堡", "伯明翰", "Birmingham", "格拉斯哥", "Glasgow"],

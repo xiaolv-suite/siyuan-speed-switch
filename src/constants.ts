@@ -10,7 +10,7 @@
 
 // ==================== 版本单一事实源 ====================
 // 与 package.json、plugin.json、README 保持四处一致，供全表面弹窗徽标与诊断快照统一消费。
-export const PLUGIN_VERSION = "0.48.94";
+export const PLUGIN_VERSION = "0.48.95";
 export const PLUGIN_VERSION_BADGE = `v${PLUGIN_VERSION}`;
 
 // ==================== 搜索与缓存 ====================

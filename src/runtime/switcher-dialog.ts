@@ -269,6 +269,7 @@ const updatedMap: {[rootId: string]: string} = {};
         // T-7040：排序浮层 disposer 由 bindSwitcherToolbarActions 返回后在释放链调用
         let disposeSortMenu: () => void = () => undefined;
         let disposeBackTop: () => void = () => undefined;
+        let disposeSearchComposition: () => void = () => undefined;
         let switcherReleased = false;
         release.fn = () => {
             if (switcherReleased) return;
@@ -279,6 +280,7 @@ const updatedMap: {[rootId: string]: string} = {};
             if (iconClampFrame) cancelAnimationFrame(iconClampFrame);
             dirtyIconRoots.clear();
             dialog.element.removeEventListener("keydown", onDialogSearchShortcut, true);
+            disposeSearchComposition();
             disposeSearchFilter();
             disposeModeChips();
             disposeBackTop();
@@ -298,7 +300,7 @@ const updatedMap: {[rootId: string]: string} = {};
         }
 
         // 右侧页签缩略图网格：每次打开都重新克隆渲染，展示各页签的最新状态
-        this.bindSwitcherListArea(dialog, scrollElement, tabs, activeTab, listOpts, settings, searchInput, sortSelect, closeOverlay, updatedMap);
+        disposeSearchComposition = this.bindSwitcherListArea(dialog, scrollElement, tabs, activeTab, listOpts, settings, searchInput, sortSelect, closeOverlay, updatedMap) || (() => undefined);
         refreshQuickActions();
         restoreSceneScroll();
         if (this.isMobile) {
@@ -326,7 +328,13 @@ const updatedMap: {[rootId: string]: string} = {};
     // 弹窗外观准备：全屏模式下给容器加类（去圆角/边框/最大宽度），并锁定 .b3-dialog__body 不整体滚动
     private prepareSwitcherChrome(dialog: Dialog, fullscreen: boolean) {
         if (fullscreen) {
-            dialog.element.querySelector(".b3-dialog__container")?.classList.add("sw-dialog--fullscreen");
+            const swContainer = dialog.element.querySelector(".b3-dialog__container");
+            swContainer?.classList.add("sw-dialog--fullscreen");
+            const isElectronFrameless = !this.isMobile && typeof document !== "undefined"
+                && (/Electron/i.test(navigator?.userAgent || "") || Boolean(document.querySelector("#minWindow, #maxWindow, #closeWindow, .toolbar__window")));
+            if (isElectronFrameless) {
+                swContainer?.classList.add("sw-dialog--frameless-avoidance");
+            }
         }
         // 思源 .b3-dialog__body 默认 overflow:auto，内容一高就会整体滚动把工具栏滚走，
         // 加类锁定它（配套 SCSS 规则见 .sw-scroll-locked），保证只有 .sw__scroll 滚动、顶栏始终固定
@@ -381,10 +389,11 @@ const updatedMap: {[rootId: string]: string} = {};
 
         // 搜索：已打开页签匹配显示在上半部分，同时全库文档结果显示在下半部分
         if (searchInput) {
-            this.bindSearchInputComposition(searchInput, () => {
+            return this.bindSearchInputComposition(searchInput, () => {
                 this.applySearch(scrollElement, searchInput, closeOverlay);
             }, scrollElement, closeOverlay);
         }
+        return (): void => undefined;
     }
 
     // 绑定回到顶部按钮：滚动超过 240px 显示，点击平滑回顶（RAF 节流 + 被动监听 + 销毁解绑）
@@ -441,6 +450,10 @@ const updatedMap: {[rootId: string]: string} = {};
                 container.style.height = "100dvh";
                 container.classList.add("sw-dialog--fullscreen");
                 swBody?.classList.add("sw--fullscreen");
+                const isElectronFrameless = !this.isMobile && typeof document !== "undefined"
+                    && (/Electron/i.test(navigator?.userAgent || "") || Boolean(document.querySelector("#minWindow, #maxWindow, #closeWindow, .toolbar__window")));
+                container.classList.toggle("sw-dialog--frameless-avoidance", isElectronFrameless);
+                swBody?.classList.toggle("sw-dialog--frameless-avoidance", isElectronFrameless);
                 fsBtn?.setAttribute("aria-label", this.i18n.exitFullscreen);
                 fsBtn?.setAttribute("title", this.i18n.exitFullscreen);
             } else {
@@ -449,6 +462,8 @@ const updatedMap: {[rootId: string]: string} = {};
                 container.style.height = `${restored.height}px`;
                 container.classList.remove("sw-dialog--fullscreen");
                 swBody?.classList.remove("sw--fullscreen");
+                container.classList.remove("sw-dialog--frameless-avoidance");
+                swBody?.classList.remove("sw-dialog--frameless-avoidance");
                 fsBtn?.setAttribute("aria-label", this.i18n.enterFullscreen);
                 fsBtn?.setAttribute("title", this.i18n.enterFullscreen);
             }
@@ -509,30 +524,37 @@ const updatedMap: {[rootId: string]: string} = {};
             dialog.destroy();
             this.openJournal();
         });
-        // 排序/分组一体化变更：更新设置 → 重排列表 → 补查最近编辑 → 清搜索词
+        // 排序/分组一体化变更：更新设置 → 重排列表 → 补查最近编辑 → 保留搜索词重放筛选
+        const replaySearchIfActive = (targetScrollEl: HTMLDivElement | null) => {
+            if (targetScrollEl && searchInput && (searchInput.value.trim() !== "" || hasDocSearchFilter.call(this, targetScrollEl))) {
+                this.applySearch(targetScrollEl, searchInput, closeOverlay);
+            }
+        };
         const applySortChange = (nextSort: SortBy) => {
             this.updateSettings({sortBy: nextSort});
+            this.updateSortTriggerLabel(dialog.element);
+            if (sortSelect) {
+                sortSelect.value = nextSort;
+            }
             const scrollElement = dialog.element.querySelector<HTMLDivElement>(".sw__scroll");
             // 弹窗存活期间页签可能已增减，重取最新列表；沿用共享 updatedMap，已回源的更新时间不重算
             if (scrollElement) {
                 this.renderList(scrollElement, this.bridge.getAllTabs(), this.bridge.getActiveTab(), listOpts, nextSort, updatedMap);
+                replaySearchIfActive(scrollElement);
             }
             this.loadUpdatedMap(this.bridge.getAllTabs()).then((map) => {
                 Object.assign(updatedMap, map);
-                if (dialog.element.isConnected && this.getSettings().sortBy === "updatedDesc" && searchInput && searchInput.value.trim() === "") {
+                if (dialog.element.isConnected && this.getSettings().sortBy === "updatedDesc") {
                     const el = dialog.element.querySelector<HTMLDivElement>(".sw__scroll");
                     if (el) {
                         this.renderList(el, this.bridge.getAllTabs(), this.bridge.getActiveTab(), listOpts, "updatedDesc", updatedMap);
+                        replaySearchIfActive(el);
                     }
                 } else if (dialog.element.isConnected && this.getSettings().showCardUpdatedBadge === true) {
                     const el = dialog.element.querySelector<HTMLDivElement>(".sw__scroll");
                     if (el) this.refreshCardUpdatedBadges(el, updatedMap);
                 }
             }).catch((err) => logger.warn("loadUpdatedMap on sort change failed", err));
-            if (searchInput) {
-                searchInput.value = "";
-                this.applySearch(scrollElement, searchInput, closeOverlay);
-            }
             scrollElement?.focus();
         };
         const applyGroupChange = (nextGroup: TabGroupMode) => {

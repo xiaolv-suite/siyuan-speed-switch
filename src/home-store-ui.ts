@@ -363,6 +363,7 @@ export function openHomeWidgetStore(this: HomeStoreUiHost, device: "desktop" | "
         }
         // T-7223：部分宿主主题会隐藏或裁掉 Dialog 原生标题栏关闭钮；商店
         // 必须在自己的内容区保留一个可见、可触摸且能恢复焦点的关闭入口。
+        // 若原生标题栏存在，则合并进标题栏右侧避免出现双行关闭栏；缺失时回退到内容区顶部。
         const closeBar = document.createElement("div");
         closeBar.className = "sw-home-store__close-bar";
         const closeButton = document.createElement("button");
@@ -373,7 +374,13 @@ export function openHomeWidgetStore(this: HomeStoreUiHost, device: "desktop" | "
         closeButton.title = this.i18n.close;
         closeButton.addEventListener("click", () => storeDialog.destroy());
         closeBar.appendChild(closeButton);
-        root.insertBefore(closeBar, root.firstChild);
+        const dialogHeader = storeDialog.element.querySelector<HTMLElement>(".b3-dialog__header");
+        if (dialogHeader) {
+            dialogHeader.querySelector(".sw-dialog__mobile-close-btn")?.remove();
+            dialogHeader.appendChild(closeBar);
+        } else {
+            root.insertBefore(closeBar, root.firstChild);
+        }
         root.setAttribute("role", "region");
         root.setAttribute("aria-label", this.i18n.homeStoreTitle);
         root.dataset.device = device;

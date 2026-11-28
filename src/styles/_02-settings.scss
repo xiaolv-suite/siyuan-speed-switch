@@ -230,6 +230,7 @@
     --sw-radius-control: 10px;
     display: flex;
     flex-direction: row;
+    width: 100%;
     height: 100%;
     min-height: 0;
     min-width: 0;
@@ -741,6 +742,8 @@
 
         .sw-settings__tabs {
             width: 100%;
+            max-width: 100%;
+            min-width: 0;
             box-sizing: border-box;
             flex-direction: row;
             gap: var(--sw-space-sm, 6px);
@@ -847,10 +850,6 @@
     // 显式开启 iOS 惯性滚动并锁定纵向手势，防止长列表滑不动
     .sw-settings__panels {
         -webkit-overflow-scrolling: touch;
-        overscroll-behavior-y: contain;
-        touch-action: pan-y;
-    }
-    .sw-settings__nav {
         overscroll-behavior-y: contain;
         touch-action: pan-y;
     }

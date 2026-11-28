@@ -1,5 +1,6 @@
 import {Dialog, getActiveTab, openTab} from "siyuan";
 import {logger} from "../logger";
+import {getVisibleSwitcherCards} from "../util";
 import {beginSearch} from "../search-session";
 import {buildSearchCacheKey, buildUnifiedSections, buildNavigationResultModel, formatCleanQuery, parseSearchQuery, updateSavedSearchEntry} from "../search-model";
 import {getBuiltinQuickActions, getGlobalQuickActions, resolveQuickActionLabel} from "../quick-actions";
@@ -22,10 +23,11 @@ export class DocSearchHostRuntime {
      * compositionend 后立即补一次触发。applySearch 内部有防抖与请求
      * 序号去重，compositionend 与随后的 input 双触发是无害的。
      */
-    private bindSearchInputComposition(input: HTMLInputElement, onTrigger: () => void): void;
-    private bindSearchInputComposition(input: HTMLInputElement, onTrigger: () => void, scrollElement?: HTMLElement, onClose?: IOverlayClose): void;
-    private bindSearchInputComposition(input: HTMLInputElement, onTrigger: () => void, scrollElement?: HTMLElement, onClose?: IOverlayClose) {
+    private bindSearchInputComposition(input: HTMLInputElement, onTrigger: () => void): () => void;
+    private bindSearchInputComposition(input: HTMLInputElement, onTrigger: () => void, scrollElement?: HTMLElement, onClose?: IOverlayClose): () => void;
+    private bindSearchInputComposition(input: HTMLInputElement, onTrigger: () => void, scrollElement?: HTMLElement, onClose?: IOverlayClose): () => void {
         let composing = false;
+        let disposed = false;
         const searchWrap = input.closest(".sw__search-wrap");
         const clearBtn = searchWrap?.querySelector<HTMLButtonElement>(".sw__search-clear");
         const updateClearVisibility = () => {
@@ -33,46 +35,48 @@ export class DocSearchHostRuntime {
                 clearBtn.classList.toggle("fn__none", !input.value);
             }
         };
-        if (clearBtn) {
-            clearBtn.addEventListener("click", () => {
-                input.value = "";
-                updateClearVisibility();
-                onTrigger();
-                input.focus();
-            });
-        }
-        input.addEventListener("focus", () => {
-            if (input.value) input.select();
-        });
         let inputDebounceTimer: number | null = null;
-        const triggerDebounced = (immediate = false) => {
-            if (inputDebounceTimer) {
+        const clearDebounceTimer = () => {
+            if (inputDebounceTimer !== null) {
                 window.clearTimeout(inputDebounceTimer);
                 inputDebounceTimer = null;
             }
+        };
+        const triggerDebounced = (immediate = false) => {
+            clearDebounceTimer();
+            if (disposed || input.isConnected === false || scrollElement?.isConnected === false) return;
             if (immediate) {
                 onTrigger();
                 return;
             }
             inputDebounceTimer = window.setTimeout(() => {
                 inputDebounceTimer = null;
+                if (disposed || input.isConnected === false || scrollElement?.isConnected === false) return;
                 onTrigger();
             }, 80);
         };
-
-        input.addEventListener("compositionstart", () => {
+        const onClearClick = () => {
+            input.value = "";
+            updateClearVisibility();
+            triggerDebounced(true);
+            input.focus();
+        };
+        if (clearBtn) {
+            clearBtn.addEventListener("click", onClearClick);
+        }
+        const onFocus = () => {
+            if (input.value) input.select();
+        };
+        const onCompositionStart = () => {
             composing = true;
-            if (inputDebounceTimer) {
-                window.clearTimeout(inputDebounceTimer);
-                inputDebounceTimer = null;
-            }
-        });
-        input.addEventListener("compositionend", () => {
+            clearDebounceTimer();
+        };
+        const onCompositionEnd = () => {
             composing = false;
             updateClearVisibility();
             triggerDebounced(true);
-        });
-        input.addEventListener("input", () => {
+        };
+        const onInput = () => {
             updateClearVisibility();
             if (composing) return;
             // 若用户清空了输入框，立即恢复全量列表；若处于连续敲击打字中，使用 80ms 黄金防抖合并高频重绘
@@ -81,8 +85,8 @@ export class DocSearchHostRuntime {
             } else {
                 triggerDebounced(false);
             }
-        });
-        input.addEventListener("keydown", (event) => {
+        };
+        const onKeyDown = (event: KeyboardEvent) => {
             if (event.key === "Escape" && input.value) {
                 if (composing || event.isComposing || event.keyCode === 229) return;
                 event.preventDefault();
@@ -95,7 +99,7 @@ export class DocSearchHostRuntime {
                     input.value = "";
                 }
                 updateClearVisibility();
-                onTrigger();
+                triggerDebounced(true);
                 return;
             }
             if (event.key === "ArrowDown") {
@@ -104,8 +108,8 @@ export class DocSearchHostRuntime {
                     || input.closest(".sw__body")?.querySelector<HTMLElement>(".sw__scroll")
                     || input.closest(".sw-platform-surface")?.querySelector<HTMLElement>(".sw__scroll");
                 if (scrollEl) {
-                    const firstTarget = scrollEl.querySelector<HTMLElement>(".sw__card.sw__focused:not(.fn__none)")
-                        || scrollEl.querySelector<HTMLElement>(".sw__card:not(.fn__none)")
+                    const cards = getVisibleSwitcherCards(scrollEl) as HTMLElement[];
+                    const firstTarget = cards.find((c) => c.classList.contains("sw__focused")) || cards[0]
                         || scrollEl.querySelector<HTMLElement>(".sw__command-item")
                         || scrollEl.querySelector<HTMLElement>(".sw__unified-item")
                         || scrollEl.querySelector<HTMLElement>(".sw__doc-item")
@@ -122,6 +126,10 @@ export class DocSearchHostRuntime {
             }
             if (event.key === "Enter") {
                 if (composing || event.isComposing || event.keyCode === 229) return;
+                if (inputDebounceTimer !== null) {
+                    clearDebounceTimer();
+                    onTrigger();
+                }
                 const scrollEl = scrollElement
                     || input.closest(".sw__body")?.querySelector<HTMLElement>(".sw__scroll")
                     || input.closest(".sw-platform-surface")?.querySelector<HTMLElement>(".sw__scroll");
@@ -132,10 +140,18 @@ export class DocSearchHostRuntime {
                         commandItem.click();
                         return;
                     }
-                    const targetCard = scrollEl.querySelector<HTMLElement>(".sw__card.sw__focused:not(.fn__none)")
-                        || scrollEl.querySelector<HTMLElement>(".sw__card:not(.fn__none)");
+                    const cards = getVisibleSwitcherCards(scrollEl) as HTMLElement[];
+                    const targetCard = cards.find((c) => c.classList.contains("sw__focused")) || cards[0];
                     if (targetCard && typeof this.activateCardByElement === "function") {
                         event.preventDefault();
+                        if (!targetCard.classList.contains("sw__focused")) {
+                            scrollEl.querySelectorAll<HTMLElement>(".sw__card.sw__focused, .sw__card[aria-current='true']").forEach((el) => {
+                                el.classList.remove("sw__focused");
+                                el.removeAttribute("aria-current");
+                            });
+                            targetCard.classList.add("sw__focused");
+                            targetCard.setAttribute("aria-current", "true");
+                        }
                         this.activateCardByElement(targetCard, onClose || (() => {}));
                         return;
                     }
@@ -152,8 +168,28 @@ export class DocSearchHostRuntime {
                         return;
                     }
                 }
-                // T-7413: 检索词无任何匹配项时按 Enter 自愈清空并刷新
+                const session = scrollEl ? this.docSearchState?.sessions?.get(scrollEl) : undefined;
+                if (session && session.timer !== null) {
+                    window.clearTimeout(session.timer);
+                    session.timer = null;
+                    const flush = session.flush;
+                    session.flush = null;
+                    if (typeof flush === "function") {
+                        flush();
+                    }
+                    event.preventDefault();
+                    return;
+                }
+                const hasPendingRemote = Boolean(
+                    scrollEl?.querySelector(".sw__doc-status--loading")
+                    || (session && (session.timer !== null || session.controller))
+                );
+                // T-7413: 检索词无任何匹配项且无在途远程检索/挂起定时器时，按 Enter 自愈清空并刷新
                 if (input.value) {
+                    if (hasPendingRemote) {
+                        event.preventDefault();
+                        return;
+                    }
                     event.preventDefault();
                     input.value = "";
                     updateClearVisibility();
@@ -161,12 +197,28 @@ export class DocSearchHostRuntime {
                     return;
                 }
             }
-        });
+        };
+        input.addEventListener("focus", onFocus);
+        input.addEventListener("compositionstart", onCompositionStart);
+        input.addEventListener("compositionend", onCompositionEnd);
+        input.addEventListener("input", onInput);
+        input.addEventListener("keydown", onKeyDown);
         updateClearVisibility();
+        return () => {
+            disposed = true;
+            clearDebounceTimer();
+            if (clearBtn) clearBtn.removeEventListener("click", onClearClick);
+            input.removeEventListener("focus", onFocus);
+            input.removeEventListener("compositionstart", onCompositionStart);
+            input.removeEventListener("compositionend", onCompositionEnd);
+            input.removeEventListener("input", onInput);
+            input.removeEventListener("keydown", onKeyDown);
+        };
     }
 
     // 执行搜索：已打开页签匹配卡片显示在上半部分，同时（防抖）搜索全库文档标题显示在下半部分
     private applySearch(scrollElement: HTMLElement, searchInput: HTMLInputElement, onClose: IOverlayClose) {
+        if (!scrollElement || scrollElement.isConnected === false) return;
         const keyword = searchInput.value.trim();
         if (keyword.length >= 2) {
             this.recordRecentSearchQuery?.(keyword);
@@ -244,11 +296,14 @@ export class DocSearchHostRuntime {
         }
         renderDocResults.call(this, scrollElement, [], onClose, "loading");
         // 延迟 180ms 再请求全库文档（防抖），避免每个按键都打内核；
-        session.timer = window.setTimeout(() => {
+        const flushRemoteSearch = () => {
             session.timer = null;
+            session.flush = null;
             // 守卫用原始 keyword，内核请求用清洗后的 kernelQuery（T-6802 修正）
             void runDocSearchFetch.call(this, scrollElement, searchInput, keyword, version, onClose, filters, cacheKey, kernelQuery);
-        }, SEARCH_DEBOUNCE_MS);
+        };
+        session.flush = flushRemoteSearch;
+        session.timer = window.setTimeout(flushRemoteSearch, SEARCH_DEBOUNCE_MS);
     }
 
     private applySearchChips(scrollElement: HTMLElement, keyword: string) {

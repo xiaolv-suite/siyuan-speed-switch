@@ -941,13 +941,26 @@ export class ProtyleSidebarRuntime {
         this.sidebarSearchFilterDispose = searchInput
             ? bindDocSearchFilter.call(this, element, scrollElement, searchInput, refresh)
             : null;
-        this.bindSearchInputComposition(searchInput, () => {
-            this.applySearch(scrollElement, searchInput, refresh);
-        });
+        const disposeSearchComposition: () => void = searchInput
+            ? this.bindSearchInputComposition(searchInput, () => {
+                this.applySearch(scrollElement, searchInput, refresh);
+            }, scrollElement, refresh)
+            : (): void => undefined;
 
-        // 收藏下拉组件：星标触发 + 分组面板（侧边栏跳转后仅刷新列表）
+        // 收藏下拉组件：星标触发 + 分组面板（侧边栏跳转后仅刷新列表；展开期间避免重建整栏 DOM）
         const favDd = element.querySelector<HTMLElement>(".sw__fav-dd");
-        this.setupFavDropdown(favDd, refresh, refresh);
+        const refreshOnFavChanged = () => {
+            const panelOpen = Boolean(favDd?.querySelector(".sw__fav-panel:not(.fn__none)"));
+            if (panelOpen && scrollElement.isConnected) {
+                this.renderList(scrollElement, this.bridge.getAllTabs(), this.bridge.getActiveTab(), {
+                    onOverlayClose: refresh,
+                    onTabsChanged: refresh,
+                }, this.getSettings().sortBy, {});
+                return;
+            }
+            refresh();
+        };
+        this.setupFavDropdown(favDd, refresh, refreshOnFavChanged);
 
         // 分组·排序一体化浮层（与弹窗同款，浮层挂 body 不受 dock 层级影响）；
         // T-7040：disposer 与历史下拉一起并入返回值，由侧栏卸载链统一释放
@@ -997,6 +1010,7 @@ export class ProtyleSidebarRuntime {
         backTopBtn?.addEventListener("click", onBackTopClick);
         // T-7040：排序浮层与历史下拉共用侧栏释放通道
         return () => {
+            disposeSearchComposition();
             disposeHistoryDropdown();
             disposeSortMenu();
         };

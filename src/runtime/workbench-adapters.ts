@@ -556,11 +556,7 @@ export class WorkbenchAdaptersRuntime {
         }, {timeoutMs: 1200, cacheTtlMs: 1500});
         // 文档关系摘要：仅查询活动文档的直接子块与引用它的块，限制数量并保持只读。
         register("document-relations-summary", this.i18n.homeDocumentRelationsSummary, "iconGraph", this.i18n.homeDescDocumentRelationsSummary, ["switch-protyle", "loaded-protyle"], async (config, _device, context) => {
-            const active = this.isMobile
-                ? this.getMobileTabs().find((tab) => tab.id === this.getMobileActiveTabId())
-                : this.getActiveTab();
-            const rootId = (context as any)?.activeDocContext?.rootId || (active ? this.rootIdOf(active) : "");
-            const docTitle = (context as any)?.activeDocContext?.title || (active ? this.titleOf(active) : "");
+            const {rootId, docTitle} = this.resolveActiveWidgetDoc(context);
             if (!rootId || !BLOCK_ID_RE.test(rootId)) return {items: [], emptyHint: this.i18n.homeCurrentDocumentMissing};
             const escaped = rootId.split("'").join("''");
             const json = await this.fetchKernelJson("/api/query/sql", {
@@ -578,11 +574,7 @@ export class WorkbenchAdaptersRuntime {
         }, {timeoutMs: 1200, cacheTtlMs: 1000});
         // 当前文档大纲：复用 Agent 大纲扁平化口径，仅读取活动文档且限制标题数量。
         register("current-document-outline", this.i18n.homeCurrentDocumentOutline, "iconList", this.i18n.homeDescCurrentDocumentOutline, ["switch-protyle", "loaded-protyle"], async (config, _device, context) => {
-            const active = this.isMobile
-                ? this.getMobileTabs().find((tab) => tab.id === this.getMobileActiveTabId())
-                : this.getActiveTab();
-            const rootId = (context as any)?.activeDocContext?.rootId || (active ? this.rootIdOf(active) : "");
-            const docTitle = (context as any)?.activeDocContext?.title || (active ? this.titleOf(active) : "");
+            const {rootId, docTitle} = this.resolveActiveWidgetDoc(context);
             if (!rootId || !BLOCK_ID_RE.test(rootId)) return {items: [], emptyHint: this.i18n.homeCurrentDocumentMissing};
             // SiYuan 3.8.x only returns the heading tree when preview is enabled;
             // preview=false yields an empty response for the same document id.
@@ -741,19 +733,7 @@ export class WorkbenchAdaptersRuntime {
             const normalized = normalizeAvTableConfig(config);
             if (!normalized.blockId) return {emptyHint: this.i18n.homeAvTableConfigHint, items: []};
             // T-6470：嵌入/镜像库块 ID≠库 ID，块 ID 调用 rows=0；pageSize 取数，0 行经 getAttributeView 解析库 ID 重试（证据 kernel-api-smoke）。
-            const fetchView = (id: string, extra: Record<string, unknown> = {}) =>
-                this.fetchKernelJson("/api/av/renderAttributeView", {id, pageSize: 100, ...extra});
-            let json = await fetchView(normalized.blockId);
-            if (!json?.data?.view?.rows?.length) {
-                try {
-                    const full = await this.fetchKernelJson("/api/av/getAttributeView", {id: normalized.blockId});
-                    const dbId = full?.data?.av?.id;
-                    const viewID = full?.data?.av?.viewID;
-                    if (typeof dbId === "string" && dbId && dbId !== normalized.blockId && typeof viewID === "string" && viewID) {
-                        json = await fetchView(dbId, {viewID});
-                    }
-                } catch (_) { /* 保持首呼结果 */ }
-            }
+            const json = await this.renderAttributeViewWithFallback(normalized.blockId, "/api/av/renderAttributeView");
             const snapshot = buildAvTableSnapshot(json, normalized, {
                 title: this.i18n.homeAvTable, empty: this.i18n.homeAvTableEmpty,
                 stat: this.i18n.homeAvTableRows,
@@ -765,19 +745,7 @@ export class WorkbenchAdaptersRuntime {
         register("database-board", this.i18n.homeDatabaseBoard || "数据库看板", "iconLayoutRight", this.i18n.homeDescDatabaseBoard, ["loaded-protyle", "destroy-protyle"], async (config) => {
             const normalized = normalizeAvBoardConfig(config);
             if (!normalized.blockId) return {emptyHint: this.i18n.homeAvTableConfigHint, items: []};
-            const fetchView = (id: string, extra: Record<string, unknown> = {}) =>
-                this.fetchKernelJson("/api/av/renderAttributeView", {id, pageSize: 100, ...extra});
-            let json = await fetchView(normalized.blockId);
-            if (!json?.data?.view?.rows?.length) {
-                try {
-                    const full = await this.fetchKernelJson("/api/av/getAttributeView", {id: normalized.blockId});
-                    const dbId = full?.data?.av?.id;
-                    const viewID = full?.data?.av?.viewID;
-                    if (typeof dbId === "string" && dbId && dbId !== normalized.blockId && typeof viewID === "string" && viewID) {
-                        json = await fetchView(dbId, {viewID});
-                    }
-                } catch (_) { /* 保持首呼结果 */ }
-            }
+            const json = await this.renderAttributeViewWithFallback(normalized.blockId);
             const snapshot = buildAvBoardSnapshot(json, normalized, {
                 title: this.i18n.homeDatabaseBoard || "数据库看板",
                 empty: this.i18n.homeAvTableEmpty || "暂无数据行",
@@ -818,6 +786,32 @@ export class WorkbenchAdaptersRuntime {
             if (!snapshot) return {emptyHint: this.i18n.homeFlashcardEmpty || "当前范围没有待复习闪卡", items: []};
             return snapshot;
         }, {timeoutMs: 2500, cacheTtlMs: 2000});
+    }
+
+    private resolveActiveWidgetDoc(context: any): {rootId: string; docTitle: string} {
+        const active = this.isMobile
+            ? this.getMobileTabs().find((tab) => tab.id === this.getMobileActiveTabId())
+            : this.getActiveTab();
+        return {
+            rootId: context?.activeDocContext?.rootId || (active ? this.rootIdOf(active) : ""),
+            docTitle: context?.activeDocContext?.title || (active ? this.titleOf(active) : ""),
+        };
+    }
+
+    private async renderAttributeViewWithFallback(blockId: string, renderEndpoint = "/api/av/renderAttributeView"): Promise<any> {
+        const fetchView = (id: string, extra: Record<string, unknown> = {}) =>
+            this.fetchKernelJson(renderEndpoint, {id, pageSize: 100, ...extra});
+        const first = await fetchView(blockId);
+        if (first?.data?.view?.rows?.length) return first;
+        try {
+            const full = await this.fetchKernelJson("/api/av/getAttributeView", {id: blockId});
+            const dbId = full?.data?.av?.id;
+            const viewID = full?.data?.av?.viewID;
+            if (typeof dbId === "string" && dbId && dbId !== blockId && typeof viewID === "string" && viewID) {
+                return await fetchView(dbId, {viewID});
+            }
+        } catch (_) { /* 保持首呼结果 */ }
+        return first;
     }
 
     // 全库扫描时间窗起点：days 天前的 "YYYYMMDDHHmmss"（思源 updated 同格式，可直接字符串比较）

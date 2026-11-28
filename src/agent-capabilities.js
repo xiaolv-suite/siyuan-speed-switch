@@ -566,303 +566,157 @@ const AGENT_ITEMS_SCHEMA = Object.freeze({
     items: AGENT_ITEM_SCHEMA,
 });
 
+const objSchema = (properties, required, frozen = true) => {
+    const s = {type: "object", properties, ...(required ? {required} : {}), additionalProperties: false};
+    return frozen ? Object.freeze(s) : s;
+};
+const strProp = (maxLength, extra) => ({type: "string", ...(maxLength !== undefined ? {maxLength} : {}), ...extra});
+const intProp = (minimum, maximum) => ({type: "integer", ...(minimum !== undefined ? {minimum} : {}), ...(maximum !== undefined ? {maximum} : {})});
+const boolProp = () => ({type: "boolean"});
+const idField = (extra) => strProp(64, {minLength: 1, pattern: AGENT_BLOCK_ID_PATTERN, ...extra});
+
 const AGENT_CAPABILITY_SPECS = Object.freeze({
     appendToJournal: Object.freeze({
         name: "append-to-journal",
         title: "小驴雷切追加今日日记",
         description: "受控写操作：向今天的日记文档末尾追加一条内容（今日日记不存在时自动创建，日记笔记本取自插件设置）。执行前会弹窗请求用户确认，用户拒绝或超时则不执行。仅在日记末尾追加，不改写已有内容。",
-        inputSchema: Object.freeze({
-            type: "object",
-            properties: {
-                content: {type: "string", minLength: 1, maxLength: 512},
-            },
-            required: ["content"],
-            additionalProperties: false,
-        }),
-        outputSchema: Object.freeze({
-            type: "object",
-            properties: {
-                ok: {type: "boolean"},
-                docId: {type: "string", maxLength: 64},
-            },
-            required: ["ok", "docId"],
-            additionalProperties: false,
-        }),
+        inputSchema: objSchema({content: strProp(512, {minLength: 1})}, ["content"]),
+        outputSchema: objSchema({ok: boolProp(), docId: strProp(64)}, ["ok", "docId"]),
     }),
     createDocument: Object.freeze({
         name: "create-document",
         title: "小驴雷切新建文档",
         description: "受控写操作：在指定笔记本下新建一篇文档（可带初始内容）。执行前会弹窗请求用户确认，用户拒绝或超时则不执行。仅创建新文档，不修改既有内容。",
-        inputSchema: Object.freeze({
-            type: "object",
-            properties: {
-                notebook: {
-                    type: "string",
-                    minLength: 1,
-                    maxLength: 64,
-                },
-                title: {type: "string", minLength: 1, maxLength: 128},
-                markdown: {type: "string", maxLength: 4096},
-            },
-            required: ["notebook", "title"],
-            additionalProperties: false,
-        }),
-        outputSchema: Object.freeze({
-            type: "object",
-            properties: {
-                ok: {type: "boolean"},
-                notebook: {type: "string", maxLength: 64},
-                title: {type: "string", maxLength: 128},
-                docId: {type: "string", maxLength: 64},
-            },
-            required: ["ok", "notebook", "title"],
-            additionalProperties: false,
-        }),
+        inputSchema: objSchema({
+            notebook: strProp(64, {minLength: 1}),
+            title: strProp(128, {minLength: 1}),
+            markdown: strProp(4096),
+        }, ["notebook", "title"]),
+        outputSchema: objSchema({
+            ok: boolProp(),
+            notebook: strProp(64),
+            title: strProp(128),
+            docId: strProp(64),
+        }, ["ok", "notebook", "title"]),
     }),
     updateTask: Object.freeze({
         name: "update-task-status",
         title: "小驴雷切换换任务状态",
         description: "受控写操作：切换指定任务块的完成状态（勾选/取消勾选）。执行前会弹窗请求用户确认，用户拒绝或超时则不执行。仅修改该任务块的勾选标记，不改写任务文本。",
-        inputSchema: Object.freeze({
-            type: "object",
-            properties: {
-                id: {
-                    type: "string",
-                    minLength: 1,
-                    maxLength: 64,
-                    pattern: AGENT_BLOCK_ID_PATTERN,
-                },
-                done: {type: "boolean"},
-            },
-            required: ["id", "done"],
-            additionalProperties: false,
-        }),
-        outputSchema: Object.freeze({
-            type: "object",
-            properties: {
-                ok: {type: "boolean"},
-                id: {type: "string", maxLength: 64},
-                done: {type: "boolean"},
-            },
-            required: ["ok", "id", "done"],
-            additionalProperties: false,
-        }),
+        inputSchema: objSchema({id: idField(), done: boolProp()}, ["id", "done"]),
+        outputSchema: objSchema({ok: boolProp(), id: strProp(64), done: boolProp()}, ["ok", "id", "done"]),
     }),
     openDocument: Object.freeze({
         name: "open-document",
         title: "小驴雷切打开文档",
         description: "受控导航动作：在思源界面打开指定文档并定位（只切换页签，不修改任何笔记内容）。用于把查询结果变成可直达的页面。",
-        inputSchema: Object.freeze({
-            type: "object",
-            properties: {
-                id: {
-                    type: "string",
-                    minLength: 1,
-                    maxLength: 64,
-                    pattern: AGENT_BLOCK_ID_PATTERN,
-                },
-            },
-            required: ["id"],
-            additionalProperties: false,
-        }),
-        outputSchema: Object.freeze({
-            type: "object",
-            properties: {
-                ok: {type: "boolean"},
-                id: {type: "string", maxLength: 64},
-            },
-            required: ["ok", "id"],
-            additionalProperties: false,
-        }),
+        inputSchema: objSchema({id: idField()}, ["id"]),
+        outputSchema: objSchema({ok: boolProp(), id: strProp(64)}, ["ok", "id"]),
     }),
     openDocuments: Object.freeze({
         name: "open-documents",
         title: "小驴雷切批量打开文档",
         description: "受控导航动作：一次打开最多 5 篇文档组成工作区（只切换页签，不修改任何笔记内容）。执行前列出全部文档弹窗请求用户确认，拒绝或超时则不打开。",
-        inputSchema: Object.freeze({
-            type: "object",
-            properties: {
-                ids: {
-                    type: "array",
-                    minItems: 1,
-                    maxItems: 5,
-                    items: {
-                        type: "string",
-                        minLength: 1,
-                        maxLength: 64,
-                        pattern: AGENT_BLOCK_ID_PATTERN,
-                    },
-                },
-            },
-            required: ["ids"],
-            additionalProperties: false,
-        }),
-        outputSchema: Object.freeze({
-            type: "object",
-            properties: {
-                ok: {type: "boolean"},
-                opened: {type: "array", maxItems: 5, items: {type: "string", maxLength: 64}},
-                failed: {type: "array", maxItems: 5, items: {type: "string", maxLength: 64}},
-            },
-            required: ["ok", "opened"],
-            additionalProperties: false,
-        }),
+        inputSchema: objSchema({
+            ids: {type: "array", minItems: 1, maxItems: 5, items: idField()},
+        }, ["ids"]),
+        outputSchema: objSchema({
+            ok: boolProp(),
+            opened: {type: "array", maxItems: 5, items: strProp(64)},
+            failed: {type: "array", maxItems: 5, items: strProp(64)},
+        }, ["ok", "opened"]),
     }),
     homeWidgets: Object.freeze({
         name: "home-widget-snapshot",
         title: "小驴雷切组件面板数据",
         description: "只读获取组件面板中任一已注册组件的有界数据快照（如今日待办、本月日记、最近打开、标签、第三方插件组件），或省略 moduleId 发现当前可查询组件。不会修改笔记或页签。",
-        inputSchema: Object.freeze({
-            type: "object",
-            properties: {
-                moduleId: {
-                    type: "string",
-                    minLength: 1,
-                    maxLength: 64,
-                    pattern: "^[A-Za-z0-9._:-]{1,64}$",
-                },
-                limit: {type: "integer", minimum: 1, maximum: 24},
-                offset: {type: "integer", minimum: 0, maximum: MAX_ITEMS * 2},
-                config: {
-                    type: "object",
-                    maxProperties: 16,
-                    additionalProperties: {
-                        anyOf: [
-                            {type: "string", maxLength: 512},
-                            {type: "number"},
-                            {type: "boolean"},
-                        ],
-                    },
-                },
-                device: {type: "string", enum: HOME_DIAGNOSTIC_DEVICES},
-                readOnly: {type: "boolean"},
-                source: {type: "string", enum: ["builtin", "external"]},
-                refresh: {type: "boolean"},
+        inputSchema: objSchema({
+            moduleId: strProp(64, {minLength: 1, pattern: "^[A-Za-z0-9._:-]{1,64}$"}),
+            limit: intProp(1, 24),
+            offset: intProp(0, MAX_ITEMS * 2),
+            config: {
+                type: "object",
+                maxProperties: 16,
+                additionalProperties: {anyOf: [strProp(512), {type: "number"}, boolProp()]},
             },
-            additionalProperties: false,
+            device: {type: "string", enum: HOME_DIAGNOSTIC_DEVICES},
+            readOnly: boolProp(),
+            source: {type: "string", enum: ["builtin", "external"]},
+            refresh: boolProp(),
         }),
         outputSchema: Object.freeze({
             anyOf: [
-                {
-                    type: "object",
-                    properties: {
-                        moduleId: {type: "string", maxLength: 64, pattern: "^[A-Za-z0-9._:-]{1,64}$"},
-                        title: {type: "string", maxLength: 64},
-                        status: {type: "string", maxLength: 32},
-                        retryable: {type: "boolean"},
-                        device: {type: "string", enum: HOME_DIAGNOSTIC_DEVICES},
-                        cached: {type: "boolean"},
-                        updatedAt: {type: "integer", minimum: 0, maximum: 9999999999999},
-                        total: {type: "integer", minimum: 0, maximum: 24},
-                        offset: {type: "integer", minimum: 0, maximum: 24},
-                        truncated: {type: "boolean"},
-                        appliedConfig: {
-                            type: "object",
-                            maxProperties: 8,
-                            additionalProperties: {
-                                anyOf: [
-                                    {type: "string", maxLength: 512},
-                                    {type: "integer", minimum: -1000000, maximum: 1000000},
-                                    {type: "boolean"},
-                                ],
-                            },
-                        },
-                        stat: {
-                            type: "object",
-                            properties: {
-                                value: {type: "string", maxLength: 32},
-                                label: {type: "string", maxLength: 32},
-                                progress: {anyOf: [{type: "number", minimum: 0, maximum: 100}, {type: "null"}]},
-                                arc: {
-                                    type: "object",
-                                    properties: {
-                                        value: {type: "number", minimum: 0, maximum: 1000000},
-                                        max: {type: "number", exclusiveMinimum: 0, maximum: 1000000},
-                                    },
-                                    required: ["value", "max"],
-                                    additionalProperties: false,
-                                },
-                            },
-                            required: ["value", "label", "progress"],
-                            additionalProperties: false,
-                        },
-                        items: {
-                            type: "array",
-                            maxItems: 24,
-                            items: {
-                                type: "object",
-                                properties: {
-                                    label: {type: "string", maxLength: 256},
-                                    value: {type: "string", maxLength: 256},
-                                    secondary: {type: "string", maxLength: 32},
-                                    count: {type: "integer", minimum: 0, maximum: 9999},
-                                    done: {type: "boolean"},
-                                },
-                                required: ["label"],
-                                additionalProperties: false,
-                            },
-                        },
+                objSchema({
+                    moduleId: strProp(64, {pattern: "^[A-Za-z0-9._:-]{1,64}$"}),
+                    title: strProp(64),
+                    status: strProp(32),
+                    retryable: boolProp(),
+                    device: {type: "string", enum: HOME_DIAGNOSTIC_DEVICES},
+                    cached: boolProp(),
+                    updatedAt: intProp(0, 9999999999999),
+                    total: intProp(0, 24),
+                    offset: intProp(0, 24),
+                    truncated: boolProp(),
+                    appliedConfig: {
+                        type: "object",
+                        maxProperties: 8,
+                        additionalProperties: {anyOf: [strProp(512), intProp(-1000000, 1000000), boolProp()]},
                     },
-                    required: ["moduleId", "items", "device", "retryable", "cached", "updatedAt", "total", "offset", "truncated", "appliedConfig"],
-                    additionalProperties: false,
-                },
-                {
-                    type: "object",
-                    properties: {
-                        widgets: {
-                            type: "array",
-                            maxItems: 24,
-                            items: {
-                                type: "object",
-                                properties: {
-                                    moduleId: {type: "string", maxLength: 64, pattern: "^[A-Za-z0-9._:-]{1,64}$"},
-                                    title: {type: "string", maxLength: 64},
-                                    description: {type: "string", maxLength: 256},
-                                    sizes: {
-                                        type: "array",
-                                        maxItems: 8,
-                                        items: {type: "string", maxLength: 32},
-                                    },
-                                    supportedDevices: {
-                                        type: "array",
-                                        maxItems: 3,
-                                        items: {type: "string", enum: HOME_DIAGNOSTIC_DEVICES},
-                                    },
-                                    readOnly: {type: "boolean"},
-                                    source: {type: "string", enum: ["builtin", "external"]},
-                                    configFields: {
-                                        type: "array",
-                                        maxItems: 8,
-                                        items: {
-                                            type: "object",
-                                            properties: {
-                                                key: {type: "string", maxLength: 32, pattern: "^[A-Za-z][A-Za-z0-9_-]{0,31}$"},
-                                                label: {type: "string", maxLength: 32},
-                                                type: {type: "string", enum: HOME_CONFIG_FIELD_TYPES},
-                                                min: {type: "integer", minimum: -1000000, maximum: 1000000},
-                                                max: {type: "integer", minimum: -1000000, maximum: 1000000},
-                                                defaultValue: {anyOf: [{type: "string", maxLength: 128}, {type: "integer", minimum: -1000000, maximum: 1000000}]},
-                                                options: {type: "array", maxItems: 12, items: {type: "string", maxLength: 32}},
-                                            },
-                                            required: ["key", "label", "type"],
-                                            additionalProperties: false,
-                                        },
-                                    },
-                                    configured: {type: "boolean"},
-                                    enabled: {type: "boolean"},
-                                    size: {type: "string", maxLength: 16},
-                                },
-                                required: ["moduleId", "title", "description", "sizes", "supportedDevices", "readOnly", "source", "configFields"],
-                                additionalProperties: false,
-                            },
-                        },
-                        total: {type: "integer", minimum: 0, maximum: MAX_ITEMS * 2},
-                        offset: {type: "integer", minimum: 0, maximum: MAX_ITEMS * 2},
-                        truncated: {type: "boolean"},
+                    stat: objSchema({
+                        value: strProp(32),
+                        label: strProp(32),
+                        progress: {anyOf: [{type: "number", minimum: 0, maximum: 100}, {type: "null"}]},
+                        arc: objSchema({
+                            value: {type: "number", minimum: 0, maximum: 1000000},
+                            max: {type: "number", exclusiveMinimum: 0, maximum: 1000000},
+                        }, ["value", "max"], false),
+                    }, ["value", "label", "progress"], false),
+                    items: {
+                        type: "array",
+                        maxItems: 24,
+                        items: objSchema({
+                            label: strProp(256),
+                            value: strProp(256),
+                            secondary: strProp(32),
+                            count: intProp(0, 9999),
+                            done: boolProp(),
+                        }, ["label"], false),
                     },
-                    required: ["widgets", "total", "offset", "truncated"],
-                    additionalProperties: false,
-                },
+                }, ["moduleId", "items", "device", "retryable", "cached", "updatedAt", "total", "offset", "truncated", "appliedConfig"], false),
+                objSchema({
+                    widgets: {
+                        type: "array",
+                        maxItems: 24,
+                        items: objSchema({
+                            moduleId: strProp(64, {pattern: "^[A-Za-z0-9._:-]{1,64}$"}),
+                            title: strProp(64),
+                            description: strProp(256),
+                            sizes: {type: "array", maxItems: 8, items: strProp(32)},
+                            supportedDevices: {type: "array", maxItems: 3, items: {type: "string", enum: HOME_DIAGNOSTIC_DEVICES}},
+                            readOnly: boolProp(),
+                            source: {type: "string", enum: ["builtin", "external"]},
+                            configFields: {
+                                type: "array",
+                                maxItems: 8,
+                                items: objSchema({
+                                    key: strProp(32, {pattern: "^[A-Za-z][A-Za-z0-9_-]{0,31}$"}),
+                                    label: strProp(32),
+                                    type: {type: "string", enum: HOME_CONFIG_FIELD_TYPES},
+                                    min: intProp(-1000000, 1000000),
+                                    max: intProp(-1000000, 1000000),
+                                    defaultValue: {anyOf: [strProp(128), intProp(-1000000, 1000000)]},
+                                    options: {type: "array", maxItems: 12, items: strProp(32)},
+                                }, ["key", "label", "type"], false),
+                            },
+                            configured: boolProp(),
+                            enabled: boolProp(),
+                            size: strProp(16),
+                        }, ["moduleId", "title", "description", "sizes", "supportedDevices", "readOnly", "source", "configFields"], false),
+                    },
+                    total: intProp(0, MAX_ITEMS * 2),
+                    offset: intProp(0, MAX_ITEMS * 2),
+                    truncated: boolProp(),
+                }, ["widgets", "total", "offset", "truncated"], false),
             ],
         }),
     }),
@@ -870,269 +724,131 @@ const AGENT_CAPABILITY_SPECS = Object.freeze({
         name: "get-document-outline",
         title: "小驴雷切文档大纲",
         description: "只读获取指定文档的标题大纲（标题文本与层级）。可与「打开文档」配合，按标题块 ID 定位到具体章节。不会修改笔记。",
-        inputSchema: Object.freeze({
-            type: "object",
-            properties: {
-                id: {
-                    type: "string",
-                    minLength: 1,
-                    maxLength: 64,
-                    pattern: AGENT_BLOCK_ID_PATTERN,
-                },
-                limit: {type: "integer", minimum: 1, maximum: MAX_OUTLINE_ITEMS},
+        inputSchema: objSchema({id: idField(), limit: intProp(1, MAX_OUTLINE_ITEMS)}, ["id"]),
+        outputSchema: objSchema({
+            id: strProp(64),
+            headings: {
+                type: "array",
+                maxItems: MAX_OUTLINE_ITEMS,
+                items: objSchema({
+                    id: strProp(64),
+                    title: strProp(200),
+                    depth: intProp(0, 8),
+                }, ["id", "title"], false),
             },
-            required: ["id"],
-            additionalProperties: false,
-        }),
-        outputSchema: Object.freeze({
-            type: "object",
-            properties: {
-                id: {type: "string", maxLength: 64},
-                headings: {
-                    type: "array",
-                    maxItems: MAX_OUTLINE_ITEMS,
-                    items: {
-                        type: "object",
-                        properties: {
-                            id: {type: "string", maxLength: 64},
-                            title: {type: "string", maxLength: 200},
-                            depth: {type: "integer", minimum: 0, maximum: 8},
-                        },
-                        required: ["id", "title"],
-                        additionalProperties: false,
-                    },
-                },
-            },
-            required: ["id", "headings"],
-            additionalProperties: false,
-        }),
+        }, ["id", "headings"]),
     }),
     navigation: Object.freeze({
         name: "navigation-state",
         title: "小驴雷切导航状态",
         description: "只读获取小驴雷切当前打开页签、最近打开记录和收藏摘要。不会修改笔记或页签。",
-        inputSchema: Object.freeze({
-            type: "object",
-            properties: {limit: {type: "integer", minimum: 1, maximum: MAX_ITEMS}},
-            additionalProperties: false,
-        }),
-        outputSchema: Object.freeze({
-            type: "object",
-            properties: {
-                activeId: {type: "string", maxLength: 128},
-                mobile: {type: "boolean"},
-                tabs: AGENT_ITEMS_SCHEMA,
-                recent: AGENT_ITEMS_SCHEMA,
-                closed: AGENT_ITEMS_SCHEMA,
-                favorites: AGENT_ITEMS_SCHEMA,
-            },
-            required: ["activeId", "mobile", "tabs", "recent", "closed", "favorites"],
-            additionalProperties: false,
-        }),
+        inputSchema: objSchema({limit: intProp(1, MAX_ITEMS)}),
+        outputSchema: objSchema({
+            activeId: strProp(128),
+            mobile: boolProp(),
+            tabs: AGENT_ITEMS_SCHEMA,
+            recent: AGENT_ITEMS_SCHEMA,
+            closed: AGENT_ITEMS_SCHEMA,
+            favorites: AGENT_ITEMS_SCHEMA,
+        }, ["activeId", "mobile", "tabs", "recent", "closed", "favorites"]),
     }),
     workspaceContext: Object.freeze({
         name: "workspace-context",
         title: "小驴雷切工作区上下文",
         description: "只读汇总当前工作区：设备端、活动文档、打开页签、文档集清单、快捷入口、今日日记状态与存储演练健康。供 Agent 一次调用了解用户当前工作环境，不修改任何内容、不创建文档。",
-        inputSchema: Object.freeze({
-            type: "object",
-            properties: {limit: {type: "integer", minimum: 1, maximum: MAX_ITEMS}},
-            additionalProperties: false,
-        }),
-        outputSchema: Object.freeze({
-            type: "object",
-            properties: {
-                device: {type: "string", enum: ["desktop", "mobile"]},
-                generatedAt: {type: "integer", minimum: 0, maximum: 9999999999999},
-                syncing: {type: "boolean"},
-                activeDocument: Object.freeze({
-                    type: "object",
-                    properties: {
-                        id: {type: "string", maxLength: 64},
-                        title: {type: "string", maxLength: 256},
-                    },
-                    additionalProperties: false,
-                }),
-                openTabs: AGENT_ITEMS_SCHEMA,
-                closedTabs: AGENT_ITEMS_SCHEMA,
-                documentSets: Object.freeze({
+        inputSchema: objSchema({limit: intProp(1, MAX_ITEMS)}),
+        outputSchema: objSchema({
+            device: {type: "string", enum: ["desktop", "mobile"]},
+            generatedAt: intProp(0, 9999999999999),
+            syncing: boolProp(),
+            activeDocument: objSchema({id: strProp(64), title: strProp(256)}),
+            openTabs: AGENT_ITEMS_SCHEMA,
+            closedTabs: AGENT_ITEMS_SCHEMA,
+            documentSets: Object.freeze({
+                type: "array",
+                maxItems: 8,
+                items: objSchema({name: strProp(128), count: intProp(0)}, ["name", "count"]),
+            }),
+            quickActions: Object.freeze({
+                type: "array",
+                maxItems: 16,
+                items: objSchema({label: strProp(80), kind: strProp(16)}, ["label", "kind"]),
+            }),
+            todayJournal: objSchema({
+                configured: boolProp(),
+                docId: strProp(64),
+                status: {type: "string", enum: ["unconfigured", "found", "missing", "unavailable", "syncing"]},
+            }, ["configured", "docId", "status"]),
+            storageHealth: objSchema({
+                available: boolProp(),
+                version: intProp(0, 9999),
+                totals: objSchema({
+                    kept: intProp(0, 18),
+                    cleaned: intProp(0, 18),
+                    migrated: intProp(0, 18),
+                    reset: intProp(0, 18),
+                    inspect: intProp(0, 18),
+                    missing: intProp(0, 18),
+                }, AGENT_STORAGE_TOTAL_KEYS),
+                anomalies: Object.freeze({
                     type: "array",
-                    maxItems: 8,
-                    items: Object.freeze({
-                        type: "object",
-                        properties: {
-                            name: {type: "string", maxLength: 128},
-                            count: {type: "integer", minimum: 0},
-                        },
-                        required: ["name", "count"],
-                        additionalProperties: false,
-                    }),
+                    maxItems: 18,
+                    items: objSchema({key: strProp(32), status: strProp(16)}, ["key", "status"]),
                 }),
-                quickActions: Object.freeze({
-                    type: "array",
-                    maxItems: 16,
-                    items: Object.freeze({
-                        type: "object",
-                        properties: {
-                            label: {type: "string", maxLength: 80},
-                            kind: {type: "string", maxLength: 16},
-                        },
-                        required: ["label", "kind"],
-                        additionalProperties: false,
-                    }),
-                }),
-                todayJournal: Object.freeze({
-                    type: "object",
-                    properties: {
-                        configured: {type: "boolean"},
-                        docId: {type: "string", maxLength: 64},
-                        status: {type: "string", enum: ["unconfigured", "found", "missing", "unavailable", "syncing"]},
-                    },
-                    required: ["configured", "docId", "status"],
-                    additionalProperties: false,
-                }),
-                storageHealth: Object.freeze({
-                    type: "object",
-                    properties: {
-                        available: {type: "boolean"},
-                        version: {type: "integer", minimum: 0, maximum: 9999},
-                        totals: Object.freeze({
-                            type: "object",
-                            properties: {
-                                kept: {type: "integer", minimum: 0, maximum: 18},
-                                cleaned: {type: "integer", minimum: 0, maximum: 18},
-                                migrated: {type: "integer", minimum: 0, maximum: 18},
-                                reset: {type: "integer", minimum: 0, maximum: 18},
-                                inspect: {type: "integer", minimum: 0, maximum: 18},
-                                missing: {type: "integer", minimum: 0, maximum: 18},
-                            },
-                            required: AGENT_STORAGE_TOTAL_KEYS,
-                            additionalProperties: false,
-                        }),
-                        anomalies: Object.freeze({
-                            type: "array",
-                            maxItems: 18,
-                            items: Object.freeze({
-                                type: "object",
-                                properties: {
-                                    key: {type: "string", maxLength: 32},
-                                    status: {type: "string", maxLength: 16},
-                                },
-                                required: ["key", "status"],
-                                additionalProperties: false,
-                            }),
-                        }),
-                    },
-                    required: ["available"],
-                    additionalProperties: false,
-                }),
-            },
-            required: ["device", "generatedAt", "syncing", "activeDocument", "openTabs", "closedTabs", "documentSets", "quickActions", "todayJournal", "storageHealth"],
-            additionalProperties: false,
-        }),
+            }, ["available"]),
+        }, ["device", "generatedAt", "syncing", "activeDocument", "openTabs", "closedTabs", "documentSets", "quickActions", "todayJournal", "storageHealth"]),
     }),
     homeDiagnostics: Object.freeze({
         name: "home-adapter-diagnostics",
         title: "小驴雷切组件诊断摘要",
         description: "只读返回组件适配器的最近成功、缓存、超时和失败状态，不包含异常对象、敏感文本或请求内容。",
-        inputSchema: Object.freeze({
-            type: "object",
-            properties: {
-                limit: {type: "integer", minimum: 1, maximum: MAX_DIAGNOSTICS},
-                windowMinutes: {type: "integer", minimum: 1, maximum: 1440},
-            },
-            additionalProperties: false,
-        }),
-        outputSchema: Object.freeze({
-            type: "object",
-            properties: {
-                diagnostics: Object.freeze({
-                    type: "array",
-                    maxItems: MAX_DIAGNOSTICS,
-                    items: Object.freeze({
-                        type: "object",
-                        properties: {
-                            type: {type: "string", maxLength: 24},
-                            moduleId: {type: "string", maxLength: 64},
-                            device: {type: "string", enum: HOME_DIAGNOSTIC_DEVICES},
-                            at: {type: "integer", minimum: 1},
-                        },
-                        required: ["type", "moduleId", "device", "at"],
-                        additionalProperties: false,
-                    }),
-                }),
-                summary: Object.freeze({
-                    type: "object",
-                    properties: {
-                        total: {type: "integer", minimum: 0, maximum: MAX_DIAGNOSTICS},
-                        windowMinutes: {type: "integer", minimum: 1, maximum: 1440},
-                        byType: {
-                            type: "object",
-                            properties: Object.fromEntries(HOME_DIAGNOSTIC_TYPES.map((type) => [type, {type: "integer", minimum: 0, maximum: MAX_DIAGNOSTICS}])),
-                            required: HOME_DIAGNOSTIC_TYPES,
-                            additionalProperties: false,
-                        },
-                        byDevice: {
-                            type: "object",
-                            properties: Object.fromEntries(HOME_DIAGNOSTIC_DEVICES.map((device) => [device, {type: "integer", minimum: 0, maximum: MAX_DIAGNOSTICS}])),
-                            required: HOME_DIAGNOSTIC_DEVICES,
-                            additionalProperties: false,
-                        },
-                        cacheHits: {type: "integer", minimum: 0, maximum: MAX_DIAGNOSTICS},
-                        completed: {type: "integer", minimum: 0, maximum: MAX_DIAGNOSTICS},
-                        failures: {type: "integer", minimum: 0, maximum: MAX_DIAGNOSTICS},
-                    },
-                    required: ["total", "windowMinutes", "byType", "byDevice", "cacheHits", "completed", "failures"],
-                    additionalProperties: false,
-                }),
-            },
-            required: ["diagnostics", "summary"],
-            additionalProperties: false,
-        }),
+        inputSchema: objSchema({limit: intProp(1, MAX_DIAGNOSTICS), windowMinutes: intProp(1, 1440)}),
+        outputSchema: objSchema({
+            diagnostics: Object.freeze({
+                type: "array",
+                maxItems: MAX_DIAGNOSTICS,
+                items: objSchema({
+                    type: strProp(24),
+                    moduleId: strProp(64),
+                    device: {type: "string", enum: HOME_DIAGNOSTIC_DEVICES},
+                    at: intProp(1),
+                }, ["type", "moduleId", "device", "at"]),
+            }),
+            summary: objSchema({
+                total: intProp(0, MAX_DIAGNOSTICS),
+                windowMinutes: intProp(1, 1440),
+                byType: objSchema(Object.fromEntries(HOME_DIAGNOSTIC_TYPES.map((type) => [type, intProp(0, MAX_DIAGNOSTICS)])), HOME_DIAGNOSTIC_TYPES, false),
+                byDevice: objSchema(Object.fromEntries(HOME_DIAGNOSTIC_DEVICES.map((device) => [device, intProp(0, MAX_DIAGNOSTICS)])), HOME_DIAGNOSTIC_DEVICES, false),
+                cacheHits: intProp(0, MAX_DIAGNOSTICS),
+                completed: intProp(0, MAX_DIAGNOSTICS),
+                failures: intProp(0, MAX_DIAGNOSTICS),
+            }, ["total", "windowMinutes", "byType", "byDevice", "cacheHits", "completed", "failures"]),
+        }, ["diagnostics", "summary"]),
     }),
     search: Object.freeze({
         name: "search-documents",
         title: "小驴雷切搜索文档",
         description: "只读搜索思源文档；支持受限的笔记本、路径、内容类型、搜索方式和结果排序筛选，并在需要时使用原生块搜索。结果只返回根文档摘要和定位信息。",
-        inputSchema: Object.freeze({
-            type: "object",
-            properties: {
-                query: {type: "string", minLength: 1, maxLength: MAX_QUERY_LENGTH},
-                notebook: {
-                    type: "string",
-                    minLength: 1,
-                    maxLength: 64,
-                    pattern: "^[A-Za-z0-9_-]{1,64}$",
-                },
-                paths: {
-                    type: "array",
-                    maxItems: MAX_AGENT_PATHS,
-                    items: {type: "string", minLength: 1, maxLength: MAX_AGENT_PATH_LENGTH},
-                },
-                limit: {type: "integer", minimum: 1, maximum: MAX_SEARCH_ITEMS},
-                offset: {type: "integer", minimum: 0, maximum: MAX_SEARCH_ITEMS * 2},
-                method: {type: "string", enum: SEARCH_METHODS},
-                orderBy: {type: "string", enum: SEARCH_ORDERS},
-                type: {type: "string", enum: SEARCH_TYPES},
-                subType: {type: "string", enum: SEARCH_SUBTYPES},
-            },
-            required: ["query"],
-            additionalProperties: false,
-        }),
-        outputSchema: Object.freeze({
-            type: "object",
-            properties: {
-                query: {type: "string", maxLength: MAX_QUERY_LENGTH},
-                count: {type: "integer", minimum: 0, maximum: MAX_SEARCH_ITEMS},
-                items: AGENT_ITEMS_SCHEMA,
-                source: {type: "string", enum: SEARCH_SOURCES},
-                total: {type: "integer", minimum: 0, maximum: MAX_SEARCH_ITEMS},
-                offset: {type: "integer", minimum: 0, maximum: MAX_SEARCH_ITEMS * 2},
-                truncated: {type: "boolean"},
-            },
-            required: ["query", "count", "items", "source", "total", "offset", "truncated"],
-            additionalProperties: false,
-        }),
+        inputSchema: objSchema({
+            query: strProp(MAX_QUERY_LENGTH, {minLength: 1}),
+            notebook: strProp(64, {minLength: 1, pattern: "^[A-Za-z0-9_-]{1,64}$"}),
+            paths: {type: "array", maxItems: MAX_AGENT_PATHS, items: strProp(MAX_AGENT_PATH_LENGTH, {minLength: 1})},
+            limit: intProp(1, MAX_SEARCH_ITEMS),
+            offset: intProp(0, MAX_SEARCH_ITEMS * 2),
+            method: {type: "string", enum: SEARCH_METHODS},
+            orderBy: {type: "string", enum: SEARCH_ORDERS},
+            type: {type: "string", enum: SEARCH_TYPES},
+            subType: {type: "string", enum: SEARCH_SUBTYPES},
+        }, ["query"]),
+        outputSchema: objSchema({
+            query: strProp(MAX_QUERY_LENGTH),
+            count: intProp(0, MAX_SEARCH_ITEMS),
+            items: AGENT_ITEMS_SCHEMA,
+            source: {type: "string", enum: SEARCH_SOURCES},
+            total: intProp(0, MAX_SEARCH_ITEMS),
+            offset: intProp(0, MAX_SEARCH_ITEMS * 2),
+            truncated: boolProp(),
+        }, ["query", "count", "items", "source", "total", "offset", "truncated"]),
     }),
 });
 

@@ -576,9 +576,11 @@ export function openSavedSearchEditor(this: DocSearchUiHost, id: string): void {
         // 保存会把原有范围静默改成“不限”，造成不可见的数据丢失。
         const savedNotebook = typeof saved.notebook === "string" ? saved.notebook.trim() : "";
         if (savedNotebook) {
+            const cachedNotebookName = ((this as unknown as {notebookListCache?: Array<{id: string; name: string}> | null}).notebookListCache || [])
+                .find((nb) => nb.id === savedNotebook)?.name;
             const fallbackOption = document.createElement("option");
             fallbackOption.value = savedNotebook;
-            fallbackOption.textContent = savedNotebook;
+            fallbackOption.textContent = cachedNotebookName || this.i18n.searchSavedEditNotebookSaved || this.i18n.groupUnknownNotebook || "已绑定笔记本";
             fallbackOption.dataset.swSavedNotebookFallback = "true";
             notebookSelect.appendChild(fallbackOption);
             notebookSelect.value = savedNotebook;
@@ -2476,6 +2478,49 @@ export async function openDocSearchResult(this: DocSearchUiHost, rootId: string,
 
     // 单个文档搜索结果按钮（图标 + 标题 + 路径）；点击直开文档（手机端走 MobileTabs.open）
 export function buildDocResultItem(this: DocSearchUiHost, doc: IDocSearchResult, id: string, onClose: IOverlayClose, query = ""): HTMLButtonElement {
+        const appendHighlightedSegments = (target: HTMLElement, text: string, kw: string): void => {
+            for (const segment of buildKeywordHighlightSegments(text, kw)) {
+                if (!segment.text) continue;
+                if (segment.hit) {
+                    const mark = document.createElement("mark");
+                    mark.className = "sw__search-mark";
+                    mark.textContent = segment.text;
+                    target.appendChild(mark);
+                } else {
+                    target.appendChild(document.createTextNode(segment.text));
+                }
+            }
+        };
+        const openNativeDocMenuAt = async (position: {x: number; y: number}): Promise<void> => {
+            let nbId = (doc as any).box || (doc as any).notebookId || "";
+            if (!nbId && id) {
+                try {
+                    const res = await (this as any).fetchKernelJson?.("/api/query/sql", {
+                        stmt: `SELECT box FROM blocks WHERE id = '${id.replace(/'/g, "''")}' LIMIT 1`,
+                    });
+                    const rows = res?.data || res;
+                    if (Array.isArray(rows) && rows[0]?.box) nbId = rows[0].box;
+                } catch {}
+            }
+            if (nbId) {
+                void showDocTreeNativeMenu({notebookId: nbId, docId: id, position});
+            } else {
+                showMessage("未检测到有效的文档笔记本关联", 2000, "info");
+            }
+        };
+        const writeBlockLinkClipboard = (targetEl: HTMLElement, textToCopy: string): void => {
+            if (typeof navigator !== "undefined" && navigator?.clipboard?.writeText) {
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    lvNotify.inline(targetEl, this.i18n.snippetCopied || "已复制到剪贴板");
+                    showMessage(this.i18n.snippetCopied || "已复制到剪贴板");
+                }).catch((err) => {
+                    logger.warn("clipboard write fail", err);
+                    showMessage(this.i18n.copyFailed || "复制失败，请检查剪贴板权限", 3000, "error");
+                });
+            } else {
+                showMessage(this.i18n.copyFailed || "当前环境不支持剪贴板写入", 3000, "error");
+            }
+        };
         const item = document.createElement("button");
         item.type = "button";
         item.className = "sw__doc-item";
@@ -2498,17 +2543,7 @@ export function buildDocResultItem(this: DocSearchUiHost, doc: IDocSearchResult,
         const hPath = String(doc.hPath || "");
         const docTitle = doc.title || doc.name || safeDocTitleFromHPath(hPath, id);
         // T-6834 关键词高亮：查询词条命中段包 <mark>（分段 textContent 装配，零 innerHTML）
-        for (const segment of buildKeywordHighlightSegments(docTitle, query)) {
-            if (!segment.text) continue;
-            if (segment.hit) {
-                const mark = document.createElement("mark");
-                mark.className = "sw__search-mark";
-                mark.textContent = segment.text;
-                title.appendChild(mark);
-            } else {
-                title.appendChild(document.createTextNode(segment.text));
-            }
-        }
+        appendHighlightedSegments(title, docTitle, query);
         const source = document.createElement("span");
         source.className = "sw__doc-source" + (doc.kind ? ` is-${doc.kind}` : "");
         if (doc.kind === "heading" || doc.kind === "block" || doc.kind === "task" || doc.kind === "tag" || doc.kind === "bookmark") {
@@ -2528,17 +2563,7 @@ export function buildDocResultItem(this: DocSearchUiHost, doc: IDocSearchResult,
             snippetElement = document.createElement("span");
             snippetElement.className = "sw__doc-snippet";
             // T-6835 片段行关键词高亮：与标题共用分段器（模型层已剥内核 <mark> 包裹）
-            for (const segment of buildKeywordHighlightSegments(snippets, query)) {
-                if (!segment.text) continue;
-                if (segment.hit) {
-                    const mark = document.createElement("mark");
-                    mark.className = "sw__search-mark";
-                    mark.textContent = segment.text;
-                    snippetElement.appendChild(mark);
-                } else {
-                    snippetElement.appendChild(document.createTextNode(segment.text));
-                }
-            }
+            appendHighlightedSegments(snippetElement, snippets, query);
         }
         const path = document.createElement("span");
         path.className = "sw__doc-path";
@@ -2574,30 +2599,8 @@ export function buildDocResultItem(this: DocSearchUiHost, doc: IDocSearchResult,
                 + " · ⌘K " + (this.i18n.actionPaletteTitle || "动作画板");
             item.addEventListener("contextmenu", (event) => {
                 event.preventDefault();
-                let nbId = (doc as any).box || (doc as any).notebookId || "";
                 if (event.shiftKey) {
-                    void (async () => {
-                        if (!nbId && id) {
-                            try {
-                                const res = await (this as any).fetchKernelJson?.("/api/query/sql", {
-                                    stmt: `SELECT box FROM blocks WHERE id = '${id.replace(/'/g, "''")}' LIMIT 1`
-                                });
-                                const rows = res?.data || res;
-                                if (Array.isArray(rows) && rows[0]?.box) {
-                                    nbId = rows[0].box;
-                                }
-                            } catch {}
-                        }
-                        if (nbId) {
-                            void showDocTreeNativeMenu({
-                                notebookId: nbId,
-                                docId: id,
-                                position: { x: event.clientX, y: event.clientY }
-                            });
-                        } else {
-                            showMessage("未检测到有效的文档笔记本关联", 2000, "info");
-                        }
-                    })();
+                    void openNativeDocMenuAt({x: event.clientX, y: event.clientY});
                     return;
                 }
                 onClose();
@@ -2608,29 +2611,7 @@ export function buildDocResultItem(this: DocSearchUiHost, doc: IDocSearchResult,
                     event.preventDefault();
                     event.stopPropagation();
                     const rect = item.getBoundingClientRect();
-                    let nbId = (doc as any).box || (doc as any).notebookId || "";
-                    void (async () => {
-                        if (!nbId && id) {
-                            try {
-                                const res = await (this as any).fetchKernelJson?.("/api/query/sql", {
-                                    stmt: `SELECT box FROM blocks WHERE id = '${id.replace(/'/g, "''")}' LIMIT 1`
-                                });
-                                const rows = res?.data || res;
-                                if (Array.isArray(rows) && rows[0]?.box) {
-                                    nbId = rows[0].box;
-                                }
-                            } catch {}
-                        }
-                        if (nbId) {
-                            void showDocTreeNativeMenu({
-                                notebookId: nbId,
-                                docId: id,
-                                position: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
-                            });
-                        } else {
-                            showMessage("未检测到有效的文档笔记本关联", 2000, "info");
-                        }
-                    })();
+                    void openNativeDocMenuAt({x: rect.left + rect.width / 2, y: rect.top + rect.height / 2});
                     return;
                 }
                 const isCtrlOrCmd = event.ctrlKey || event.metaKey;
@@ -2647,20 +2628,7 @@ export function buildDocResultItem(this: DocSearchUiHost, doc: IDocSearchResult,
                     event.stopPropagation();
                     const copyTargetId = hitId || docRootKey;
                     if (copyTargetId) {
-                        const textToCopy = event.shiftKey
-                            ? `[${docTitle}](siyuan://blocks/${copyTargetId})`
-                            : `siyuan://blocks/${copyTargetId}`;
-                        if (typeof navigator !== "undefined" && navigator?.clipboard?.writeText) {
-                            navigator.clipboard.writeText(textToCopy).then(() => {
-                                lvNotify.inline(item, this.i18n.snippetCopied || "已复制到剪贴板");
-                                showMessage(this.i18n.snippetCopied || "已复制到剪贴板");
-                            }).catch((err) => {
-                                logger.warn("clipboard write fail", err);
-                                showMessage(this.i18n.copyFailed || "复制失败，请检查剪贴板权限", 3000, "error");
-                            });
-                        } else {
-                            showMessage(this.i18n.copyFailed || "当前环境不支持剪贴板写入", 3000, "error");
-                        }
+                        writeBlockLinkClipboard(item, event.shiftKey ? `[${docTitle}](siyuan://blocks/${copyTargetId})` : `siyuan://blocks/${copyTargetId}`);
                     }
                     return;
                 }
@@ -2669,17 +2637,7 @@ export function buildDocResultItem(this: DocSearchUiHost, doc: IDocSearchResult,
                     event.stopPropagation();
                     const copyTargetId = hitId || docRootKey;
                     if (copyTargetId) {
-                        if (typeof navigator !== "undefined" && navigator?.clipboard?.writeText) {
-                            navigator.clipboard.writeText(`siyuan://blocks/${copyTargetId}`).then(() => {
-                                lvNotify.inline(item, this.i18n.snippetCopied || "已复制到剪贴板");
-                                showMessage(this.i18n.snippetCopied || "已复制到剪贴板");
-                            }).catch((err) => {
-                                logger.warn("clipboard write fail", err);
-                                showMessage(this.i18n.copyFailed || "复制失败，请检查剪贴板权限", 3000, "error");
-                            });
-                        } else {
-                            showMessage(this.i18n.copyFailed || "当前环境不支持剪贴板写入", 3000, "error");
-                        }
+                        writeBlockLinkClipboard(item, `siyuan://blocks/${copyTargetId}`);
                     }
                 }
             });

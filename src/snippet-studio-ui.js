@@ -110,6 +110,12 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
     let restoreDialog = null;
     let importPlanDialog = null;
     let importPlanCancel = null;
+    let groupNameDialog = null;
+    const overlayDisposables = new Set();
+    const overlayKeyStack = [];
+    const popOverlayKeyTarget = (t) => { const i = overlayKeyStack.indexOf(t); if (i >= 0) overlayKeyStack.splice(i, 1); };
+    const pushOverlayKeyTarget = (t) => { popOverlayKeyTarget(t); overlayKeyStack.push(t); };
+    const isTopOverlayKeyTarget = (t) => overlayKeyStack[overlayKeyStack.length - 1] === t;
     let gistSettings = (() => {
         try { return normalizeGistSettings(gist?.load?.()); } catch (_) { return normalizeGistSettings(null); }
     })();
@@ -1029,9 +1035,8 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
         }
     });
     aiResultPanel.append(aiResultHeader, aiThinkingHost, aiDiffSummary, aiEmpty, aiResult, aiDiffPanel);
-    const acceptButton = action("snippetAIAccept", () => {
-        if (!candidate || candidate.mode === "explain" || busy) return;
-        if (candidate.revision !== revision && !win.confirm(t("snippetAIStale"))) return;
+    const applyAcceptedCandidate = () => {
+        if (!candidate || candidate.mode === "explain" || busy || disposed) return;
         let applied = candidate.content;
         if (activeDiff && !activeDiff.degraded) {
             const anyAccepted = activeHunkAccepted.some(Boolean);
@@ -1067,6 +1072,16 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
         commitDraftHistory();
         renderPreview();
         setStatus(t("snippetAIAccepted"), "ready");
+    };
+    const acceptButton = action("snippetAIAccept", () => {
+        if (!candidate || candidate.mode === "explain" || busy) return;
+        if (candidate.revision !== revision) {
+            void confirmStudioDialog(t("snippetAIAccept"), t("snippetAIStale")).then((ok) => {
+                if (ok) applyAcceptedCandidate();
+            });
+            return;
+        }
+        applyAcceptedCandidate();
     }, "is-primary");
     acceptButton.disabled = true;
     const candidateActions = node("div", "sw-studio__ai-actions");
@@ -1660,7 +1675,8 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
             setStatus(t("snippetUnavailable"), "blocked");
             return;
         }
-        if (latest.type === "js" && !latest.enabled && typeof win.confirm === "function" && !win.confirm(t("snippetConfirmJS"))) return;
+        if (latest.type === "js" && !latest.enabled && !await confirmStudioDialog(t("snippetEnable"), t("snippetConfirmJS"))) return;
+        if (disposed) return;
         busySet.add(item.id);
         refresh?.();
         try {
@@ -2760,10 +2776,12 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
     }
     async function mutate(actionName) {
         if (busy || loading || loadFailed || disposed) return false;
-        if (actionName === "delete" && !win.confirm(t("snippetConfirmDelete"))) return false;
+        if (actionName === "delete" && !await confirmStudioDialog(t("snippetDelete"), t("snippetConfirmDelete"))) return false;
+        if (busy || loading || loadFailed || disposed) return false;
         if (actionName === "toggle" && dirty()) { setStatus(t("snippetSaveFirst"), "blocked"); return false; }
         if (draft.type === "js" && (actionName === "toggle" && !baseline?.enabled || actionName === "save" && baseline?.enabled)) {
-            if (!win.confirm(t("snippetConfirmJS"))) return false;
+            if (!await confirmStudioDialog(t("snippetEnable"), t("snippetConfirmJS"))) return false;
+            if (busy || loading || loadFailed || disposed) return false;
         }
         busy = true;
         setStatus(status.textContent, "busy");
@@ -3150,34 +3168,162 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
         if (result.changed) saveSnippetGroupStore(result.store);
         return result;
     }
-    function promptSnippetGroupName(current = "") {
-        if (typeof win.prompt !== "function") return null;
-        return win.prompt(t("snippetGroupNamePrompt"), current);
+    function promptSnippetGroupName(title, current = "", onConfirm) {
+        if (disposed) return;
+        groupNameDialog?.destroy?.();
+        const opener = doc.activeElement instanceof win.HTMLElement ? doc.activeElement : null;
+        const dialog = new Dialog({
+            title,
+            content: '<div class="sw-studio__leave sw-studio__group-prompt"></div>',
+            width: "min(420px, 92vw)",
+            destroyCallback: () => {
+                if (groupNameDialog === dialog) groupNameDialog = null;
+                if (opener && opener.isConnected && typeof opener.focus === "function") {
+                    try { opener.focus({preventScroll: true}); } catch (_) { opener.focus(); }
+                }
+            },
+        });
+        groupNameDialog = dialog;
+        mountPlatformDialogTitleWrap(dialog.element, title, "", "iconCode");
+        mountPlatformDialogCloseHint(dialog.element, locale.i18n.platformCloseHint || "to close");
+        const box = dialog.element.querySelector(".sw-studio__group-prompt");
+        if (!box) { dialog.destroy(); return; }
+        const message = node("p", "sw-studio__leave-message", t("snippetGroupNamePrompt"));
+        const input = node("input", "b3-text-field sw-studio__input sw-studio__group-prompt-input");
+        input.type = "text";
+        input.value = current || "";
+        input.setAttribute("aria-label", t("snippetGroupNamePrompt"));
+        const actions = node("div", "sw-studio__leave-actions");
+        const cancelBtn = node("button", "b3-button b3-button--cancel", t("cancel"));
+        cancelBtn.type = "button";
+        const confirmBtn = node("button", "b3-button b3-button--text", t("confirm") || "确定");
+        confirmBtn.type = "button";
+        const submit = () => {
+            const value = input.value;
+            dialog.destroy();
+            onConfirm?.(value);
+        };
+        cancelBtn.addEventListener("click", () => dialog.destroy());
+        confirmBtn.addEventListener("click", submit);
+        input.addEventListener("keydown", (event) => {
+            if (event.isComposing || event.keyCode === 229) return;
+            if (event.key === "Enter") {
+                event.preventDefault();
+                event.stopPropagation();
+                submit();
+            }
+        });
+        dialog.element.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                if (event.isComposing || event.keyCode === 229) return;
+                event.preventDefault();
+                event.stopPropagation();
+                dialog.destroy();
+            }
+        });
+        actions.append(cancelBtn, confirmBtn);
+        box.append(message, input, actions);
+        try {
+            input.focus({preventScroll: true});
+            input.select?.();
+        } catch (_) {
+            input.focus?.();
+        }
     }
     function createSnippetGroup() {
-        const name = promptSnippetGroupName();
-        if (name === null) return;
-        const result = addSnippetGroup(snippetGroups, name, {id: createSnippetGroupId(Date.now(), groupIdSeed++)});
-        if (!result.changed) {
-            setStatus(t("snippetGroupNameInvalid"), "blocked");
-            return;
-        }
-        saveSnippetGroupStore(result.store);
-        pickerRefresh?.();
+        promptSnippetGroupName(t("snippetGroupNew"), "", (name) => {
+            if (disposed) return;
+            const result = addSnippetGroup(snippetGroups, name, {id: createSnippetGroupId(Date.now(), groupIdSeed++)});
+            if (!result.changed) {
+                setStatus(t("snippetGroupNameInvalid"), "blocked");
+                return;
+            }
+            saveSnippetGroupStore(result.store);
+            pickerRefresh?.();
+        });
     }
     function editSnippetGroup(group) {
-        const name = promptSnippetGroupName(group.name);
-        if (name === null) return;
-        const result = renameSnippetGroup(snippetGroups, group.id, name);
-        if (!result.changed) {
-            setStatus(t("snippetGroupNameInvalid"), "blocked");
-            return;
-        }
-        saveSnippetGroupStore(result.store);
-        pickerRefresh?.();
+        promptSnippetGroupName(t("snippetGroupRename"), group.name, (name) => {
+            if (disposed) return;
+            const result = renameSnippetGroup(snippetGroups, group.id, name);
+            if (!result.changed) {
+                setStatus(t("snippetGroupNameInvalid"), "blocked");
+                return;
+            }
+            saveSnippetGroupStore(result.store);
+            pickerRefresh?.();
+        });
     }
-    function deleteSnippetGroup(group) {
-        if (typeof win.confirm === "function" && !win.confirm(t("snippetGroupDeleteConfirm"))) return;
+    function confirmStudioDialog(title, messageText) {
+        if (disposed) return Promise.resolve(false);
+        return new Promise((resolve) => {
+            let settled = false;
+            const finish = (accepted) => {
+                if (settled) return;
+                settled = true;
+                overlayDisposables.delete(release);
+                resolve(accepted);
+            };
+            const release = () => {
+                finish(false);
+                dialog.destroy();
+            };
+            const opener = doc.activeElement instanceof win.HTMLElement ? doc.activeElement : null;
+            const dialog = new Dialog({
+                title: title || t("confirm") || "确认",
+                content: '<div class="sw-studio__leave sw-studio__confirm-dialog"></div>',
+                width: "min(420px, 92vw)",
+                destroyCallback: () => {
+                    finish(false);
+                    if (opener && opener.isConnected && typeof opener.focus === "function") {
+                        try { opener.focus({preventScroll: true}); } catch (_) { opener.focus(); }
+                    }
+                },
+            });
+            overlayDisposables.add(release);
+            mountPlatformDialogTitleWrap(dialog.element, title || t("confirm") || "确认", "", "iconCode");
+            mountPlatformDialogCloseHint(dialog.element, locale.i18n.platformCloseHint || "to close");
+            const box = dialog.element.querySelector(".sw-studio__confirm-dialog");
+            if (!box) { release(); return; }
+            const msgEl = node("p", "sw-studio__leave-message", messageText || "");
+            const actions = node("div", "sw-studio__leave-actions");
+            const cancelBtn = node("button", "b3-button b3-button--cancel", t("cancel"));
+            cancelBtn.type = "button";
+            const confirmBtn = node("button", "b3-button b3-button--text", t("confirm") || "确定");
+            confirmBtn.type = "button";
+            cancelBtn.addEventListener("click", () => {
+                finish(false);
+                dialog.destroy();
+            });
+            confirmBtn.addEventListener("click", () => {
+                finish(true);
+                dialog.destroy();
+            });
+            dialog.element.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    cancelBtn.click();
+                    return;
+                }
+                if (["ArrowLeft", "ArrowRight"].includes(event.key)) {
+                    const buttons = [cancelBtn, confirmBtn].filter((b) => !b.disabled);
+                    const idx = buttons.indexOf(doc.activeElement);
+                    if (idx >= 0) {
+                        event.preventDefault();
+                        const nextIdx = (idx + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
+                        buttons[nextIdx]?.focus({preventScroll: true});
+                    }
+                }
+            });
+            actions.append(cancelBtn, confirmBtn);
+            box.append(msgEl, actions);
+            try { cancelBtn.focus({preventScroll: true}); } catch (_) { cancelBtn.focus?.(); }
+        });
+    }
+    async function deleteSnippetGroup(group) {
+        if (!await confirmStudioDialog(t("snippetGroupDelete"), t("snippetGroupDeleteConfirm"))) return;
+        if (disposed) return;
         const result = removeSnippetGroup(snippetGroups, group.id);
         if (!result.changed) return;
         saveSnippetGroupStore(result.store);
@@ -3215,9 +3361,12 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
         const list = node("div", "sw-studio__catalog");
         const focusables = () => Array.from(overlay.querySelectorAll("button")).filter((el) => !el.disabled);
         let closed = false;
+        let releaseRecycle = () => {};
         const close = () => {
             if (closed) return;
             closed = true;
+            popOverlayKeyTarget(overlay);
+            overlayDisposables.delete(releaseRecycle);
             doc.removeEventListener("keydown", keydown, true);
             overlay.remove();
             if (opener) opener.focus({preventScroll: true});
@@ -3313,6 +3462,7 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
         root.appendChild(overlay);
         renderList();
         const keydown = (event) => {
+            if (!isTopOverlayKeyTarget(overlay)) return;
             if (event.key === "Escape") {
                 event.preventDefault();
                 event.stopPropagation();
@@ -3366,7 +3516,17 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
                 firstEl.focus({preventScroll: true});
             }
         };
+        pushOverlayKeyTarget(overlay);
         doc.addEventListener("keydown", keydown, true);
+        releaseRecycle = () => {
+            if (closed) return;
+            closed = true;
+            popOverlayKeyTarget(overlay);
+            overlayDisposables.delete(releaseRecycle);
+            doc.removeEventListener("keydown", keydown, true);
+            overlay.remove();
+        };
+        overlayDisposables.add(releaseRecycle);
         overlay.addEventListener("click", (event) => {
             if (event.target === overlay) close();
         });
@@ -3427,7 +3587,8 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
                 syncStoreInstallBtn();
                 return;
             }
-            if (storeSelection.type === "js" && typeof win.confirm === "function" && !win.confirm(t("snippetConfirmJS"))) return;
+            if (storeSelection.type === "js" && !await confirmStudioDialog(t("snippetEnable"), t("snippetConfirmJS"))) return;
+            if (disposed) return;
             storeInstallBtn.disabled = true;
             try {
                 const candidateDraft = {
@@ -3558,16 +3719,32 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
             openLianDiBtn.addEventListener("click", () => {
                 win.open("https://ld246.com/", "_blank", "noopener,noreferrer");
             });
+            const releaseGuide = () => {
+                popOverlayKeyTarget(overlay);
+                doc.removeEventListener("keydown", docGuideEsc, true);
+                overlayDisposables.delete(releaseGuide);
+                overlay.remove();
+            };
+            const docGuideEsc = (e) => {
+                if (isTopOverlayKeyTarget(overlay) && e.key === "Escape") { e.preventDefault(); e.stopPropagation(); releaseGuide(); }
+            };
             const closeBtn = node("button", "b3-button b3-button--cancel", t("cancel"));
-            closeBtn.addEventListener("click", () => overlay.remove());
+            closeBtn.addEventListener("click", () => releaseGuide());
             actions.append(copyJsonBtn, openLianDiBtn, closeBtn);
             box.append(head, desc, actions);
             overlay.appendChild(box);
+            overlay.addEventListener("click", (event) => {
+                if (event.target === overlay) releaseGuide();
+            });
             overlay.addEventListener("keydown", (event) => {
+                if (!isTopOverlayKeyTarget(overlay)) return;
                 if (event.key === "Escape") {
                     event.preventDefault();
                     event.stopPropagation();
+                    popOverlayKeyTarget(overlay);
+                    doc.removeEventListener("keydown", docGuideEsc, true);
                     overlay.remove();
+                    overlayDisposables.delete(releaseGuide);
                     return;
                 }
                 if (["ArrowLeft", "ArrowRight"].includes(event.key)) {
@@ -3580,6 +3757,9 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
                     }
                 }
             });
+            pushOverlayKeyTarget(overlay);
+            doc.addEventListener("keydown", docGuideEsc, true);
+            overlayDisposables.add(releaseGuide);
             doc.body.appendChild(overlay);
             closeBtn.focus({preventScroll: true});
         };
@@ -3691,7 +3871,8 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
                 setStatus(t("snippetUnavailable"), "blocked");
                 return;
             }
-            if (latest.type === "js" && !latest.enabled && typeof win.confirm === "function" && !win.confirm(t("snippetConfirmJS"))) return;
+            if (latest.type === "js" && !latest.enabled && !await confirmStudioDialog(t("snippetEnable"), t("snippetConfirmJS"))) return;
+            if (disposed) return;
             catalogToggleBusy.add(item.id);
             render();
             try {
@@ -4043,6 +4224,7 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
         picker.appendChild(sheet);
         root.appendChild(picker);
         const keydown = (event) => {
+            if (!isTopOverlayKeyTarget(picker)) return;
             if (queryComposing || event.isComposing || event.keyCode === 229) return;
             if (event.key === "Escape") {
                 event.preventDefault();
@@ -4098,8 +4280,9 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
             }
         };
         // The host also listens for Escape. Capture while the nested selector is open.
+        pushOverlayKeyTarget(picker);
         doc.addEventListener("keydown", keydown, true);
-        pickerRelease = () => { storePreview?.dispose(); doc.removeEventListener("keydown", keydown, true); };
+        pickerRelease = () => { popOverlayKeyTarget(picker); storePreview?.dispose(); doc.removeEventListener("keydown", keydown, true); };
         render(); query.focus();
     }
     syncFields();
@@ -4186,6 +4369,13 @@ function mountSnippetStudio(root, {i18n = {}, getConfig = () => ({}), store = cr
             importPlanCancel?.();
             importPlanDialog?.destroy?.();
             importPlanDialog = null;
+            groupNameDialog?.destroy?.();
+            groupNameDialog = null;
+            restoreDialog?.destroy?.();
+            restoreDialog = null;
+            for (const release of Array.from(overlayDisposables)) release();
+            overlayDisposables.clear();
+            overlayKeyStack.length = 0;
             aiGeneration += 1;
             cleanupAIThinking(false);
             session.draft = {...draft};

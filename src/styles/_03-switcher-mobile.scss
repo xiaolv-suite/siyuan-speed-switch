@@ -171,7 +171,7 @@
                 width: 100%;
                 height: var(--sw-control-h);
                 padding-left: 30px;
-                padding-right: 56px;
+                padding-right: 68px;
                 border: 1px solid var(--sw-color-line-soft, var(--sw-color-line));
                 background: var(--sw-control-bg);
                 box-shadow: none;
@@ -192,7 +192,7 @@
 
             .sw__search-clear {
                 position: absolute;
-                right: 30px;
+                right: 42px;
                 top: 50%;
                 transform: translateY(-50%);
                 display: inline-flex;
@@ -340,13 +340,6 @@
             align-items: center;
             gap: var(--sw-space-sm, 6px);
             min-width: 0;
-
-            .sw__select-label {
-                flex: none;
-                font-size: var(--sw-font-sm, 12px);
-                color: var(--sw-color-text-muted);
-                white-space: nowrap;
-            }
 
             .sw__sort {
                 flex: 0 1 132px;
@@ -1314,10 +1307,10 @@
                 mark {
                     padding: 1px var(--sw-space-2xs, 2px);
                     border-radius: 3px;
-                    background: color-mix(in srgb, var(--sw-color-accent, var(--sw-color-accent)) 22%, transparent);
-                    color: var(--sw-color-accent, var(--sw-color-accent));
+                    background: color-mix(in srgb, var(--sw-color-accent) 18%, transparent);
+                    color: color-mix(in srgb, var(--sw-color-accent) 45%, var(--sw-color-text));
                     font-weight: 700;
-                    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sw-color-accent, var(--sw-color-accent)) 30%, transparent);
+                    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sw-color-accent) 30%, transparent);
                 }
             }
 
@@ -1499,7 +1492,6 @@
                     border-radius: var(--sw-radius-card, 12px);
                     background: color-mix(in srgb, var(--sw-color-surface) 92%, var(--sw-color-bg));
 
-                    .sw__doc-preview-empty-icon { font-size: 28px; margin-bottom: var(--sw-space-md, 8px); }
                     .sw__doc-preview-empty-text { font-size: 13px; font-weight: 500; color: var(--sw-color-text-subtle); }
                     .sw__doc-preview-empty-sub { font-size: 11px; color: var(--sw-color-text-muted); margin-top: var(--sw-space-xs, 4px); }
                 }
@@ -1542,19 +1534,8 @@
                         line-height: var(--sw-leading-body, 1.5);
                         transition: transform $sw-dur-fast $sw-ease, background-color $sw-dur-fast $sw-ease, color $sw-dur-fast $sw-ease;
 
-                        &:hover {
-                            background: var(--sw-color-accent-soft);
-                            color: var(--sw-color-accent);
-                            transform: translateY(-0.5px);
-                        }
-
                         &:active {
                             transform: translateY(0.5px) scale(0.96);
-                        }
-
-                        &:focus-visible {
-                            outline: none;
-                            box-shadow: var(--sw-focus-glow);
                         }
                         cursor: pointer;
 
@@ -2258,10 +2239,6 @@
                 flex-basis: 140px;
             }
 
-            .sw__select-label {
-                display: none;
-            }
-
             .sw__fav-trigger,
             .sw__select-wrap .sw__sort {
                 min-width: 78px;
@@ -2743,6 +2720,14 @@
                     flex: 1 1 128px;
                     // 保底最小宽：单行空间不足时搜索框也不允许被压缩消失
                     min-width: 120px;
+
+                    .sw__search {
+                        padding-right: 78px;
+                    }
+
+                    .sw__search-clear {
+                        right: 52px;
+                    }
                 }
 
                 .sw__sort {
@@ -2822,6 +2807,14 @@
 
                 &.sw__mobile-grid--double {
                     grid-template-columns: 1fr 1fr;
+
+                    .sw__mobile-card {
+                        padding-bottom: 30px;
+
+                        .sw__meta {
+                            padding-right: var(--sw-space-md, 8px);
+                        }
+                    }
                 }
 
                 &.sw__mobile-grid--auto {
@@ -2829,6 +2822,14 @@
 
                     @media (min-width: 480px) and (orientation: landscape) {
                         grid-template-columns: 1fr 1fr;
+
+                        .sw__mobile-card {
+                            padding-bottom: 30px;
+
+                            .sw__meta {
+                                padding-right: var(--sw-space-md, 8px);
+                            }
+                        }
                     }
                 }
             }

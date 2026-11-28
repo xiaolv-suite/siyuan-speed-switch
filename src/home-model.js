@@ -70,15 +70,18 @@ function applyWorkbenchScenePreset(state, presetId, device = "desktop") {
     const instances = [];
     const layoutEntries = [];
     const presetIds = new Set();
+    const presetModuleIds = new Set();
     matched.widgets.forEach((item, index) => {
         const {moduleId, ...layout} = item;
         presetIds.add(moduleId);
-        const existing = sourceInstanceMap.get(moduleId);
+        presetModuleIds.add(moduleId);
+        const existing = sourceInstanceMap.get(moduleId)
+            || sourceInstances.find((candidate) => candidate?.moduleId === moduleId && candidate.config && typeof candidate.config === "object" && !Array.isArray(candidate.config) && Object.keys(candidate.config).length > 0);
         instances.push({
             instanceId: moduleId,
             moduleId,
             enabled: true,
-            config: existing && existing.config && typeof existing.config === "object"
+            config: existing && existing.config && typeof existing.config === "object" && !Array.isArray(existing.config)
                 ? {...existing.config}
                 : (moduleId === "external-local-time" ? {showSeconds: "否"} : {}),
         });
@@ -90,7 +93,8 @@ function applyWorkbenchScenePreset(state, presetId, device = "desktop") {
         });
     });
 
-    // R9: 保留其他端（移动端/侧栏）独有布局引用的组件实例，防止 normalizeHomeState 误抹
+    // R9: 保留其他端（移动端/侧栏）独有布局引用的组件实例，防止 normalizeHomeState 误抹；
+    // 同时保留曾自定义过 config 的非预设组件实例，切换预设后再切回/重新添加时不丢失参数。
     const otherDeviceIds = new Set();
     ["desktop", "sidebar", "mobile"].forEach((d) => {
         if (d === targetDevice) return;
@@ -100,9 +104,17 @@ function applyWorkbenchScenePreset(state, presetId, device = "desktop") {
         });
     });
     sourceInstances.forEach((inst) => {
-        if (inst && inst.instanceId && otherDeviceIds.has(inst.instanceId) && !presetIds.has(inst.instanceId)) {
+        if (!inst || !inst.instanceId || presetIds.has(inst.instanceId)) return;
+        const hasCustomConfig = Boolean(
+            inst.config && typeof inst.config === "object" && !Array.isArray(inst.config)
+            && Object.keys(inst.config).length > 0,
+        );
+        if (otherDeviceIds.has(inst.instanceId) || (hasCustomConfig && !presetModuleIds.has(inst.moduleId))) {
             presetIds.add(inst.instanceId);
-            instances.push(inst);
+            instances.push({
+                ...inst,
+                config: inst.config && typeof inst.config === "object" && !Array.isArray(inst.config) ? {...inst.config} : {},
+            });
         }
     });
 
@@ -181,422 +193,438 @@ const CONDITIONAL_MODULES = new Set([
     "current-document-outline", "today-reservations", "journal-calendar", "writing-streak", "plugin-commands",
 ]);
 
+const _ynOpts = ["是", "否"];
+const _nyOpts = ["否", "是"];
+const yn = (key, label, defaults = "是") => ({key, label, type: "select", options: _ynOpts, defaults});
+const ny = (key, label) => ({key, label, type: "select", options: _nyOpts, defaults: "否"});
+const sel = (key, label, options, defaults) => ({key, label, type: "select", options, defaults});
+const num = (key, label, min, max, defaults) => ({key, label, type: "number", min, max, defaults});
+const txt = (key, label, defaults = "") => ({key, label, type: "text", defaults});
+const nb = (label = "限定笔记本") => ({key: "notebook", label, type: "notebook"});
+const mod = (moduleId, title, icon, sizes, configSchema, extra) => ({
+    moduleId, title, icon, category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes, protocolVersion: 2, configSchema, ...extra,
+});
+const extMod = (moduleId, title, icon, sizes, configSchema, extra) =>
+    mod(moduleId, title, icon, sizes, configSchema, {availability: "external", ...extra});
+const checkinMod = (moduleId, title, icon, sizes, order, configSchema, extra) =>
+    extMod(moduleId, title, icon, sizes, configSchema, {source: {pluginId: "siyuan-checkin", name: "小驴打卡", icon: "iconCheck", order}, ...extra});
+
 const DEFAULT_MODULES = Object.freeze([
-    {moduleId: "recent-documents", title: "近期文档", icon: "iconHistory", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "wide", "large", "full"], protocolVersion: 2, configSchema: [
-        {key: "limit", label: "显示条数", type: "number", min: 1, max: 8, defaults: 8},
-        {key: "showPath", label: "显示文档路径", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showRank", label: "显示最近序号", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "today-journal", title: "今日日记", icon: "iconCalendar", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["xs", "small"], protocolVersion: 2, configSchema: [
-        {key: "notebook", label: "日记笔记本", type: "notebook"},
-    ]},
-    {moduleId: "today-tasks", title: "今日待办", icon: "iconCheck", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "tall", "large", "full"], protocolVersion: 2, configSchema: [
-        {key: "limit", label: "条数上限", type: "number", min: 1, max: 5, defaults: 5},
-        {key: "allDocuments", label: "扫描全部文档", type: "select", options: ["否", "是"], defaults: "否"},
-        {key: "notebook", label: "限定笔记本", type: "notebook"},
-        {key: "showCompleted", label: "显示已完成", type: "select", options: ["否", "是"], defaults: "否"},
-        {key: "days", label: "时间范围（天）", type: "number", min: 7, max: 365, defaults: 30},
-        {key: "query", label: "筛选待办或文档", type: "text", defaults: ""},
-        {key: "sortBy", label: "排序方式", type: "select", options: ["最近更新", "文档名称"], defaults: "最近更新"},
-        {key: "showDocument", label: "显示来源文档", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showPath", label: "显示文档路径", type: "select", options: ["否", "是"], defaults: "否"},
-        {key: "showRank", label: "显示序号", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "fixed-document", title: "指定文档", icon: "iconFile", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["xs", "small", "medium"], protocolVersion: 2, configSchema: [
+    mod("recent-documents", "近期文档", "iconHistory", ["small", "medium", "wide", "large", "full"], [
+        num("limit", "显示条数", 1, 8, 8),
+        yn("showPath", "显示文档路径"),
+        ny("showRank", "显示最近序号"),
+    ]),
+    mod("today-journal", "今日日记", "iconCalendar", ["xs", "small"], [
+        nb("日记笔记本"),
+    ]),
+    mod("today-tasks", "今日待办", "iconCheck", ["small", "medium", "tall", "large", "full"], [
+        num("limit", "条数上限", 1, 5, 5),
+        ny("allDocuments", "扫描全部文档"),
+        nb(),
+        ny("showCompleted", "显示已完成"),
+        num("days", "时间范围（天）", 7, 365, 30),
+        txt("query", "筛选待办或文档"),
+        sel("sortBy", "排序方式", ["最近更新", "文档名称"], "最近更新"),
+        yn("showDocument", "显示来源文档"),
+        ny("showPath", "显示文档路径"),
+        ny("showRank", "显示序号"),
+    ]),
+    mod("fixed-document", "指定文档", "iconFile", ["xs", "small", "medium"], [
         {key: "docId", label: "文档 ID", type: "document", defaults: ""},
-        {key: "title", label: "显示名称", type: "text", defaults: ""},
-        {key: "showPath", label: "显示文档路径", type: "select", options: ["是", "否"], defaults: "是"},
-    ]},
-    {moduleId: "favorites", title: "收藏", icon: "iconStar", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "wide", "large", "full"], protocolVersion: 2, configSchema: [
-        {key: "limit", label: "显示条数", type: "number", min: 1, max: 8, defaults: 8},
+        txt("title", "显示名称"),
+        yn("showPath", "显示文档路径"),
+    ]),
+    mod("favorites", "收藏", "iconStar", ["small", "medium", "wide", "large", "full"], [
+        num("limit", "显示条数", 1, 8, 8),
         {key: "group", label: "收藏分组", type: "favorite-group", defaults: ""},
-        {key: "showGroup", label: "显示所属分组", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showPath", label: "显示文档路径", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showUnavailable", label: "显示失效收藏", type: "select", options: ["是", "否"], defaults: "是"},
-    ]},
-    {moduleId: "document-sets", title: "文档集", icon: "iconLayout", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["medium", "tall", "large"], protocolVersion: 2, configSchema: [
-        {key: "limit", label: "显示条数", type: "number", min: 1, max: 5, defaults: 5},
-        {key: "sortBy", label: "排序方式", type: "select", options: ["最近使用", "名称", "文档数"], defaults: "最近使用"},
-        {key: "showCount", label: "显示文档数", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showUpdated", label: "显示最近使用日期", type: "select", options: ["是", "否"], defaults: "是"},
-    ]},
-    {moduleId: "tags", title: "标签", icon: "iconTags", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "tall"], protocolVersion: 2, configSchema: [
-        {key: "limit", label: "显示条数", type: "number", min: 1, max: 12, defaults: 8},
-        {key: "query", label: "筛选标签", type: "text", defaults: ""},
-        {key: "sortBy", label: "排序方式", type: "select", options: ["数量", "名称"], defaults: "数量"},
-        {key: "showCount", label: "显示块数量", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showHierarchy", label: "显示标签层级", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showRank", label: "显示序号", type: "select", options: ["是", "否"], defaults: "否"},
-    ]},
-    {moduleId: "bookmarks", title: "书签", icon: "iconBookmark", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "tall"], protocolVersion: 2, configSchema: [
-        {key: "limit", label: "显示条数", type: "number", min: 1, max: 6, defaults: 6},
-        {key: "query", label: "筛选书签", type: "text", defaults: ""},
-        {key: "sortBy", label: "排序方式", type: "select", options: ["数量", "名称"], defaults: "数量"},
-        {key: "showCount", label: "显示块数量", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showEmpty", label: "显示空书签", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showRank", label: "显示序号", type: "select", options: ["是", "否"], defaults: "否"},
-    ]},
-    {moduleId: "journal-monthly", title: "本月日记", icon: "iconCalendar", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["medium", "wide", "large"], protocolVersion: 2, configSchema: [
-        {key: "limit", label: "条数上限", type: "number", min: 1, max: 20, defaults: 12},
-        {key: "notebook", label: "限定笔记本", type: "notebook"},
-        {key: "monthOffset", label: "月份偏移", type: "number", min: -24, max: 24, defaults: 0},
-        {key: "sortBy", label: "排序方式", type: "select", options: ["日期", "最近更新"], defaults: "日期"},
-        {key: "showPath", label: "显示文档路径", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showUpdated", label: "显示更新时间", type: "select", options: ["否", "是"], defaults: "否"},
-        {key: "showRank", label: "显示序号", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "note-stats", title: "笔记统计", icon: "iconGraph", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["medium", "wide"], protocolVersion: 2, configSchema: [
-        {key: "notebook", label: "限定笔记本", type: "notebook"},
-        {key: "days", label: "趋势窗口（天）", type: "number", min: 7, max: 90, defaults: 7},
-        {key: "primaryMetric", label: "主指标", type: "select", options: ["文档数", "估算字数"], defaults: "文档数"},
-        {key: "showTrend", label: "显示环比趋势", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showStrength", label: "显示写作强度", type: "select", options: ["是", "否"], defaults: "否"},
-    ]},
-    {moduleId: "year-progress", title: "年度进度", icon: "iconRefresh", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["xs", "small", "medium"], protocolVersion: 2, configSchema: [
-        {key: "period", label: "统计周期", type: "select", options: ["年度", "季度", "月份"], defaults: "年度"},
-        {key: "showElapsed", label: "显示已过天数", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showRemaining", label: "显示剩余天数", type: "select", options: ["是", "否"], defaults: "是"},
-    ]},
-    {moduleId: "external-local-time", title: "时间与日期", icon: "iconClock", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["xs", "small", "medium"], protocolVersion: 2, configSchema: [
-        {key: "hourFormat", label: "小时制", type: "select", options: ["24 小时制", "12 小时制"], defaults: "24 小时制"},
-        {key: "showSeconds", label: "显示秒", type: "select", options: ["否", "是"], defaults: "否"},
-        {key: "showDate", label: "显示日期", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "emphasis", label: "数字大小", type: "select", options: ["标准", "大", "特大"], defaults: "标准"},
-    ]},
-    {moduleId: "external-world-clock", title: "世界时钟", icon: "iconClock", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["xs", "small", "medium", "wide", "large", "full"], protocolVersion: 2, configSchema: [
-        {key: "cities", label: "城市（中文名或 IANA，逗号分隔，如 上海,东京）", type: "text", defaults: ""},
-        {key: "hourFormat", label: "小时制", type: "select", options: ["24 小时制", "12 小时制"], defaults: "24 小时制"},
-    ]},
-    {moduleId: "external-weather-open-meteo", title: "近期天气", icon: "iconCloud", category: "siyuan", availability: "external", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "wide", "large"], protocolVersion: 2, configSchema: [
-        {key: "city", label: "城市或邮编", type: "text", defaults: ""},
-        {key: "temperatureUnit", label: "温度单位", type: "select", options: ["°C", "°F"], defaults: "°C"},
-        {key: "forecastDays", label: "预报天数", type: "number", min: 2, max: 5, defaults: 4},
-        {key: "showApparent", label: "显示体感温度", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showWind", label: "显示风速", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "external-air-quality", title: "空气质量", icon: "iconCloud", category: "siyuan", availability: "external", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "wide"], protocolVersion: 2, configSchema: [
-        {key: "city", label: "城市或邮编（与天气相互独立）", type: "text", defaults: ""},
-        {key: "showPollutants", label: "显示更多污染物", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "external-anime-bangumi", title: "每日放送", icon: "iconVideo", category: "siyuan", availability: "external", supportedDevices: DEVICES, readOnly: true, sizes: ["medium", "wide", "large", "full"], protocolVersion: 2, viewType: "media", configSchema: [
-        {key: "dayRange", label: "放送范围", type: "select", options: ["今天", "明天", "本周"], defaults: "今天"},
-        {key: "limit", label: "条目上限", type: "number", min: 2, max: 12, defaults: 6},
-        {key: "showCovers", label: "显示封面", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showDates", label: "显示日期", type: "select", options: ["否", "是"], defaults: "否"},
-        {key: "showScore", label: "显示评分", type: "select", options: ["是", "否"], defaults: "是"},
-    ]},
+        yn("showGroup", "显示所属分组"),
+        yn("showPath", "显示文档路径"),
+        yn("showUnavailable", "显示失效收藏"),
+    ]),
+    mod("document-sets", "文档集", "iconLayout", ["medium", "tall", "large"], [
+        num("limit", "显示条数", 1, 5, 5),
+        sel("sortBy", "排序方式", ["最近使用", "名称", "文档数"], "最近使用"),
+        yn("showCount", "显示文档数"),
+        yn("showUpdated", "显示最近使用日期"),
+    ]),
+    mod("tags", "标签", "iconTags", ["small", "medium", "tall"], [
+        num("limit", "显示条数", 1, 12, 8),
+        txt("query", "筛选标签"),
+        sel("sortBy", "排序方式", ["数量", "名称"], "数量"),
+        yn("showCount", "显示块数量"),
+        yn("showHierarchy", "显示标签层级"),
+        yn("showRank", "显示序号", "否"),
+    ]),
+    mod("bookmarks", "书签", "iconBookmark", ["small", "medium", "tall"], [
+        num("limit", "显示条数", 1, 6, 6),
+        txt("query", "筛选书签"),
+        sel("sortBy", "排序方式", ["数量", "名称"], "数量"),
+        yn("showCount", "显示块数量"),
+        yn("showEmpty", "显示空书签"),
+        ny("showRank", "显示序号"),
+    ]),
+    mod("journal-monthly", "本月日记", "iconCalendar", ["medium", "wide", "large"], [
+        num("limit", "条数上限", 1, 20, 12),
+        nb(),
+        num("monthOffset", "月份偏移", -24, 24, 0),
+        sel("sortBy", "排序方式", ["日期", "最近更新"], "日期"),
+        yn("showPath", "显示文档路径"),
+        ny("showUpdated", "显示更新时间"),
+        ny("showRank", "显示序号"),
+    ]),
+    mod("note-stats", "笔记统计", "iconGraph", ["medium", "wide"], [
+        nb(),
+        num("days", "趋势窗口（天）", 7, 90, 7),
+        sel("primaryMetric", "主指标", ["文档数", "估算字数"], "文档数"),
+        yn("showTrend", "显示环比趋势"),
+        yn("showStrength", "显示写作强度", "否"),
+    ]),
+    mod("year-progress", "年度进度", "iconRefresh", ["xs", "small", "medium"], [
+        sel("period", "统计周期", ["年度", "季度", "月份"], "年度"),
+        yn("showElapsed", "显示已过天数"),
+        yn("showRemaining", "显示剩余天数"),
+    ]),
+    mod("external-local-time", "时间与日期", "iconClock", ["xs", "small", "medium"], [
+        sel("hourFormat", "小时制", ["24 小时制", "12 小时制"], "24 小时制"),
+        ny("showSeconds", "显示秒"),
+        yn("showDate", "显示日期"),
+        sel("emphasis", "数字大小", ["标准", "大", "特大"], "标准"),
+    ]),
+    mod("external-world-clock", "世界时钟", "iconClock", ["xs", "small", "medium", "wide", "large", "full"], [
+        txt("cities", "城市（中文名或 IANA，逗号分隔，如 上海,东京）"),
+        sel("hourFormat", "小时制", ["24 小时制", "12 小时制"], "24 小时制"),
+    ]),
+    extMod("external-weather-open-meteo", "近期天气", "iconCloud", ["small", "medium", "wide", "large"], [
+        txt("city", "城市或邮编"),
+        sel("temperatureUnit", "温度单位", ["°C", "°F"], "°C"),
+        num("forecastDays", "预报天数", 2, 5, 4),
+        yn("showApparent", "显示体感温度"),
+        ny("showWind", "显示风速"),
+    ]),
+    extMod("external-air-quality", "空气质量", "iconCloud", ["small", "medium", "wide"], [
+        txt("city", "城市或邮编（与天气相互独立）"),
+        ny("showPollutants", "显示更多污染物"),
+    ]),
+    extMod("external-anime-bangumi", "每日放送", "iconVideo", ["medium", "wide", "large", "full"], [
+        sel("dayRange", "放送范围", ["今天", "明天", "本周"], "今天"),
+        num("limit", "条目上限", 2, 12, 6),
+        yn("showCovers", "显示封面"),
+        ny("showDates", "显示日期"),
+        yn("showScore", "显示评分"),
+    ], {viewType: "media"}),
     // T-6971 批次⑥：列表流家族行流组件不做英雄位（full），声明档位一律 M/W/L
-    {moduleId: "external-hot-news-dailyhot", title: "热搜事件", icon: "iconGraph", category: "siyuan", availability: "external", supportedDevices: DEVICES, readOnly: true, sizes: ["medium", "wide", "large"], protocolVersion: 2, configSchema: [
-        {key: "endpoint", label: "DailyHotApi 完整接口", type: "text", defaults: ""},
-        {key: "apiBase", label: "基址（可选，填后按路由拼接口）", type: "text", defaults: ""},
-        {key: "route", label: "热榜路由", type: "select", options: ["weibo", "zhihu", "bilibili", "baidu", "douyin", "douban-movie", "ithome", "36kr", "sspai", "v2ex"], defaults: "weibo"},
-        {key: "limit", label: "条目上限", type: "number", min: 3, max: 12, defaults: 8},
-        {key: "showHot", label: "显示热度", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showTime", label: "显示时间", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showRank", label: "显示排名", type: "select", options: ["是", "否"], defaults: "是"},
-    ]},
-    {moduleId: "external-news-hackernews", title: "Hacker News 热门", icon: "iconGraph", category: "siyuan", availability: "external", supportedDevices: DEVICES, readOnly: true, sizes: ["medium", "wide", "large"], protocolVersion: 2, configSchema: [
-        {key: "board", label: "榜单（非首页榜单会在标题追加标注）", type: "select", options: ["首页", "最佳", "问答", "展示"], defaults: "首页"},
-        {key: "limit", label: "条目上限", type: "number", min: 3, max: 12, defaults: 8},
-        {key: "showMeta", label: "显示得分", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showTime", label: "显示时间", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "external-status-uptimekuma", title: "服务状态", icon: "iconCloud", category: "siyuan", availability: "external", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "wide"], protocolVersion: 2, configSchema: [
-        {key: "endpoint", label: "Uptime Kuma 完整地址", type: "text", defaults: ""},
-        {key: "slug", label: "状态页 slug", type: "text", defaults: ""},
-        {key: "showPing", label: "显示延迟", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showUptime", label: "显示在线率", type: "select", options: ["是", "否"], defaults: "是"},
-    ]},
-    {moduleId: "external-fx-frankfurter", title: "汇率参考", icon: "iconGraph", category: "siyuan", availability: "external", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "wide"], protocolVersion: 2, configSchema: [
-        {key: "base", label: "基准货币（3 位代码）", type: "text", defaults: "CNY"},
-        {key: "quotes", label: "目标货币（逗号分隔，1-6 个）", type: "text", defaults: "USD,EUR,JPY,GBP,HKD"},
-        {key: "showDate", label: "显示牌价日期", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showInverse", label: "显示反向汇率", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "external-rss-miniflux", title: "未读文章", icon: "iconRss", category: "siyuan", availability: "external", supportedDevices: DEVICES, readOnly: true, sizes: ["medium", "wide", "large"], protocolVersion: 2, configSchema: [
-        {key: "endpoint", label: "Miniflux 实例地址", type: "text", defaults: ""},
+    extMod("external-hot-news-dailyhot", "热搜事件", "iconGraph", ["medium", "wide", "large"], [
+        txt("endpoint", "DailyHotApi 完整接口"),
+        txt("apiBase", "基址（可选，填后按路由拼接口）"),
+        sel("route", "热榜路由", ["weibo", "zhihu", "bilibili", "baidu", "douyin", "douban-movie", "ithome", "36kr", "sspai", "v2ex"], "weibo"),
+        num("limit", "条目上限", 3, 12, 8),
+        yn("showHot", "显示热度"),
+        yn("showTime", "显示时间"),
+        yn("showRank", "显示排名"),
+    ]),
+    extMod("external-news-hackernews", "Hacker News 热门", "iconGraph", ["medium", "wide", "large"], [
+        sel("board", "榜单（非首页榜单会在标题追加标注）", ["首页", "最佳", "问答", "展示"], "首页"),
+        num("limit", "条目上限", 3, 12, 8),
+        yn("showMeta", "显示得分"),
+        ny("showTime", "显示时间"),
+    ]),
+    extMod("external-status-uptimekuma", "服务状态", "iconCloud", ["small", "medium", "wide"], [
+        txt("endpoint", "Uptime Kuma 完整地址"),
+        txt("slug", "状态页 slug"),
+        yn("showPing", "显示延迟"),
+        yn("showUptime", "显示在线率"),
+    ]),
+    extMod("external-fx-frankfurter", "汇率参考", "iconGraph", ["small", "medium", "wide"], [
+        txt("base", "基准货币（3 位代码）", "CNY"),
+        txt("quotes", "目标货币（逗号分隔，1-6 个）", "USD,EUR,JPY,GBP,HKD"),
+        yn("showDate", "显示牌价日期"),
+        ny("showInverse", "显示反向汇率"),
+    ]),
+    extMod("external-rss-miniflux", "未读文章", "iconRss", ["medium", "wide", "large"], [
+        txt("endpoint", "Miniflux 实例地址"),
         {key: "token", label: "API Token（设置 → API 密钥）", type: "secret", defaults: ""},
         {key: "categoryId", label: "分类筛选", type: "miniflux-category", defaults: ""},
-        {key: "limit", label: "条目上限", type: "number", min: 1, max: 50, defaults: 20},
-        {key: "sortBy", label: "排序", type: "select", options: ["最新优先", "最旧优先"], defaults: "最新优先"},
-        {key: "showDate", label: "显示日期", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showFeed", label: "显示来源", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showRank", label: "显示序号", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "external-rss-subscription", title: "RSS 订阅", icon: "iconRss", category: "siyuan", availability: "external", supportedDevices: DEVICES, readOnly: true, sizes: ["medium", "wide", "large"], protocolVersion: 2, configSchema: [
-        {key: "url", label: "RSS / Atom 订阅地址", type: "text", defaults: ""},
-        {key: "title", label: "显示标题（可选，留空读 feed 自带标题）", type: "text", defaults: ""},
-        {key: "maxItems", label: "条目上限", type: "number", min: 1, max: 30, defaults: 10},
-        {key: "showDate", label: "显示日期", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showFeedTitle", label: "显示来源名", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showRank", label: "显示序号", type: "select", options: ["否", "是"], defaults: "否"},
-        {key: "hideRead", label: "只看未读", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "external-ical-events", title: "iCal 日程", icon: "iconCalendar", category: "siyuan", availability: "external", supportedDevices: DEVICES, readOnly: true, sizes: ["medium", "wide", "large", "full"], protocolVersion: 2, configSchema: [
-        {key: "url", label: "iCal 订阅地址（.ics）", type: "text", defaults: ""},
-        {key: "windowDays", label: "日程窗口（天）", type: "number", min: 1, max: 60, defaults: 14},
-        {key: "maxEvents", label: "条目上限", type: "number", min: 1, max: 12, defaults: 6},
-    ]},
-    {moduleId: "external-github-contrib", title: "GitHub 贡献", icon: "iconGraph", category: "siyuan", availability: "external", supportedDevices: DEVICES, readOnly: true, sizes: ["medium", "wide", "large", "full"], protocolVersion: 2, viewType: "heatmap", configSchema: [
-        {key: "username", label: "GitHub 用户名", type: "text", defaults: ""},
-        {key: "windowDays", label: "统计窗口（天）", type: "number", min: 28, max: 366, defaults: 84},
+        num("limit", "条目上限", 1, 50, 20),
+        sel("sortBy", "排序", ["最新优先", "最旧优先"], "最新优先"),
+        yn("showDate", "显示日期"),
+        yn("showFeed", "显示来源"),
+        ny("showRank", "显示序号"),
+    ]),
+    extMod("external-rss-subscription", "RSS 订阅", "iconRss", ["medium", "wide", "large"], [
+        txt("url", "RSS / Atom 订阅地址"),
+        txt("title", "显示标题（可选，留空读 feed 自带标题）"),
+        num("maxItems", "条目上限", 1, 30, 10),
+        yn("showDate", "显示日期"),
+        yn("showFeedTitle", "显示来源名"),
+        ny("showRank", "显示序号"),
+        ny("hideRead", "只看未读"),
+    ]),
+    extMod("external-ical-events", "iCal 日程", "iconCalendar", ["medium", "wide", "large", "full"], [
+        txt("url", "iCal 订阅地址（.ics）"),
+        num("windowDays", "日程窗口（天）", 1, 60, 14),
+        num("maxEvents", "条目上限", 1, 12, 6),
+    ]),
+    extMod("external-github-contrib", "GitHub 贡献", "iconGraph", ["medium", "wide", "large", "full"], [
+        txt("username", "GitHub 用户名"),
+        num("windowDays", "统计窗口（天）", 28, 366, 84),
         {key: "token", label: "个人访问令牌（可选，仅经请求头传递）", type: "secret", defaults: ""},
-    ]},
-    {moduleId: "external-quote-daily", title: "每日引言", icon: "iconQuote", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["xs", "small", "medium"], protocolVersion: 2, configSchema: [
+    ], {viewType: "heatmap"}),
+    mod("external-quote-daily", "每日引言", "iconQuote", ["xs", "small", "medium"], [
         {key: "quotes", label: "自定义语录（每行一条，可选 —— 分隔出处）", type: "textarea", defaults: ""},
-        {key: "showSource", label: "显示出处", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "emphasis", label: "文字大小", type: "select", options: ["标准", "大", "特大"], defaults: "标准"},
-    ]},
-    {moduleId: "external-device-battery", title: "设备电量", icon: "iconDashboard", category: "siyuan", supportedDevices: ["desktop", "sidebar"], readOnly: true, sizes: ["xs", "small", "medium"], protocolVersion: 2, configSchema: [
-        {key: "showEstimate", label: "显示预计时间", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showSource", label: "显示数据来源行", type: "select", options: ["是", "否"], defaults: "是"},
-    ]},
-    {moduleId: "external-news-newsnow", title: "实时资讯", icon: "iconList", category: "siyuan", availability: "external", supportedDevices: DEVICES, readOnly: true, sizes: ["medium", "wide", "large"], protocolVersion: 2, configSchema: [
-        {key: "endpoint", label: "NewsNow 完整接口", type: "text", defaults: ""},
-        {key: "limit", label: "条目上限", type: "number", min: 3, max: 12, defaults: 8},
-        {key: "showHot", label: "显示热度", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showTime", label: "显示时间", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showRank", label: "显示排名", type: "select", options: ["是", "否"], defaults: "是"},
-    ]},
+        yn("showSource", "显示出处"),
+        sel("emphasis", "文字大小", ["标准", "大", "特大"], "标准"),
+    ]),
+    mod("external-device-battery", "设备电量", "iconDashboard", ["xs", "small", "medium"], [
+        yn("showEstimate", "显示预计时间"),
+        yn("showSource", "显示数据来源行"),
+    ], {supportedDevices: ["desktop", "sidebar"]}),
+    extMod("external-news-newsnow", "实时资讯", "iconList", ["medium", "wide", "large"], [
+        txt("endpoint", "NewsNow 完整接口"),
+        num("limit", "条目上限", 3, 12, 8),
+        yn("showHot", "显示热度"),
+        yn("showTime", "显示时间"),
+        yn("showRank", "显示排名"),
+    ]),
     {moduleId: "external-activitywatch-time", title: "使用时长", icon: "iconClock", category: "siyuan", availability: "external", supportedDevices: ["desktop", "sidebar"], readOnly: true, sizes: ["small", "medium", "wide", "large", "full"], protocolVersion: 2, configSchema: [
-        {key: "endpoint", label: "ActivityWatch 本机地址", type: "text", defaults: "http://127.0.0.1:5600"},
-        {key: "hours", label: "统计范围（小时）", type: "number", min: 1, max: 168, defaults: 24},
-        {key: "limit", label: "应用上限", type: "number", min: 3, max: 10, defaults: 6},
-        {key: "showPercent", label: "显示时长占比", type: "select", options: ["否", "是"], defaults: "否"},
-        {key: "showRank", label: "显示排名", type: "select", options: ["是", "否"], defaults: "是"},
+        txt("endpoint", "ActivityWatch 本机地址", "http://127.0.0.1:5600"),
+        num("hours", "统计范围（小时）", 1, 168, 24),
+        num("limit", "应用上限", 3, 10, 6),
+        ny("showPercent", "显示时长占比"),
+        yn("showRank", "显示排名"),
         {key: "bucketId", label: "桶 ID（留空自动选择）", type: "activitywatch-bucket", defaults: ""},
     ]},
-    {moduleId: "recent-edits", title: "近期编辑", icon: "iconEdit", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["medium", "wide", "large"], protocolVersion: 2, configSchema: [
-        {key: "limit", label: "显示条数", type: "number", min: 1, max: 5, defaults: 5},
-        {key: "notebook", label: "限定笔记本", type: "notebook"},
-        {key: "days", label: "最近天数", type: "number", min: 1, max: 3650, defaults: 30},
-        {key: "query", label: "标题或路径过滤", type: "text", defaults: ""},
-        {key: "showPath", label: "显示文档路径", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showUpdated", label: "显示编辑时间", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showRank", label: "显示序号", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "flashcard-due", title: "闪卡待复习", icon: "iconClock", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "tall"], protocolVersion: 2, configSchema: [
-        {key: "notebook", label: "限定笔记本", type: "notebook"},
-        {key: "limit", label: "显示条数", type: "number", min: 1, max: 12, defaults: 8},
-        {key: "sortBy", label: "全部笔记本排序", type: "select", options: ["待复习数量", "笔记本顺序"], defaults: "待复习数量"},
-        {key: "showNotebook", label: "显示来源笔记本", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showPath", label: "显示文档路径", type: "select", options: ["否", "是"], defaults: "否"},
-        {key: "showRank", label: "显示序号", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "random-review", title: "随机回顾", icon: "iconRefresh", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "tall"], protocolVersion: 2, configSchema: [
-        {key: "days", label: "多久未看（天）", type: "number", min: 7, max: 3650, defaults: 90},
-        {key: "notebook", label: "限定笔记本", type: "notebook"},
+    mod("recent-edits", "近期编辑", "iconEdit", ["medium", "wide", "large"], [
+        num("limit", "显示条数", 1, 5, 5),
+        nb(),
+        num("days", "最近天数", 1, 3650, 30),
+        txt("query", "标题或路径过滤"),
+        yn("showPath", "显示文档路径"),
+        yn("showUpdated", "显示编辑时间"),
+        ny("showRank", "显示序号"),
+    ]),
+    mod("flashcard-due", "闪卡待复习", "iconClock", ["small", "medium", "tall"], [
+        nb(),
+        num("limit", "显示条数", 1, 12, 8),
+        sel("sortBy", "全部笔记本排序", ["待复习数量", "笔记本顺序"], "待复习数量"),
+        yn("showNotebook", "显示来源笔记本"),
+        ny("showPath", "显示文档路径"),
+        ny("showRank", "显示序号"),
+    ]),
+    mod("random-review", "随机回顾", "iconRefresh", ["small", "medium", "tall"], [
+        num("days", "多久未看（天）", 7, 3650, 90),
+        nb(),
         {key: "parentDocument", label: "限定父文档（随机选择其子文档）", type: "document", defaults: ""},
-        {key: "limit", label: "每批篇数", type: "number", min: 1, max: 6, defaults: 3},
-        {key: "showPath", label: "显示文档路径", type: "select", options: ["是", "否"], defaults: "是"},
-    ]},
-    {moduleId: "quick-capture", title: "快速记录", icon: "iconAdd", category: "siyuan", supportedDevices: DEVICES, readOnly: false, sizes: ["xs", "small", "medium"], protocolVersion: 2, configSchema: [
-        {key: "notebook", label: "目标日记笔记本", type: "notebook"},
-        {key: "initialText", label: "预填短语（最多 24 字）", type: "text", defaults: ""},
-        {key: "includeTime", label: "预填当前时间", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "clipped-unread", title: "剪藏待读", icon: "iconBookmark", category: "siyuan", availability: "external", source: {pluginId: "siyuan-clipper", name: "思源剪藏", icon: "iconBookmark", collection: "剪藏"}, supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "tall"], protocolVersion: 2, configSchema: [
-        {key: "tag", label: "标签名", type: "text", defaults: "剪藏"},
-        {key: "limit", label: "条数上限", type: "number", min: 1, max: 12, defaults: 8},
-        {key: "notebook", label: "限定笔记本", type: "notebook"},
-        {key: "sortBy", label: "排序方式", type: "select", options: ["最近剪藏", "名称"], defaults: "最近剪藏"},
-        {key: "showPath", label: "显示文档路径", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showUpdated", label: "显示最近剪藏时间", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showRank", label: "显示序号", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "on-this-day", title: "往年今日", icon: "iconClock", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "tall"], protocolVersion: 2, configSchema: [
-        {key: "limit", label: "条数上限", type: "number", min: 1, max: 3, defaults: 3},
-        {key: "notebook", label: "限定笔记本", type: "notebook"},
-        {key: "yearRange", label: "回看年份", type: "number", min: 1, max: 100, defaults: 20},
-        {key: "sortBy", label: "排序方式", type: "select", options: ["最近年份", "最早年份"], defaults: "最近年份"},
-        {key: "showYear", label: "显示年份", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showPath", label: "显示文档路径", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showRank", label: "显示序号", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
+        num("limit", "每批篇数", 1, 6, 3),
+        yn("showPath", "显示文档路径"),
+    ]),
+    mod("quick-capture", "快速记录", "iconAdd", ["xs", "small", "medium"], [
+        nb("目标日记笔记本"),
+        txt("initialText", "预填短语（最多 24 字）"),
+        ny("includeTime", "预填当前时间"),
+    ], {readOnly: false}),
+    extMod("clipped-unread", "剪藏待读", "iconBookmark", ["small", "medium", "tall"], [
+        txt("tag", "标签名", "剪藏"),
+        num("limit", "条数上限", 1, 12, 8),
+        nb(),
+        sel("sortBy", "排序方式", ["最近剪藏", "名称"], "最近剪藏"),
+        yn("showPath", "显示文档路径"),
+        yn("showUpdated", "显示最近剪藏时间"),
+        ny("showRank", "显示序号"),
+    ], {source: {pluginId: "siyuan-clipper", name: "思源剪藏", icon: "iconBookmark", collection: "剪藏"}}),
+    mod("on-this-day", "往年今日", "iconClock", ["small", "medium", "tall"], [
+        num("limit", "条数上限", 1, 3, 3),
+        nb(),
+        num("yearRange", "回看年份", 1, 100, 20),
+        sel("sortBy", "排序方式", ["最近年份", "最早年份"], "最近年份"),
+        yn("showYear", "显示年份"),
+        yn("showPath", "显示文档路径"),
+        ny("showRank", "显示序号"),
+    ]),
     // T-6971 批次⑦：今日写作 = 目标型组件，上限 M（规格卡建议 S/M）
-    {moduleId: "today-writing", title: "今日写作", icon: "iconEdit", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium"], protocolVersion: 2, configSchema: [
-        {key: "notebook", label: "限定笔记本", type: "notebook"},
-        {key: "goal", label: "每日字符目标", type: "number", min: 0, max: 50000, defaults: 1000},
-        {key: "showBlocks", label: "显示新增内容块", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showNewDocs", label: "显示新建文档", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showEditedDocs", label: "显示修订文档", type: "select", options: ["是", "否"], defaults: "是"},
-    ]},
-    {moduleId: "recent-writing-activity", title: "近期写作活跃度", icon: "iconChart", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["medium", "wide", "large"], protocolVersion: 2, configSchema: [
-        {key: "days", label: "统计天数", type: "number", min: 7, max: 366, defaults: 14},
-        {key: "notebook", label: "限定笔记本", type: "notebook"},
-        {key: "metric", label: "统计指标", type: "select", options: ["内容块", "新增字符"], defaults: "内容块"},
-        {key: "density", label: "图形密度", type: "select", options: ["每日", "紧凑"], defaults: "每日"},
-        {key: "showZero", label: "显示零值日期", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "view", label: "视图", type: "select", options: ["列表", "年历"], defaults: "列表"},
-        {key: "yearOffset", label: "年历年份偏移（0 为今年）", type: "number", min: -3, max: 0, defaults: 0},
-        {key: "showAverage", label: "显示日均值", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showStrength", label: "显示写作强度", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "recent-daily-notes", title: "近期日记", icon: "iconCalendar", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "wide"], protocolVersion: 2, configSchema: [
-        {key: "days", label: "回看天数", type: "number", min: 7, max: 60, defaults: 14},
-        {key: "limit", label: "条数上限", type: "number", min: 1, max: 5, defaults: 5},
-        {key: "notebook", label: "限定笔记本", type: "notebook"},
-        {key: "sortBy", label: "排序方式", type: "select", options: ["日期", "最近更新"], defaults: "日期"},
-        {key: "showPath", label: "显示文档路径", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showUpdated", label: "显示更新时间", type: "select", options: ["否", "是"], defaults: "否"},
-        {key: "showRank", label: "显示序号", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "document-relations-summary", title: "文档关系摘要", icon: "iconGraph", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "wide"], protocolVersion: 2, configSchema: [
-        {key: "limit", label: "条数上限", type: "number", min: 1, max: 6, defaults: 6},
-        {key: "relation", label: "关系类型", type: "select", options: ["全部", "子块", "引用"], defaults: "全部"},
-        {key: "query", label: "筛选关系内容", type: "text", defaults: ""},
-        {key: "showType", label: "显示关系类型", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showRank", label: "显示序号", type: "select", options: ["是", "否"], defaults: "否"},
-    ]},
-    {moduleId: "current-document-outline", title: "当前文档大纲", icon: "iconList", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "tall", "wide"], protocolVersion: 2, configSchema: [
-        {key: "limit", label: "标题上限", type: "number", min: 1, max: 8, defaults: 8},
-        {key: "query", label: "筛选标题", type: "text", defaults: ""},
-        {key: "maxDepth", label: "最大标题层级", type: "number", min: 1, max: 8, defaults: 8},
-        {key: "showLevel", label: "显示标题层级", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showRank", label: "显示序号", type: "select", options: ["是", "否"], defaults: "否"},
-    ]},
-    {moduleId: "today-reservations", title: "近期预约", icon: "iconClock", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "wide"], protocolVersion: 2, configSchema: [
-        {key: "days", label: "未来天数", type: "number", min: 0, max: 14, defaults: 3},
-        {key: "overdueDays", label: "包含过期天数（已停用）", type: "number", min: 0, max: 0, defaults: 0},
-        {key: "limit", label: "条数上限", type: "number", min: 1, max: 4, defaults: 4},
-        {key: "notebook", label: "限定笔记本", type: "notebook"},
-        {key: "query", label: "筛选预约内容或路径", type: "text", defaults: ""},
-        {key: "sortBy", label: "排序方式", type: "select", options: ["预约时间", "最近更新"], defaults: "预约时间"},
-        {key: "showDate", label: "显示预约日期", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showStatus", label: "显示今天或过期状态", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showPath", label: "显示所在路径", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showRank", label: "显示序号", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "journal-calendar", title: "日历月视图", icon: "iconCalendar", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["large", "full"], protocolVersion: 2, viewType: "calendar", configSchema: [
-        {key: "monthOffset", label: "月份偏移", type: "number", min: -24, max: 24, defaults: 0},
-        {key: "weekStart", label: "每周起始日", type: "select", options: ["周一", "周日"], defaults: "周一"},
-        {key: "showAdjacent", label: "显示相邻月份日期", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showLunar", label: "显示农历", type: "select", options: ["否", "是"], defaults: "否"},
-        {key: "showHolidays", label: "显示中国节假日", type: "select", options: ["否", "是"], defaults: "否"},
-        {key: "notebook", label: "限定笔记本", type: "notebook"},
-    ]},
+    mod("today-writing", "今日写作", "iconEdit", ["small", "medium"], [
+        nb(),
+        num("goal", "每日字符目标", 0, 50000, 1000),
+        yn("showBlocks", "显示新增内容块"),
+        yn("showNewDocs", "显示新建文档"),
+        yn("showEditedDocs", "显示修订文档"),
+    ]),
+    mod("recent-writing-activity", "近期写作活跃度", "iconChart", ["medium", "wide", "large"], [
+        num("days", "统计天数", 7, 366, 14),
+        nb(),
+        sel("metric", "统计指标", ["内容块", "新增字符"], "内容块"),
+        sel("density", "图形密度", ["每日", "紧凑"], "每日"),
+        yn("showZero", "显示零值日期"),
+        sel("view", "视图", ["列表", "年历"], "列表"),
+        num("yearOffset", "年历年份偏移（0 为今年）", -3, 0, 0),
+        yn("showAverage", "显示日均值"),
+        ny("showStrength", "显示写作强度"),
+    ]),
+    mod("recent-daily-notes", "近期日记", "iconCalendar", ["small", "medium", "wide"], [
+        num("days", "回看天数", 7, 60, 14),
+        num("limit", "条数上限", 1, 5, 5),
+        nb(),
+        sel("sortBy", "排序方式", ["日期", "最近更新"], "日期"),
+        yn("showPath", "显示文档路径"),
+        ny("showUpdated", "显示更新时间"),
+        ny("showRank", "显示序号"),
+    ]),
+    mod("document-relations-summary", "文档关系摘要", "iconGraph", ["small", "medium", "wide"], [
+        num("limit", "条数上限", 1, 6, 6),
+        sel("relation", "关系类型", ["全部", "子块", "引用"], "全部"),
+        txt("query", "筛选关系内容"),
+        yn("showType", "显示关系类型"),
+        yn("showRank", "显示序号", "否"),
+    ]),
+    mod("current-document-outline", "当前文档大纲", "iconList", ["small", "medium", "tall", "wide"], [
+        num("limit", "标题上限", 1, 8, 8),
+        txt("query", "筛选标题"),
+        num("maxDepth", "最大标题层级", 1, 8, 8),
+        yn("showLevel", "显示标题层级"),
+        yn("showRank", "显示序号", "否"),
+    ]),
+    mod("today-reservations", "近期预约", "iconClock", ["small", "medium", "wide"], [
+        num("days", "未来天数", 0, 14, 3),
+        num("overdueDays", "包含过期天数（已停用）", 0, 0, 0),
+        num("limit", "条数上限", 1, 4, 4),
+        nb(),
+        txt("query", "筛选预约内容或路径"),
+        sel("sortBy", "排序方式", ["预约时间", "最近更新"], "预约时间"),
+        yn("showDate", "显示预约日期"),
+        yn("showStatus", "显示今天或过期状态"),
+        yn("showPath", "显示所在路径"),
+        ny("showRank", "显示序号"),
+    ]),
+    mod("journal-calendar", "日历月视图", "iconCalendar", ["large", "full"], [
+        num("monthOffset", "月份偏移", -24, 24, 0),
+        sel("weekStart", "每周起始日", ["周一", "周日"], "周一"),
+        yn("showAdjacent", "显示相邻月份日期"),
+        ny("showLunar", "显示农历"),
+        ny("showHolidays", "显示中国节假日"),
+        nb(),
+    ], {viewType: "calendar"}),
     // T-6971 批次⑦：写作打卡 = 强状态数值组件，上限 M（规格卡建议 S/M）
-    {moduleId: "writing-streak", title: "写作打卡", icon: "iconCheck", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium"], protocolVersion: 2, viewType: "weekdays", configSchema: [
-        {key: "notebook", label: "限定笔记本", type: "notebook"},
-        {key: "windowDays", label: "连续统计窗口（天）", type: "number", min: 30, max: 365, defaults: 90},
-        {key: "metric", label: "达标指标", type: "select", options: ["新增字符", "内容块"], defaults: "新增字符"},
-        {key: "dailyGoal", label: "每日达标值", type: "number", min: 1, max: 5000, defaults: 1},
-        {key: "weekStart", label: "每周起始日", type: "select", options: ["周一", "周日"], defaults: "周一"},
-        {key: "todayGrace", label: "今天未达标时延续昨日", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "weeklyGoal", label: "每周达标天数（0 为关闭）", type: "number", min: 0, max: 7, defaults: 0},
-        {key: "restDays", label: "豁免休息日（不计达标也不断签）", type: "select", options: ["无", "周末", "周六", "周日", "周一", "周二", "周三", "周四", "周五"], defaults: "无"},
-    ]},
-    {moduleId: "countdown", title: "倒数日", icon: "iconClock", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["xs", "small", "medium", "large"], protocolVersion: 2, configSchema: [
-        {key: "title", label: "名称", type: "text", defaults: ""},
+    mod("writing-streak", "写作打卡", "iconCheck", ["small", "medium"], [
+        nb(),
+        num("windowDays", "连续统计窗口（天）", 30, 365, 90),
+        sel("metric", "达标指标", ["新增字符", "内容块"], "新增字符"),
+        num("dailyGoal", "每日达标值", 1, 5000, 1),
+        sel("weekStart", "每周起始日", ["周一", "周日"], "周一"),
+        yn("todayGrace", "今天未达标时延续昨日"),
+        num("weeklyGoal", "每周达标天数（0 为关闭）", 0, 7, 0),
+        sel("restDays", "豁免休息日（不计达标也不断签）", ["无", "周末", "周六", "周日", "周一", "周二", "周三", "周四", "周五"], "无"),
+    ], {viewType: "weekdays"}),
+    mod("countdown", "倒数日", "iconClock", ["xs", "small", "medium", "large"], [
+        txt("title", "名称"),
         {key: "targetDate", label: "目标日期", type: "date", defaults: ""},
-        {key: "mode", label: "统计方式", type: "select", options: ["倒数", "累计"], defaults: "倒数"},
-        {key: "repeat", label: "重复", type: "select", options: ["不重复", "每年"], defaults: "不重复"},
-        {key: "showTargetDate", label: "显示目标日期", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "emphasis", label: "数字大小", type: "select", options: ["标准", "大", "特大"], defaults: "标准"},
-    ]},
-    {moduleId: "plugin-commands", title: "插件命令", icon: "iconPlugin", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "wide", "large"], protocolVersion: 2, configSchema: [
-        {key: "limit", label: "条数上限", type: "number", min: 1, max: 5, defaults: 5},
-        {key: "query", label: "搜索命令或插件", type: "text", defaults: ""},
-        {key: "plugin", label: "限定插件名称", type: "text", defaults: ""},
-        {key: "sortBy", label: "排序方式", type: "select", options: ["插件顺序", "命令名称", "插件名称"], defaults: "插件顺序"},
-        {key: "showPlugin", label: "显示来源插件", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showRank", label: "显示序号", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
+        sel("mode", "统计方式", ["倒数", "累计"], "倒数"),
+        sel("repeat", "重复", ["不重复", "每年"], "不重复"),
+        yn("showTargetDate", "显示目标日期"),
+        sel("emphasis", "数字大小", ["标准", "大", "特大"], "标准"),
+    ]),
+    mod("plugin-commands", "插件命令", "iconPlugin", ["small", "medium", "wide", "large"], [
+        num("limit", "条数上限", 1, 5, 5),
+        txt("query", "搜索命令或插件"),
+        txt("plugin", "限定插件名称"),
+        sel("sortBy", "排序方式", ["插件顺序", "命令名称", "插件名称"], "插件顺序"),
+        yn("showPlugin", "显示来源插件"),
+        ny("showRank", "显示序号"),
+    ]),
     {moduleId: "checkin-summary", title: "打卡摘要", icon: "iconCalendar", category: "plugin", supportedDevices: DEVICES, readOnly: true, sizes: ["xs", "small", "medium"]},
     // —— 小驴打卡桥接组件（ADR 0057）：由本插件内建 adapter 消费打卡公开生态 API v4，
     // 但 source 把来源标注为 siyuan-checkin，商店据此把它们归到「小驴打卡」一组。 ——
-    {moduleId: "checkin-today", title: "今日打卡", icon: "iconCheck", category: "siyuan", availability: "external", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "tall", "wide", "large"], protocolVersion: 2, source: {pluginId: "siyuan-checkin", name: "小驴打卡", icon: "iconCheck", order: 1}, configSchema: [
-        {key: "limit", label: "显示条数", type: "number", min: 1, max: 12, defaults: 6},
-        {key: "group", label: "只看分组（留空为全部）", type: "text", defaults: ""},
-        {key: "showGroup", label: "显示分组", type: "select", options: ["是", "否"], defaults: "是"},
-    ]},
-    {moduleId: "checkin-streak", title: "连续记录", icon: "iconRefresh", category: "siyuan", availability: "external", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "wide"], protocolVersion: 2, source: {pluginId: "siyuan-checkin", name: "小驴打卡", icon: "iconCheck", order: 2}, configSchema: [
-        {key: "limit", label: "排行条数", type: "number", min: 1, max: 12, defaults: 6},
-        {key: "showRank", label: "显示排名", type: "select", options: ["是", "否"], defaults: "是"},
-    ]},
-    {moduleId: "checkin-year-heatmap", title: "打卡热力图", icon: "iconGraph", category: "siyuan", availability: "external", supportedDevices: DEVICES, readOnly: true, sizes: ["medium", "wide", "large", "full"], protocolVersion: 2, viewType: "heatmap", source: {pluginId: "siyuan-checkin", name: "小驴打卡", icon: "iconCheck", order: 3}, configSchema: [
-        {key: "yearOffset", label: "回溯年数", type: "number", min: 0, max: 5, defaults: 0},
-    ]},
-    {moduleId: "checkin-weekly", title: "本周打卡", icon: "iconCalendar", category: "siyuan", availability: "external", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "wide"], protocolVersion: 2, source: {pluginId: "siyuan-checkin", name: "小驴打卡", icon: "iconCheck", order: 4}, configSchema: [
-        {key: "limit", label: "显示周数", type: "number", min: 1, max: 12, defaults: 6},
-    ]},
-    {moduleId: "checkin-occasions", title: "近期事项", icon: "iconCheck", category: "siyuan", availability: "external", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "tall"], protocolVersion: 2, source: {pluginId: "siyuan-checkin", name: "小驴打卡", icon: "iconCheck", order: 5}, configSchema: [
-        {key: "limit", label: "显示条数", type: "number", min: 1, max: 12, defaults: 6},
-        {key: "showKind", label: "显示类型", type: "select", options: ["是", "否"], defaults: "是"},
-    ]},
-    {moduleId: "checkin-monthly", title: "本月打卡", icon: "iconCalendar", category: "siyuan", availability: "external", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "wide"], protocolVersion: 2, source: {pluginId: "siyuan-checkin", name: "小驴打卡", icon: "iconCheck", order: 6}, configSchema: [
-        {key: "limit", label: "显示条数", type: "number", min: 1, max: 12, defaults: 6},
-        {key: "showRank", label: "显示排名", type: "select", options: ["是", "否"], defaults: "是"},
-    ]},
-    {moduleId: "pinned-docs", title: "置顶文档", icon: "iconBookmark", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "wide"], protocolVersion: 2, configSchema: [
-        {key: "limit", label: "显示条数", type: "number", min: 1, max: 6, defaults: 6},
-        {key: "showPath", label: "显示文档路径", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showChildCount", label: "显示子文档数", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showRank", label: "显示置顶序号", type: "select", options: ["否", "是"], defaults: "否"},
-        {key: "showUnavailable", label: "显示不可用文档", type: "select", options: ["是", "否"], defaults: "是"},
-    ]},
-    {moduleId: "inbox-shorthands", title: "收集箱", icon: "iconInbox", category: "siyuan", availability: "external", source: {pluginId: "siyuan-cloud", name: "思源云端收集箱", icon: "iconInbox", collection: "收集箱", kind: "external"}, network: "remote", auth: "host", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "wide"], protocolVersion: 2, configSchema: [
-        {key: "page", label: "云端页码", type: "number", min: 1, max: 100, defaults: 1},
-        {key: "limit", label: "显示条数", type: "number", min: 1, max: 12, defaults: 8},
-        {key: "query", label: "筛选标题或正文", type: "text", defaults: ""},
-        {key: "showPreview", label: "显示正文摘要", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showLinkHost", label: "显示链接来源", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showRank", label: "显示序号", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "recent-updates", title: "最近更新", icon: "iconRefresh", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["medium", "wide", "large"], protocolVersion: 2, configSchema: [
-        {key: "limit", label: "显示条数", type: "number", min: 1, max: 5, defaults: 5},
-        {key: "groupByDocument", label: "同文档更新合并", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showPath", label: "显示文档路径", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showUpdated", label: "显示更新时间", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showRank", label: "显示序号", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "data-health", title: "数据健康", icon: "iconCloud", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "wide"], protocolVersion: 2, configSchema: [
-        {key: "limit", label: "清单上限", type: "number", min: 1, max: 12, defaults: 8},
-        {key: "query", label: "筛选名称或路径", type: "text", defaults: ""},
-        {key: "sortBy", label: "排序方式", type: "select", options: ["清单顺序", "名称"], defaults: "清单顺序"},
-        {key: "showPath", label: "显示资源路径", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showRank", label: "显示序号", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "database-list", title: "数据库", icon: "iconDatabase", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["medium", "wide", "large"], protocolVersion: 2, configSchema: [
+    checkinMod("checkin-today", "今日打卡", "iconCheck", ["small", "medium", "tall", "wide", "large"], 1, [
+        num("limit", "显示条数", 1, 12, 6),
+        txt("group", "只看分组（留空为全部）"),
+        yn("showGroup", "显示分组"),
+    ]),
+    checkinMod("checkin-streak", "连续记录", "iconRefresh", ["small", "medium", "wide"], 2, [
+        num("limit", "排行条数", 1, 12, 6),
+        yn("showRank", "显示排名"),
+    ]),
+    checkinMod("checkin-year-heatmap", "打卡热力图", "iconGraph", ["medium", "wide", "large", "full"], 3, [
+        num("yearOffset", "回溯年数", 0, 5, 0),
+    ], {viewType: "heatmap"}),
+    checkinMod("checkin-weekly", "本周打卡", "iconCalendar", ["small", "medium", "wide"], 4, [
+        num("limit", "显示周数", 1, 12, 6),
+    ]),
+    checkinMod("checkin-occasions", "近期事项", "iconCheck", ["small", "medium", "tall"], 5, [
+        num("limit", "显示条数", 1, 12, 6),
+        yn("showKind", "显示类型"),
+    ]),
+    checkinMod("checkin-monthly", "本月打卡", "iconCalendar", ["small", "medium", "wide"], 6, [
+        num("limit", "显示条数", 1, 12, 6),
+        yn("showRank", "显示排名"),
+    ]),
+    mod("pinned-docs", "置顶文档", "iconBookmark", ["small", "medium", "wide"], [
+        num("limit", "显示条数", 1, 6, 6),
+        yn("showPath", "显示文档路径"),
+        yn("showChildCount", "显示子文档数"),
+        ny("showRank", "显示置顶序号"),
+        yn("showUnavailable", "显示不可用文档"),
+    ]),
+    extMod("inbox-shorthands", "收集箱", "iconInbox", ["small", "medium", "wide"], [
+        num("page", "云端页码", 1, 100, 1),
+        num("limit", "显示条数", 1, 12, 8),
+        txt("query", "筛选标题或正文"),
+        yn("showPreview", "显示正文摘要"),
+        yn("showLinkHost", "显示链接来源"),
+        ny("showRank", "显示序号"),
+    ], {source: {pluginId: "siyuan-cloud", name: "思源云端收集箱", icon: "iconInbox", collection: "收集箱", kind: "external"}, network: "remote", auth: "host"}),
+    mod("recent-updates", "最近更新", "iconRefresh", ["medium", "wide", "large"], [
+        num("limit", "显示条数", 1, 5, 5),
+        yn("groupByDocument", "同文档更新合并"),
+        yn("showPath", "显示文档路径"),
+        yn("showUpdated", "显示更新时间"),
+        ny("showRank", "显示序号"),
+    ]),
+    mod("data-health", "数据健康", "iconCloud", ["small", "medium", "wide"], [
+        num("limit", "清单上限", 1, 12, 8),
+        txt("query", "筛选名称或路径"),
+        sel("sortBy", "排序方式", ["清单顺序", "名称"], "清单顺序"),
+        yn("showPath", "显示资源路径"),
+        ny("showRank", "显示序号"),
+    ]),
+    mod("database-list", "数据库", "iconDatabase", ["medium", "wide", "large"], [
         {key: "blockId", label: "绑定单个数据库（表格形态）", type: "database", defaults: ""},
-        {key: "limit", label: "显示条数", type: "number", min: 1, max: 5, defaults: 5},
-        {key: "notebook", label: "限定笔记本", type: "notebook"},
-        {key: "query", label: "名称或路径过滤", type: "text", defaults: ""},
-        {key: "sortBy", label: "排序方式", type: "select", options: ["最近更新", "名称", "路径"], defaults: "最近更新"},
-        {key: "showPath", label: "显示所在路径", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showUpdated", label: "显示更新时间", type: "select", options: ["是", "否"], defaults: "否"},
-        {key: "showRank", label: "显示序号", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "saved-searches", title: "已存筛选", icon: "iconSearch", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "wide"], protocolVersion: 2, configSchema: [
-        {key: "limit", label: "显示条数", type: "number", min: 1, max: 5, defaults: 5},
-        {key: "query", label: "名称或关键词过滤", type: "text", defaults: ""},
-        {key: "method", label: "搜索方式", type: "select", options: ["全部", "文本", "查询语法", "SQL", "正则", "语义"], defaults: "全部"},
-        {key: "sortBy", label: "排序方式", type: "select", options: ["原顺序", "名称"], defaults: "原顺序"},
-        {key: "showKeyword", label: "显示搜索词", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showMethod", label: "显示搜索方式", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showScope", label: "显示搜索范围", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showRank", label: "显示序号", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "database-table", title: "数据库表格", icon: "iconDatabase", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["medium", "wide", "large"], protocolVersion: 2, configSchema: [
+        num("limit", "显示条数", 1, 5, 5),
+        nb(),
+        txt("query", "名称或路径过滤"),
+        sel("sortBy", "排序方式", ["最近更新", "名称", "路径"], "最近更新"),
+        yn("showPath", "显示所在路径"),
+        ny("showUpdated", "显示更新时间"),
+        ny("showRank", "显示序号"),
+    ]),
+    mod("saved-searches", "已存筛选", "iconSearch", ["small", "medium", "wide"], [
+        num("limit", "显示条数", 1, 5, 5),
+        txt("query", "名称或关键词过滤"),
+        sel("method", "搜索方式", ["全部", "文本", "查询语法", "SQL", "正则", "语义"], "全部"),
+        sel("sortBy", "排序方式", ["原顺序", "名称"], "原顺序"),
+        yn("showKeyword", "显示搜索词"),
+        yn("showMethod", "显示搜索方式"),
+        yn("showScope", "显示搜索范围"),
+        ny("showRank", "显示序号"),
+    ]),
+    mod("database-table", "数据库表格", "iconDatabase", ["medium", "wide", "large"], [
         {key: "blockId", label: "选择数据库", type: "database", defaults: ""},
         {key: "columns", label: "展示内容（最多 3 项）", type: "database-columns", defaults: ""},
-        {key: "limit", label: "显示条数", type: "number", min: 1, max: 8, defaults: 8},
-        {key: "showColumnNames", label: "显示字段名", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showRank", label: "显示行号", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "database-board", title: "数据库看板", icon: "iconLayoutRight", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["medium", "wide", "large"], protocolVersion: 2, configSchema: [
+        num("limit", "显示条数", 1, 8, 8),
+        yn("showColumnNames", "显示字段名"),
+        ny("showRank", "显示行号"),
+    ]),
+    mod("database-board", "数据库看板", "iconLayoutRight", ["medium", "wide", "large"], [
         {key: "blockId", label: "选择数据库", type: "database", defaults: ""},
-        {key: "groupBy", label: "分组字段", type: "text", defaults: ""},
-        {key: "limit", label: "每组条数", type: "number", min: 1, max: 12, defaults: 6},
-        {key: "showCounts", label: "显示计数", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showPercent", label: "显示占比", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
-    {moduleId: "flashcard-review", title: "闪卡复习", icon: "iconRiffCard", category: "siyuan", supportedDevices: DEVICES, readOnly: true, sizes: ["small", "medium", "wide"], protocolVersion: 2, configSchema: [
-        {key: "notebook", label: "限定笔记本", type: "notebook"},
-        {key: "dailyLimit", label: "今日上限", type: "number", min: 5, max: 200, defaults: 30},
-        {key: "showPercent", label: "显示掌握进度", type: "select", options: ["是", "否"], defaults: "是"},
-        {key: "showForecast", label: "显示推演预测", type: "select", options: ["否", "是"], defaults: "否"},
-    ]},
+        txt("groupBy", "分组字段"),
+        num("limit", "每组条数", 1, 12, 6),
+        yn("showCounts", "显示计数"),
+        ny("showPercent", "显示占比"),
+    ]),
+    mod("flashcard-review", "闪卡复习", "iconRiffCard", ["small", "medium", "wide"], [
+        nb(),
+        num("dailyLimit", "今日上限", 5, 200, 30),
+        yn("showPercent", "显示掌握进度"),
+        ny("showForecast", "显示推演预测"),
+    ]),
 ]);
 
 const BUILTIN_EXTENSION_MODULES = Object.freeze([]);
@@ -985,7 +1013,8 @@ function normalizeInstances(value, definitions = DEFAULT_MODULES, allowedModuleI
  * @returns {{schemaVersion: number, defaultsVersion: number, instances: Array<{instanceId: string, moduleId: string, enabled: boolean, config: Record<string, unknown>}>, layouts: Record<string, Array<{instanceId: string, x: number, y: number, w: number, h: number, collapsed: boolean}>>}}
  */
 function normalizeHomeState(value, allowedModuleIds = null) {
-    const source = value && typeof value === "object" ? value : {};
+    const hasPersistedState = Boolean(value && typeof value === "object" && !Array.isArray(value));
+    const source = hasPersistedState ? value : {};
     const instances = normalizeInstances(source.instances, DEFAULT_MODULES, allowedModuleIds);
     const layouts = {};
     DEVICES.forEach((device) => {
@@ -1002,13 +1031,14 @@ function normalizeHomeState(value, allowedModuleIds = null) {
             return true;
         });
     });
-    return {schemaVersion: HOME_SCHEMA_VERSION, defaultsVersion: normalizeHomeDefaultsVersion(source.defaultsVersion, value != null), instances, layouts};
+    return {schemaVersion: HOME_SCHEMA_VERSION, defaultsVersion: normalizeHomeDefaultsVersion(source.defaultsVersion, hasPersistedState), instances, layouts};
 }
 
 function migrateHomeState(value, allowedModuleIds = null) {
-    const source = value && typeof value === "object" ? value : {};
+    const hasPersistedState = Boolean(value && typeof value === "object" && !Array.isArray(value));
+    const source = hasPersistedState ? value : {};
     const migrated = normalizeHomeState({
-        defaultsVersion: normalizeHomeDefaultsVersion(source.defaultsVersion, value != null),
+        defaultsVersion: normalizeHomeDefaultsVersion(source.defaultsVersion, hasPersistedState),
         instances: source.instances || source.widgets || [],
         layouts: source.layouts || {desktop: source.layout || []},
     }, allowedModuleIds);

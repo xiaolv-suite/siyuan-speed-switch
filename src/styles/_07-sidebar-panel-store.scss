@@ -76,17 +76,6 @@
     color: var(--sw-color-text-muted);
     font-size: var(--sw-font-sm, 12px);
     line-height: var(--sw-leading-reading, 1.6);
-
-    .sw-home__hint-link {
-        color: var(--sw-color-accent);
-        text-decoration: none;
-
-        &:hover,
-        &:focus-visible {
-            text-decoration: underline;
-            outline: none;
-        }
-    }
 }
 
 // ==================== 组件面板：任务条目勾选交互 ====================

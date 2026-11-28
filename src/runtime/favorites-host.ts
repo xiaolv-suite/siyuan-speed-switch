@@ -1,12 +1,12 @@
 import {Dialog, Menu, openTab} from "siyuan";
-import {lvNotify} from "../libs/lv-notice-kit";
+import {lvNotify, safeDocTitleFromHPath} from "../libs/lv-notice-kit";
 import {logger} from "../logger";
-import {groupFavoritesByGroup, resolveFavoriteRootId, planGroupOpenFavorites, sanitizeFavorites, sanitizeStringList} from "../util";
+import {groupFavoritesByGroup, resolveFavoriteRootId, planGroupOpenFavorites, sanitizeFavorites, sanitizeStringList, normalizeSqlResult} from "../util";
 import {mountPlatformDialogCloseHint, mountPlatformDialogTitleWrap} from "../platform-dom";
 import {openDocumentOnDesktop} from "../document-actions";
 import {removeFavoriteEntry, setFavoriteEntryGroup, migrateFavoriteEntry, normalizeFavoriteSmartGroups, buildTagSmartGroupQuery, projectTagSmartGroupEntries} from "../favorite-actions";
 import {normalizeEssentials} from "../settings-model";
-import {MESSAGE_DEFAULT_MS, TAB_SETTLE_MS, FAVORITES_MAX, PINNED_MAX, FAVORITE_GROUPS_MAX, FAV_PANEL_WIDTH_PX, FAV_PANEL_MAX_HEIGHT_PX, FAV_PANEL_MIN_HEIGHT_PX, PINNED_KEY, FAV_KEY, FAV_GROUPS_KEY, FAV_COLLAPSED_KEY} from "../constants";
+import {BLOCK_ID_RE, MESSAGE_DEFAULT_MS, TAB_SETTLE_MS, FAVORITES_MAX, PINNED_MAX, FAVORITE_GROUPS_MAX, FAV_PANEL_WIDTH_PX, FAV_PANEL_MAX_HEIGHT_PX, FAV_PANEL_MIN_HEIGHT_PX, PINNED_KEY, FAV_KEY, FAV_GROUPS_KEY, FAV_COLLAPSED_KEY} from "../constants";
 import {type Tab, type IOverlayClose, type IFavoriteItem, type ISpeedSwitchHost} from "./plugin-types";
 import {showMessage} from "./runtime-notice";
 
@@ -377,10 +377,9 @@ export class FavoritesHostRuntime {
         head.type = "button";
         head.className = "sw__fav-group-head";
         head.title = `${group.tag}`;
-        head.innerHTML = `<svg class="sw__fav-arrow"><use xlink:href="#iconRight"></use></svg>
-<span class="sw__fav-group-name"></span>
-<span class="sw__fav-count">#${group.tag}</span>`;
+        head.innerHTML = '<svg class="sw__fav-arrow"><use xlink:href="#iconRight"></use></svg><span class="sw__fav-group-name"></span><span class="sw__fav-count"></span>';
         head.querySelector<HTMLElement>(".sw__fav-group-name")!.textContent = group.name;
+        head.querySelector<HTMLElement>(".sw__fav-count")!.textContent = `#${group.tag}`;
         groupEl.appendChild(head);
 
         const list = document.createElement("div");
@@ -398,6 +397,7 @@ export class FavoritesHostRuntime {
             return;
         }
         void this.fetchKernelJson("/api/query/sql", query).then((json) => {
+            if (!panel.isConnected) return;
             const entries = projectTagSmartGroupEntries(json?.data);
             status.remove();
             entries.forEach((entry) => {
@@ -426,8 +426,8 @@ export class FavoritesHostRuntime {
             }
             const count = head.querySelector<HTMLElement>(".sw__fav-count");
             if (count) count.textContent = `${entries.length} · #${group.tag}`;
-            onChanged();
         }).catch(() => {
+            if (!panel.isConnected) return;
             status.textContent = this.i18n.favSmartGroupEmpty;
         });
     }
@@ -547,11 +547,38 @@ export class FavoritesHostRuntime {
             } else {
                 const list = document.createElement("div");
                 list.className = "sw-document-set-essentials__list";
+                const titleMap = new Map<string, string>();
+                try {
+                    this.currentDocumentSetEntries?.().forEach((entry) => {
+                        if (entry?.rootId && entry?.title) titleMap.set(entry.rootId, entry.title);
+                    });
+                    this.getFavorites?.().forEach((fav) => {
+                        const rid = resolveFavoriteRootId(fav);
+                        if (rid && fav?.title && !titleMap.has(rid)) titleMap.set(rid, fav.title);
+                    });
+                    this.getClosedHistory?.().forEach((item) => {
+                        if (item?.rootId && item?.title && !titleMap.has(item.rootId)) titleMap.set(item.rootId, item.title);
+                    });
+                    this.getDocumentSets?.().forEach((docSet) => {
+                        docSet?.entries?.forEach((entry: {rootId?: string; title?: string}) => {
+                            if (entry?.rootId && entry?.title && !titleMap.has(entry.rootId)) titleMap.set(entry.rootId, entry.title);
+                        });
+                    });
+                } catch (_) {}
+                const fallbackTitle = this.i18n.documentSetEssentialUntitled || this.i18n.homeCheckinUnnamed || "未命名文档";
+                const pendingLabels = new Map<string, {label: HTMLElement; index: number}>();
                 essentials.forEach((rootId, index) => {
                     const row = document.createElement("div");
                     row.className = "sw-document-set-essentials__item";
                     const label = document.createElement("span");
-                    label.textContent = `#${index + 1} · ${rootId.slice(0, 14)}…`;
+                    const knownTitle = titleMap.get(rootId);
+                    if (knownTitle) {
+                        label.textContent = `#${index + 1} · ${knownTitle}`;
+                        label.title = knownTitle;
+                    } else {
+                        label.textContent = `#${index + 1} · ${fallbackTitle}`;
+                        if (BLOCK_ID_RE.test(rootId)) pendingLabels.set(rootId, {label, index});
+                    }
                     const remove = document.createElement("button");
                     remove.type = "button";
                     remove.className = "b3-button b3-button--text";
@@ -564,6 +591,26 @@ export class FavoritesHostRuntime {
                     list.appendChild(row);
                 });
                 dynamic.appendChild(list);
+                if (pendingLabels.size > 0 && typeof this.fetchKernelJson === "function") {
+                    const idList = Array.from(pendingLabels.keys()).map((id) => `'${id}'`).join(",");
+                    void this.fetchKernelJson("/api/query/sql", {
+                        stmt: `SELECT id, content, hpath FROM blocks WHERE id IN (${idList}) AND type = 'd' LIMIT 200`,
+                    }).then((json) => {
+                        if (json?.code !== undefined && json.code !== 0) return;
+                        const res = normalizeSqlResult(json);
+                        (res.rows as Array<{id?: unknown; content?: unknown; hpath?: unknown}>).forEach((docRow) => {
+                            const id = typeof docRow?.id === "string" ? docRow.id : "";
+                            const target = pendingLabels.get(id);
+                            if (!target || !target.label.isConnected) return;
+                            const resolved = safeDocTitleFromHPath({
+                                title: typeof docRow?.content === "string" ? docRow.content : "",
+                                hPath: typeof docRow?.hpath === "string" ? docRow.hpath : "",
+                            }, fallbackTitle);
+                            target.label.textContent = `#${target.index + 1} · ${resolved}`;
+                            target.label.title = resolved;
+                        });
+                    }).catch((): void => undefined);
+                }
             }
             section.appendChild(dynamic);
         };

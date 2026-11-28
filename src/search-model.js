@@ -1020,10 +1020,6 @@ function toRootSet(value) {
     return roots;
 }
 
-function withoutRoots(cards, roots) {
-    return cards.filter((card) => !roots.has(card.rootId));
-}
-
 function firstArray(...values) {
     return values.find((value) => Array.isArray(value)) || [];
 }

@@ -96,7 +96,7 @@ export class SwitcherKeyboardNavRuntime {
                 }
             }
             const cards = Array.from(scrollElement.querySelectorAll<HTMLElement>(".sw__card"))
-                .filter((card) => !card.closest(".fn__none"));
+                .filter((card) => !card.closest(".fn__none, .sw__group--collapsed"));
             if (cards.length === 0) {
                 // T-6837：搜索态页签卡隐藏时，数字直达转投文档结果行（不静默丢失）
                 if (/^[1-9]$/.test(key) && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey) {
@@ -140,7 +140,7 @@ export class SwitcherKeyboardNavRuntime {
             let colCount = 1;
             const plain = !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey;
             if (plain && (key === "ArrowDown" || key === "ArrowUp")) {
-                const grid = scrollElement.querySelector(".sw__grid") as HTMLElement | null;
+                const grid = (cards[focusIndex] || cards[0])?.closest<HTMLElement>(".sw__grid");
                 if (grid) {
                     const cols = getComputedStyle(grid).gridTemplateColumns.split(" ").filter((c) => c && c !== "none");
                     if (cols.length > 0) colCount = cols.length;
@@ -285,7 +285,7 @@ export class SwitcherKeyboardNavRuntime {
         const targetIndex = at + delta;
         if (targetIndex < 0) {
             const cards = Array.from(scrollElement.querySelectorAll<HTMLElement>(".sw__card"))
-                .filter((card) => !card.closest(".fn__none"));
+                .filter((card) => !card.closest(".fn__none, .sw__group--collapsed"));
             if (cards.length > 0) {
                 const lastCard = cards[cards.length - 1];
                 this.focusCard(lastCard, true);
@@ -378,7 +378,7 @@ export class SwitcherKeyboardNavRuntime {
     }
 
     private focusCard(card: HTMLElement | undefined | null, domFocus = false) {
-        if (!card) {
+        if (!card || card.closest(".fn__none, .sw__group--collapsed")) {
             return;
         }
         // T-7007：键盘导航路径把 DOM 焦点移到卡片本体（Tab 顺序与读屏跟随）；

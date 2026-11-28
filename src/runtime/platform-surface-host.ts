@@ -137,6 +137,11 @@ export class PlatformSurfaceRuntime {
         // 自适应/固定模式用 Dialog 内联尺寸，缩窗后保持打开时尺寸（与工作台语义一致）。
         if (studioMode === "fullscreen") {
             dialog.element.querySelector<HTMLElement>(".b3-dialog__container")?.classList.add("sw-dialog--fullscreen");
+            const isElectronFrameless = !this.isMobile && typeof document !== "undefined"
+                && (/Electron/i.test(navigator?.userAgent || "") || Boolean(document.querySelector("#minWindow, #maxWindow, #closeWindow, .toolbar__window")));
+            if (isElectronFrameless) {
+                dialog.element.querySelector<HTMLElement>(".b3-dialog__container")?.classList.add("sw-dialog--frameless-avoidance");
+            }
         }
         dialog.element.querySelector<HTMLElement>(".b3-dialog__container")?.classList.add("sw-dialog--snippet-studio", "sw-platform-dialog", "sw-platform-dialog--studio");
         mountPlatformDialogTitleWrap(dialog.element, this.i18n.dialogStudioTitle || "片段实验室", "", "iconCode");
@@ -179,7 +184,10 @@ export class PlatformSurfaceRuntime {
             dialog.destroy();
         };
         root.addEventListener("keydown", loadingKeydown);
-        this.loadSnippetStudioModule(({mountSnippetStudio}) => {
+        const tier2Gate = typeof this.ensureTier2Loaded === "function" && !this.tier2Ready
+            ? this.ensureTier2Loaded().catch(() => {})
+            : Promise.resolve();
+        void Promise.all([this.loadSnippetStudioModule((mod) => mod), tier2Gate]).then(([{mountSnippetStudio}]) => {
             root.removeEventListener("keydown", loadingKeydown);
             if (!dialog.element.isConnected || this.snippetStudioDialog !== dialog) return;
             holder.controller = mountSnippetStudio(root, {

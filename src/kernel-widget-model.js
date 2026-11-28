@@ -65,6 +65,21 @@ function formatKernelTime(value) {
     return `${stamp.slice(0, 4)}-${stamp.slice(4, 6)}-${stamp.slice(6, 8)} ${stamp.slice(8, 10)}:${stamp.slice(10, 12)}`;
 }
 
+function buildKernelDocRowItem(label, value, details, showRank, index, extra) {
+    return {
+        label,
+        value,
+        ...(details.length ? {secondary: details.join(" · ")} : {}),
+        ...(showRank ? {rank: index + 1} : {}),
+        ...extra,
+    };
+}
+
+function resolveReportedTotal(rows, fallbackLen) {
+    const reported = Math.trunc(Number(rows?.[0]?.total_count ?? rows?.[0]?.totalCount));
+    return Number.isFinite(reported) && reported >= fallbackLen ? reported : fallbackLen;
+}
+
 function localDateKey(now = Date.now()) {
     const date = new Date(Number.isFinite(now) ? now : Date.now());
     return `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`;
@@ -543,10 +558,9 @@ function buildDatabaseListSnapshot(rows, config, labels = {}, now = Date.now(), 
         if (normalized.showPath && entry.path) details.push(entry.path);
         const time = normalized.showUpdated ? formatKernelTime(entry.updated) : "";
         if (time) details.push(time);
-        return {label: entry.label, value: entry.id, ...(details.length ? {secondary: details.join(" · ")} : {}), ...(normalized.showRank ? {rank: index + 1} : {})};
+        return buildKernelDocRowItem(entry.label, entry.id, details, normalized.showRank, index);
     });
-    const reportedTotal = Math.trunc(Number(list[0]?.total_count ?? list[0]?.totalCount));
-    const total = Number.isFinite(reportedTotal) && reportedTotal >= entries.length ? reportedTotal : entries.length;
+    const total = resolveReportedTotal(list, entries.length);
     const snapshot = snapshotOf(boundedText(labels.title, 64) || "数据库", items, labels, now, status, normalized.query ? (boundedText(labels.emptyFiltered, 96) || "没有符合筛选条件的数据库") : "工作区里还没有思源数据库");
     snapshot.stat = {value: total > items.length ? `${items.length}/${total}` : String(total), label: boundedText(labels.stat, 32) || "个数据库"};
     return snapshot;
@@ -763,10 +777,9 @@ function buildRecentEditsSnapshot(rows, config, labels = {}, now = Date.now(), s
         if (normalized.showPath && entry.path) details.push(entry.path);
         const time = normalized.showUpdated ? formatKernelTime(entry.updated) : "";
         if (time) details.push(time);
-        return {label: entry.label, value: entry.id, ...(details.length ? {secondary: details.join(" · ")} : {}), ...(normalized.showRank ? {rank: index + 1} : {})};
+        return buildKernelDocRowItem(entry.label, entry.id, details, normalized.showRank, index);
     });
-    const reportedTotal = Math.trunc(Number(rows[0]?.total_count ?? rows[0]?.totalCount));
-    const total = Number.isFinite(reportedTotal) && reportedTotal >= entries.length ? reportedTotal : entries.length;
+    const total = resolveReportedTotal(rows, entries.length);
     const snapshot = snapshotOf(boundedText(labels.title, 64) || "近期编辑", items, labels, now, status,
         normalized.query ? (boundedText(labels.emptyFiltered, 96) || "没有符合筛选条件的近期编辑") : (boundedText(labels.empty, 96) || "当前范围暂无近期编辑文档"));
     snapshot.stat = {value: total > items.length ? `${items.length}/${total}` : String(total), label: boundedText(labels.stat, 32) || "篇文档"};
@@ -1099,10 +1112,9 @@ function buildClippedUnreadSnapshot(rows, config, labels = {}, now = Date.now(),
         const details = [];
         if (normalized.showPath && entry.path) details.push(entry.path);
         if (normalized.showUpdated && /^\d{14}$/.test(entry.updated)) details.push(formatKernelTime(entry.updated));
-        return {label: entry.title, value: entry.id, ...(details.length ? {secondary: details.join(" · ")} : {}), ...(normalized.showRank ? {rank: index + 1} : {})};
+        return buildKernelDocRowItem(entry.title, entry.id, details, normalized.showRank, index);
     });
-    const reportedTotal = Math.trunc(Number(rows[0]?.total_count ?? rows[0]?.totalCount));
-    const total = Number.isFinite(reportedTotal) && reportedTotal >= entries.length ? reportedTotal : entries.length;
+    const total = resolveReportedTotal(rows, entries.length);
     const snapshot = snapshotOf(boundedText(labels.title, 64) || "剪藏待读", items, labels, now, status,
         boundedText(labels.empty, 96) || "还没有符合条件的剪藏");
     snapshot.stat = {value: total > items.length ? `${items.length}/${total}` : String(total), label: boundedText(labels.stat, 32) || "篇待读"};
@@ -1199,10 +1211,9 @@ function buildRecentDailyNotesSnapshot(rows, config, labels = {}, now = Date.now
         details.push(`${entry.characters.toLocaleString()} 字`);
         if (normalized.showPath && entry.path) details.push(entry.path);
         if (normalized.showUpdated && /^\d{14}$/.test(entry.updated)) details.push(formatKernelTime(entry.updated));
-        return {label: entry.title, value: entry.id, ...(details.length ? {secondary: details.join(" · ")} : {}), ...(normalized.showRank ? {rank: index + 1} : {})};
+        return buildKernelDocRowItem(entry.title, entry.id, details, normalized.showRank, index);
     });
-    const reportedTotal = Math.trunc(Number(rows[0]?.total_count ?? rows[0]?.totalCount));
-    const total = Number.isFinite(reportedTotal) && reportedTotal >= entries.length ? reportedTotal : entries.length;
+    const total = resolveReportedTotal(rows, entries.length);
     const snapshot = snapshotOf(boundedText(labels.title, 64) || "近期日记", items, labels, now, status,
         boundedText(labels.empty, 96) || "时间范围内没有已有日记");
     snapshot.stat = {value: total > items.length ? `${items.length}/${total}` : String(total), label: boundedText(labels.stat, 32) || "篇日记"};
@@ -1268,7 +1279,7 @@ function buildJournalMonthlySnapshot(rows, config, labels = {}, now = Date.now()
         const details = [];
         if (normalized.showPath && entry.path) details.push(entry.path);
         if (normalized.showUpdated && /^\d{14}$/.test(entry.updated)) details.push(formatKernelTime(entry.updated));
-        return {label: entry.title, value: entry.id, ...(details.length ? {secondary: details.join(" · ")} : {}), ...(normalized.showRank ? {rank: index + 1} : {})};
+        return buildKernelDocRowItem(entry.title, entry.id, details, normalized.showRank, index);
     });
     const action = normalized.monthOffset === 0 && boundedText(labels.todayAction, 96)
         ? [{label: boundedText(labels.todayAction, 96), value: normalized.notebook ? `action:journal:${normalized.notebook}` : "action:journal"}]
@@ -1278,8 +1289,7 @@ function buildJournalMonthlySnapshot(rows, config, labels = {}, now = Date.now()
         [...action, ...journalItems], labels, now, status,
         boundedText(labels.empty, 96) || "这个月还没有日记",
     );
-    const reportedTotal = Math.trunc(Number(rows[0]?.total_count ?? rows[0]?.totalCount));
-    const total = Number.isFinite(reportedTotal) && reportedTotal >= entries.length ? reportedTotal : entries.length;
+    const total = resolveReportedTotal(rows, entries.length);
     const characters = entries.reduce((sum, entry) => sum + entry.characters, 0);
     const days = new Set(entries.map((entry) => entry.date));
     let streak = 0;
